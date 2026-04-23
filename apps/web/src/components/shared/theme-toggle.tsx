@@ -10,7 +10,7 @@ export function ThemeToggle() {
   return (
     <button
       aria-label="Toggle theme"
-      className="rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+      className="rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground transition hover:-translate-y-0.5 hover:bg-white/8 hover:text-foreground"
       onClick={() => setTheme(isLight ? "dark" : "light")}
       type="button"
     >

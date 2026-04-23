@@ -2,6 +2,7 @@
 
 import { useShellStore } from "@/stores/use-shell-store";
 
+import { GlassCard } from "./glass-card";
 import { OverlayFrame } from "./overlay-frame";
 
 const HOTKEYS = [
@@ -17,8 +18,17 @@ export function HotkeyDialog() {
   const close = useShellStore((state) => state.closeHotkeyDialog);
 
   return (
-    <OverlayFrame open={open} onClose={close} panelClassName="max-w-[520px]" title="단축키 치트시트">
+    <OverlayFrame
+      open={open}
+      onClose={close}
+      panelClassName="max-w-[520px]"
+      subtitle="지금 화면을 더 빠르게 다루는 전역 단축키입니다."
+      title="단축키 치트시트"
+    >
       <div className="p-5">
+        <GlassCard className="mb-4 p-4" priority="secondary">
+          <p className="text-sm text-muted-foreground">탐색은 `g + key`, 생성은 `c + key`, 전역 오버레이는 `Cmd` 계열로 통일되어 있습니다.</p>
+        </GlassCard>
         <div className="space-y-2">
           {HOTKEYS.map(([key, description]) => (
             <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3" key={key}>

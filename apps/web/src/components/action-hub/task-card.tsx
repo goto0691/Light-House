@@ -1,29 +1,49 @@
 import Link from "next/link";
 
+import { GlassCard } from "@/components/shared/glass-card";
+import { Tag } from "@/components/shared/tag";
 import type { TaskMock } from "@/lib/mock/action-hub";
 
 export function TaskCard({ projectId, task }: { projectId?: string; task: TaskMock }) {
+  const progress = task.checklist.total ? Math.round((task.checklist.completed / task.checklist.total) * 100) : 0;
+
   return (
-    <Link
-      className="rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:bg-white/8"
+    <GlassCard
+      as={Link}
+      className="group block"
+      elevation="l1"
       href={projectId ? `/action-hub/${projectId}/tasks/${task.id}` : `/action-hub/inbox?detail=task:${task.id}`}
+      interactive
+      priority="secondary"
     >
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-sm font-medium text-foreground">{task.title}</h3>
-        <span className={`rounded-full px-2 py-1 text-[11px] ${task.priority === "P1" ? "bg-red-500/15 text-red-300" : task.priority === "P2" ? "bg-amber-500/15 text-amber-300" : "bg-white/8 text-muted-foreground"}`}>
-          {task.priority}
-        </span>
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-0.5 inline-flex h-10 w-1.5 rounded-full bg-white/10 transition [@media(hover:hover)]:group-hover:bg-primary/60" />
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{task.kind}</p>
+            <h3 className="text-pretty mt-1 line-clamp-2 text-sm font-medium text-foreground">{task.title}</h3>
+          </div>
+        </div>
+        <div className="shrink-0 space-y-2 text-right">
+          <Tag value={task.priority} variant="priority" />
+          <Tag value={task.status} variant="status" />
+        </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <span className="rounded-full bg-white/8 px-2 py-1 text-[11px] text-muted-foreground">{task.brainEnergy}</span>
-        {task.dueAt ? <span className="rounded-full bg-white/8 px-2 py-1 text-[11px] text-muted-foreground">{task.dueAt}</span> : null}
+        <Tag value={task.brainEnergy} variant="energy" />
+        {task.dueAt ? <span className="tabular-nums rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{task.dueAt}</span> : null}
       </div>
-      <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-        <span>
+
+      <div className="mt-4 rounded-full bg-black/10 p-1">
+        <div className="h-1.5 rounded-full bg-primary/75 transition-all duration-300" style={{ width: `${progress}%` }} />
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span className="tabular-nums uppercase tracking-[0.14em]">
           Checklist {task.checklist.completed}/{task.checklist.total}
         </span>
-        <span>{task.linkedPeople.join(", ") || "solo"}</span>
+        <span className="truncate">{task.linkedPeople.slice(0, 3).join(", ") || "solo"}</span>
       </div>
-    </Link>
+    </GlassCard>
   );
 }

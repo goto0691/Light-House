@@ -8,6 +8,8 @@ export const zettels = sqliteTable(
   {
     id: id(),
     userId: userId(),
+    notionSourceId: text("notion_source_id"),
+    importBatchId: text("import_batch_id"),
     title: text("title").notNull(),
     slug: text("slug").notNull(),
     content: text("content"),
@@ -25,6 +27,7 @@ export const zettels = sqliteTable(
   (table) => ({
     userTypeIndex: index("idx_zettel_user_type").on(table.userId, table.type),
     slugUnique: index("idx_zettel_slug").on(table.userId, table.slug),
+    notionSourceIndex: index("idx_zettel_notion_source").on(table.userId, table.notionSourceId),
   }),
 );
 
@@ -54,6 +57,8 @@ export const mediaLogs = sqliteTable(
   {
     id: id(),
     userId: userId(),
+    notionSourceId: text("notion_source_id"),
+    importBatchId: text("import_batch_id"),
     mediaType: text("media_type").notNull(),
     title: text("title").notNull(),
     originalTitle: text("original_title"),
@@ -79,6 +84,7 @@ export const mediaLogs = sqliteTable(
   },
   (table) => ({
     userTypeStatusIndex: index("idx_media_user_type_status").on(table.userId, table.mediaType, table.status),
+    notionSourceIndex: index("idx_media_notion_source").on(table.userId, table.notionSourceId),
   }),
 );
 

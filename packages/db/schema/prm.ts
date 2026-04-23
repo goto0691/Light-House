@@ -7,6 +7,8 @@ export const people = sqliteTable(
   {
     id: id(),
     userId: userId(),
+    notionSourceId: text("notion_source_id"),
+    importBatchId: text("import_batch_id"),
     name: text("name").notNull(),
     nickname: text("nickname"),
     birthDate: text("birth_date"),
@@ -30,6 +32,7 @@ export const people = sqliteTable(
     userStatusIndex: index("idx_person_user_status").on(table.userId, table.status),
     layerIndex: index("idx_person_layer").on(table.userId, table.dunbarLayer),
     lastContactIndex: index("idx_person_last_contact").on(table.lastContactedAt),
+    notionSourceIndex: index("idx_person_notion_source").on(table.userId, table.notionSourceId),
   }),
 );
 
@@ -38,6 +41,8 @@ export const interactions = sqliteTable(
   {
     id: id(),
     userId: userId(),
+    notionSourceId: text("notion_source_id"),
+    importBatchId: text("import_batch_id"),
     personId: text("person_id")
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
@@ -76,6 +81,7 @@ export const gifts = sqliteTable(
   },
   (table) => ({
     personIndex: index("idx_gift_person").on(table.personId),
+    notionSourceIndex: index("idx_gift_notion_source").on(table.userId, table.notionSourceId),
   }),
 );
 

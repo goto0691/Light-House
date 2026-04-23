@@ -1,67 +1,57 @@
 import Link from "next/link";
 
+import { GlassCard } from "@/components/shared/glass-card";
+import { PersonHealthBar } from "@/components/prm/person-health-bar";
+import { Tag } from "@/components/shared/tag";
 import type { PersonMock } from "@/lib/mock/prm";
+import { getLayerColor } from "@/lib/mock/prm";
 
 export function PersonCard({ person }: { person: PersonMock }) {
   const overdue = person.daysSinceContact > person.cadenceDays;
-  const progress = Math.min(100, Math.round((person.daysSinceContact / person.cadenceDays) * 100));
 
   return (
-    <Link
-      className={`glass block rounded-[24px] p-5 transition hover:translate-y-[-2px] ${overdue ? "shadow-[0_0_28px_rgba(239,68,68,0.15)]" : ""}`}
+    <GlassCard
+      as={Link}
+      className={overdue ? "shadow-[0_0_28px_rgba(239,68,68,0.15)]" : ""}
       href={`/prm?detail=person:${person.id}`}
+      interactive
+      priority="primary"
     >
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-foreground">{person.name}</h2>
+            <div
+              aria-hidden="true"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold text-primary-foreground"
+              style={{ backgroundColor: getLayerColor(person.layer) }}
+            >
+              {person.name.slice(0, 1)}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-balance truncate font-display text-2xl text-foreground">{person.name}</h2>
+              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">Layer {person.layer}</p>
+            </div>
             {person.nickname ? <span className="text-sm text-muted-foreground">({person.nickname})</span> : null}
-            {person.favorite ? <span className="rounded-full bg-primary/15 px-2 py-1 text-[11px] text-primary">STAR</span> : null}
+            {person.favorite ? <Tag value="favorite" variant="custom" /> : null}
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">{person.bio}</p>
+          <p className="text-pretty mt-3 text-sm text-muted-foreground">{person.bio}</p>
         </div>
-        <div
-          className="h-3 w-3 rounded-full"
-          style={{
-            backgroundColor:
-              person.layer === 5
-                ? "hsl(var(--danger))"
-                : person.layer === 15
-                  ? "hsl(var(--warning))"
-                  : person.layer === 50
-                    ? "hsl(var(--info))"
-                    : "hsl(var(--muted-foreground))",
-          }}
-        />
+        <Tag value={person.status} variant="status" />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {person.groups.map((group) => (
-          <span className="rounded-full bg-white/6 px-3 py-1 text-xs text-foreground" key={group}>
-            {group}
-          </span>
+          <Tag className="normal-case tracking-normal" key={group} value={group} variant="custom" />
         ))}
+        <Tag value={`${person.layer}`} variant="dunbar" />
       </div>
 
-      <div className="mt-5">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Relationship Health</span>
-          <span>
-            {person.daysSinceContact}d / cadence {person.cadenceDays}d
-          </span>
-        </div>
-        <div className="mt-2 h-2 rounded-full bg-white/8">
-          <div
-            className={`h-2 rounded-full ${overdue ? "bg-[hsl(var(--danger))]" : "bg-[hsl(var(--primary))]"}`}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
+      <PersonHealthBar cadenceDays={person.cadenceDays} lastContactDays={person.daysSinceContact} />
 
-      <div className="mt-5 flex items-center justify-between text-xs text-muted-foreground">
-        <span>Layer {person.layer}</span>
-        {person.upcomingBirthday ? <span>🎂 {person.upcomingBirthday}</span> : <span>{person.status}</span>}
+      <div className="tabular-nums mt-5 flex items-center justify-between text-xs text-muted-foreground">
+        <span>{person.interactionsCount} interactions</span>
+        {person.upcomingBirthday ? <span>🎂 {person.upcomingBirthday}</span> : <span>{person.daysSinceContact}d since contact</span>}
       </div>
-    </Link>
+    </GlassCard>
   );
 }

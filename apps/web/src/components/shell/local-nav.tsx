@@ -22,11 +22,11 @@ export function LocalNav({ domain }: { domain: DomainKey }) {
   const toggle = useShellStore((state) => state.toggleLNB);
 
   return (
-    <aside className="glass sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col border-r border-white/10 p-4 lg:flex">
+    <aside className="glass sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-white/10 p-4 lg:flex">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Workspace</p>
-          <h2 className="mt-2 text-lg font-semibold text-foreground">{DOMAIN_LABELS[domain]}</h2>
+          <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Light House</p>
+          <h2 className="mt-2 font-display text-[1.35rem] leading-7 text-foreground">{DOMAIN_LABELS[domain]}</h2>
         </div>
         <button
           aria-label="Collapse local navigation"
@@ -48,8 +48,8 @@ export function LocalNav({ domain }: { domain: DomainKey }) {
                   key={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "rounded-2xl px-3 py-2 text-sm text-muted-foreground transition hover:bg-white/6 hover:text-foreground",
-                    active && "bg-white/8 text-foreground",
+                    "rounded-2xl px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-white/6 hover:text-foreground",
+                    active && "bg-white/8 text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
                   )}
                   href={item.href}
                 >
@@ -60,8 +60,9 @@ export function LocalNav({ domain }: { domain: DomainKey }) {
           </nav>
 
           <div className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-4">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Shared Layer</p>
-            <p className="mt-2 text-sm text-foreground">Command Palette, Quick Capture, Drawer, Hotkeys가 연결되었습니다.</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-primary">Shared Layer</p>
+            <p className="mt-2 text-sm text-foreground">검색, 캡처, 드로어, 알림이 전역에서 이어지는 작업 캔버스입니다.</p>
+            <p className="mt-3 text-xs uppercase tracking-[0.2em] text-muted-foreground">Cmd+\ · toggle rail</p>
           </div>
         </>
       ) : (

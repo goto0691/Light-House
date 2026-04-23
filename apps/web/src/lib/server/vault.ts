@@ -1,8 +1,12 @@
 import "server-only";
 
+import { ulid } from "ulidx";
+
 import type { AssetMock, MediaMock, PlaceMock, ZettelMock } from "@/lib/mock/vault";
 import { getSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
+import { syncZettelRelationsFromContent } from "@/lib/server/relations";
+import { syncTagsForEntity } from "@/lib/server/tagging";
 
 export type VaultSnapshot = {
   selectedZettelId: string;
@@ -13,8 +17,16 @@ export type VaultSnapshot = {
 };
 
 type UserRow = { id: string };
-type ZettelRow = { id: string; title: string; type: ZettelMock["type"]; category: string | null; summary: string | null; content: string | null };
-type LinkRow = { sourceId: string; targetTitle: string };
+type ZettelRow = {
+  id: string;
+  title: string;
+  type: ZettelMock["type"];
+  category: string | null;
+  summary: string | null;
+  content: string | null;
+};
+type BacklinkRow = { targetId: string; sourceTitle: string };
+type OutgoingRow = { id: string; sourceId: string; targetId: string; targetTitle: string };
 type MediaRow = { id: string; mediaType: MediaMock["mediaType"]; title: string; creator: string | null; status: MediaMock["status"]; review: string | null };
 type AssetRow = { id: string; category: AssetMock["category"]; name: string; brand: string | null; currentCondition: string | null };
 type PlaceRow = { id: string; category: PlaceMock["category"]; name: string; address: string | null; notes: string | null };
@@ -32,6 +44,21 @@ async function resolveUser() {
     [userId, session.email, session.displayName],
   );
   return { id: userId, session };
+}
+
+function summarize(content: string) {
+  const text = content.trim().replace(/\s+/g, " ");
+  return text ? text.slice(0, 160) : "요약이 아직 없습니다.";
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 64);
 }
 
 export async function seedVaultSupportData() {
@@ -81,41 +108,63 @@ export async function seedVaultSupportData() {
 
 export async function getVaultSnapshot(): Promise<VaultSnapshot> {
   const { id: userId } = await resolveUser();
-  const [zettelResult, backlinkResult, mediaResult, assetResult, placeResult] = await Promise.all([
+  const [zettelResult, backlinkResult, outgoingResult, mediaResult, assetResult, placeResult] = await Promise.all([
     queryD1<ZettelRow>(
-      `select id, title, type, category, summary, content from zettels where user_id = ? order by pinned desc, updated_at desc`,
+      `select id, title, type, category, summary, content
+       from zettels
+       where user_id = ? and deleted_at is null
+       order by pinned desc, updated_at desc`,
       [userId],
     ),
-    queryD1<LinkRow>(
-      `select zl.target_id as sourceId, zs.title as targetTitle
+    queryD1<BacklinkRow>(
+      `select zl.target_id as targetId, zs.title as sourceTitle
        from zettel_links zl
        inner join zettels zs on zs.id = zl.source_id
        inner join zettels zt on zt.id = zl.target_id
-       where zt.user_id = ?`,
+       where zt.user_id = ? and zs.deleted_at is null and zt.deleted_at is null`,
       [userId],
     ),
-    queryD1<MediaRow>(`select id, media_type as mediaType, title, creator, status, review from media_logs where user_id = ? order by updated_at desc`, [userId]),
-    queryD1<AssetRow>(`select id, category, name, brand, current_condition as currentCondition from assets where user_id = ? order by created_at asc`, [userId]),
-    queryD1<PlaceRow>(`select id, category, name, address, notes from places where user_id = ? order by updated_at desc`, [userId]),
+    queryD1<OutgoingRow>(
+      `select zl.id, zl.source_id as sourceId, zl.target_id as targetId, zt.title as targetTitle
+       from zettel_links zl
+       inner join zettels zs on zs.id = zl.source_id
+       inner join zettels zt on zt.id = zl.target_id
+       where zs.user_id = ? and zs.deleted_at is null and zt.deleted_at is null`,
+      [userId],
+    ),
+    queryD1<MediaRow>(`select id, media_type as mediaType, title, creator, status, review from media_logs where user_id = ? and deleted_at is null order by updated_at desc`, [userId]),
+    queryD1<AssetRow>(`select id, category, name, brand, current_condition as currentCondition from assets where user_id = ? and deleted_at is null order by created_at asc`, [userId]),
+    queryD1<PlaceRow>(`select id, category, name, address, notes from places where user_id = ? and deleted_at is null order by updated_at desc`, [userId]),
   ]);
 
   const backlinks = new Map<string, string[]>();
   for (const row of backlinkResult.rows) {
-    const list = backlinks.get(row.sourceId) ?? [];
-    list.push(row.targetTitle);
-    backlinks.set(row.sourceId, list);
+    const list = backlinks.get(row.targetId) ?? [];
+    list.push(row.sourceTitle);
+    backlinks.set(row.targetId, list);
   }
 
-  const zettels: ZettelMock[] = zettelResult.rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    type: row.type,
-    category: row.category ?? "미분류",
-    summary: row.summary ?? "요약이 아직 없습니다.",
-    content: row.content ?? "",
-    backlinks: backlinks.get(row.id) ?? [],
-    related: [],
-  }));
+  const outgoing = new Map<string, ZettelMock["outgoingLinks"]>();
+  for (const row of outgoingResult.rows) {
+    const list = outgoing.get(row.sourceId) ?? [];
+    list.push({ id: row.id, targetId: row.targetId, title: row.targetTitle });
+    outgoing.set(row.sourceId, list);
+  }
+
+  const zettels: ZettelMock[] = zettelResult.rows.map((row) => {
+    const links = outgoing.get(row.id) ?? [];
+    return {
+      id: row.id,
+      title: row.title,
+      type: row.type,
+      category: row.category ?? "미분류",
+      summary: row.summary ?? "요약이 아직 없습니다.",
+      content: row.content ?? "",
+      outgoingLinks: links,
+      backlinks: backlinks.get(row.id) ?? [],
+      related: links.map((link) => link.title),
+    };
+  });
   const media: MediaMock[] = mediaResult.rows.map((row) => ({
     id: row.id,
     mediaType: row.mediaType,
@@ -165,13 +214,98 @@ export async function cycleVaultMediaStatus(mediaId: string) {
 
 export async function updateVaultZettelTitle(zettelId: string, title: string) {
   const { id: userId } = await resolveUser();
-  await executeD1(`update zettels set title = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [title.trim(), zettelId, userId]);
+  const nextTitle = title.trim();
+  if (!nextTitle) throw new Error("제목은 비워둘 수 없습니다.");
+  await executeD1(`update zettels set title = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [nextTitle, zettelId, userId]);
   return getVaultSnapshot();
 }
 
 export async function updateVaultZettelContent(zettelId: string, content: string) {
   const { id: userId } = await resolveUser();
-  await executeD1(`update zettels set content = ?, content_text = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [content, content, zettelId, userId]);
+  await executeD1(
+    `update zettels
+     set content = ?, content_text = ?, summary = ?, updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [content, content, summarize(content), zettelId, userId],
+  );
+  await syncTagsForEntity({
+    userId,
+    taggableType: "zettel",
+    taggableId: zettelId,
+    content,
+  });
+  await syncZettelRelationsFromContent({
+    userId,
+    zettelId,
+    content,
+  });
+  return getVaultSnapshot();
+}
+
+export async function createVaultZettel(input: { title: string; type?: ZettelMock["type"]; category?: string; content?: string }) {
+  const { id: userId } = await resolveUser();
+  const title = input.title.trim();
+  if (!title) throw new Error("메모 제목은 비워둘 수 없습니다.");
+  const content = input.content ?? "";
+  const id = ulid();
+  await executeD1(
+    `insert into zettels
+      (id, user_id, title, slug, content, content_text, summary, type, category, pinned, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'), datetime('now'))`,
+    [id, userId, title, `${slugify(title)}-${id.slice(-6).toLowerCase()}`, content, content, summarize(content), input.type ?? "fleeting", input.category?.trim() || "미분류"],
+  );
+  await syncTagsForEntity({
+    userId,
+    taggableType: "zettel",
+    taggableId: id,
+    content,
+  });
+  await syncZettelRelationsFromContent({
+    userId,
+    zettelId: id,
+    content,
+  });
+  const snapshot = await getVaultSnapshot();
+  return {
+    snapshot: {
+      ...snapshot,
+      selectedZettelId: id,
+    },
+  };
+}
+
+export async function deleteVaultZettel(zettelId: string) {
+  const { id: userId } = await resolveUser();
+  await executeD1(`delete from zettel_links where source_id = ? or target_id = ?`, [zettelId, zettelId]);
+  await executeD1(`update zettels set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [zettelId, userId]);
+  return getVaultSnapshot();
+}
+
+export async function linkVaultZettels(input: { sourceId: string; targetId: string; context?: string }) {
+  const { id: userId } = await resolveUser();
+  if (!input.sourceId || !input.targetId) throw new Error("링크할 두 메모를 모두 선택해 주세요.");
+  if (input.sourceId === input.targetId) throw new Error("같은 메모끼리는 연결할 수 없습니다.");
+
+  const allowed = await queryD1<{ count: number }>(
+    `select count(*) as count
+     from zettels
+     where user_id = ? and id in (?, ?) and deleted_at is null`,
+    [userId, input.sourceId, input.targetId],
+  );
+  if (Number(allowed.rows[0]?.count ?? 0) < 2) {
+    throw new Error("연결 대상 메모를 찾지 못했습니다.");
+  }
+
+  await executeD1(
+    `insert or ignore into zettel_links (id, source_id, target_id, context, created_at)
+     values (?, ?, ?, ?, datetime('now'))`,
+    [ulid(), input.sourceId, input.targetId, input.context?.trim() || null],
+  );
+  return getVaultSnapshot();
+}
+
+export async function unlinkVaultZettels(linkId: string) {
+  await executeD1(`delete from zettel_links where id = ?`, [linkId]);
   return getVaultSnapshot();
 }
 

@@ -21,6 +21,20 @@ export function ZettelDrawer({ id }: { id: string }) {
         <p className="mt-3 text-sm text-foreground">{zettel.content}</p>
       </section>
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-primary">Outgoing</p>
+        <div className="mt-3 space-y-2">
+          {zettel.outgoingLinks.length ? (
+            zettel.outgoingLinks.map((item) => (
+              <p className="text-sm text-muted-foreground" key={item.id}>
+                {item.title}
+              </p>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">연결한 메모가 없습니다.</p>
+          )}
+        </div>
+      </section>
+      <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs uppercase tracking-[0.2em] text-primary">Backlinks</p>
         <div className="mt-3 space-y-2">
           {zettel.backlinks.map((item) => (

@@ -8,6 +8,7 @@ import {
   PENDING_CAPTURES,
   PROJECTS_MOCK,
   TASKS_MOCK,
+  type ActionHubReference,
   type PendingCaptureMock,
   type ProjectMock,
   type TaskMock,
@@ -27,7 +28,9 @@ type ActionHubState = {
   projects: ProjectMock[];
   tasks: TaskMock[];
   pendingCaptures: PendingCaptureMock[];
-  replaceSnapshot: (snapshot: Pick<ActionHubState, "projects" | "tasks" | "pendingCaptures">) => void;
+  referencePeople: ActionHubReference[];
+  referenceZettels: ActionHubReference[];
+  replaceSnapshot: (snapshot: Pick<ActionHubState, "projects" | "tasks" | "pendingCaptures" | "referencePeople" | "referenceZettels">) => void;
   ingestCapture: (text: string, result: CaptureResult) => { taskId?: string };
   dismissCapture: (id: string) => void;
   routeInboxTaskToProject: (taskId: string, projectId: string) => void;
@@ -44,11 +47,15 @@ export const useActionHubStore = create<ActionHubState>()(
       projects: PROJECTS_MOCK,
       tasks: TASKS_MOCK,
       pendingCaptures: PENDING_CAPTURES,
+      referencePeople: [],
+      referenceZettels: [],
       replaceSnapshot: (snapshot) =>
         set(() => ({
           projects: snapshot.projects,
           tasks: snapshot.tasks,
           pendingCaptures: snapshot.pendingCaptures,
+          referencePeople: snapshot.referencePeople,
+          referenceZettels: snapshot.referenceZettels,
         })),
       ingestCapture: (text, result) => {
         if (result.status === "routed" && result.suggested.domain === "task") {
@@ -65,6 +72,7 @@ export const useActionHubStore = create<ActionHubState>()(
                 brainEnergy: "normal",
                 dueAt: typeof result.suggested.fields.dueAt === "string" ? result.suggested.fields.dueAt : undefined,
                 checklist: { total: 1, completed: 0 },
+                checklistItems: [{ id: ulid(), content: "프로젝트 라우팅", completed: false }],
                 linkedPeople: [],
                 linkedZettels: [],
                 content: text,
@@ -121,6 +129,8 @@ export const useActionHubStore = create<ActionHubState>()(
         projects: state.projects,
         tasks: state.tasks,
         pendingCaptures: state.pendingCaptures,
+        referencePeople: state.referencePeople,
+        referenceZettels: state.referenceZettels,
       }),
     },
   ),

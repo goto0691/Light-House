@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { ulid } from "ulidx";
+
+import { ingestActionHubCapture } from "@/lib/server/action-hub";
 
 type CaptureRequest = {
   text?: string;
@@ -10,41 +11,38 @@ type CaptureRequest = {
   };
 };
 
-function inferDomain(text: string) {
-  const normalized = text.toLowerCase();
-  if (normalized.includes("미팅") || normalized.includes("연락")) return "interaction";
-  if (normalized.includes("메모") || normalized.includes("아이디어")) return "zettel";
-  return "task";
-}
-
 export async function POST(request: Request) {
-  const body = (await request.json()) as CaptureRequest;
-  const text = body.text?.trim() ?? "";
+  try {
+    const body = (await request.json()) as CaptureRequest;
+    const text = body.text?.trim() ?? "";
 
-  if (!text) {
-    return NextResponse.json({ error: "Text is required" }, { status: 400 });
-  }
+    if (!text) {
+      return NextResponse.json({ error: "Text is required" }, { status: 400 });
+    }
 
-  const domain = inferDomain(text);
-  const confidence = domain === "task" ? 0.83 : 0.74;
-  const captureId = ulid();
-  const entityId = ulid();
+    const result = await ingestActionHubCapture(text, body.context);
 
-  return NextResponse.json({
-    captureId,
-    status: confidence >= 0.7 ? "routed" : "pending",
-    suggested: {
-      domain,
-      fields: {
-        title: text.length > 40 ? `${text.slice(0, 40)}...` : text,
-        priority: "P2",
-        projectId: body.context?.projectId ?? null,
+    return NextResponse.json({
+      captureId: result.captureId,
+      status: result.status,
+      suggested: result.suggested,
+      routedEntity: result.taskId
+        ? {
+            type: "task",
+            id: result.taskId,
+          }
+        : {
+            type: result.suggested.domain,
+            id: result.captureId,
+          },
+      snapshot: result.snapshot,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Capture failed.",
       },
-      confidence,
-    },
-    routedEntity: {
-      type: domain,
-      id: entityId,
-    },
-  });
+      { status: 500 },
+    );
+  }
 }

@@ -6,6 +6,42 @@ export type Habit = {
   completedToday: boolean;
 };
 
+export type HabitDefinition = {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  schedule: string;
+  isActive: boolean;
+};
+
+export type WorkoutLog = {
+  id: string;
+  date: string;
+  categories: string;
+  duration: number;
+  intensity: number;
+  notes: string;
+};
+
+export type CareerLog = {
+  id: string;
+  organization: string;
+  role: string;
+  period: string;
+  category: string;
+  description: string;
+};
+
+export type HealthMetric = {
+  id: string;
+  date: string;
+  sleepHours: number;
+  deepWorkMinutes: number;
+  weight?: number;
+  stepsCount?: number;
+};
+
 export type DailyLogMock = {
   date: string;
   mood: number;

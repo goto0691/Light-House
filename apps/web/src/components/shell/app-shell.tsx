@@ -7,6 +7,7 @@ import { ShellProvider } from "@/components/providers/shell-provider";
 import { Breadcrumb } from "@/components/shell/breadcrumb";
 import { CommandPalette } from "@/components/shared/command-palette";
 import { HotkeyDialog } from "@/components/shared/hotkey-dialog";
+import { NotificationCenter } from "@/components/shared/notification-center";
 import { QuickCaptureModal } from "@/components/shared/quick-capture-modal";
 import { SideDrawerHost } from "@/components/shared/side-drawer-host";
 import { ToastViewport } from "@/components/shared/toast-viewport";
@@ -22,24 +23,33 @@ function resolveDomain(pathname: string): DomainKey {
   return "dashboard";
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  glassOpacity = "full",
+}: {
+  children: ReactNode;
+  glassOpacity?: "full" | "low" | "off";
+}) {
   const pathname = usePathname();
   const domain = resolveDomain(pathname);
 
   return (
     <ShellProvider>
-      <div className="min-h-screen bg-background text-foreground">
-        <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.10),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(14,165,233,0.08),_transparent_30%),linear-gradient(180deg,_rgba(22,26,34,0.75),_rgba(14,17,22,1))]" />
+      <div className="min-h-screen bg-background text-foreground" data-glass-opacity={glassOpacity}>
+        <div className="fixed inset-0 -z-20 bg-[linear-gradient(180deg,_rgba(22,26,34,0.84),_rgba(14,17,22,1))]" />
+        <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_10%_0%,rgba(251,191,36,0.13),transparent_24%),radial-gradient(circle_at_100%_10%,rgba(14,165,233,0.09),transparent_28%),radial-gradient(circle_at_40%_100%,rgba(139,92,246,0.07),transparent_24%)]" />
+        <div className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-40 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),transparent)]" />
         <div className="flex min-h-screen">
           <GlobalNav />
           <LocalNav domain={domain} />
           <main className="flex min-h-screen min-w-0 flex-1 flex-col">
             <Breadcrumb />
-            <div className="flex-1 px-4 py-4 md:px-6 md:py-6">{children}</div>
+            <div className="flex-1 px-4 py-5 md:px-6 md:py-7 xl:px-8">{children}</div>
           </main>
         </div>
         <SideDrawerHost />
         <CommandPalette />
+        <NotificationCenter />
         <QuickCaptureModal />
         <HotkeyDialog />
         <ToastViewport />

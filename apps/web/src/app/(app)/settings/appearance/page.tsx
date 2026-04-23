@@ -1,22 +1,19 @@
 import { GlassCard } from "@/components/shared/glass-card";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { AppearanceSettingsClient } from "@/components/settings/appearance-settings-client";
+import { getAppearanceSettingsOverview } from "@/lib/server/settings";
 
-export default function AppearancePage() {
+export default async function AppearancePage() {
+  const overview = await getAppearanceSettingsOverview();
+
   return (
-    <section className="grid gap-4 xl:grid-cols-2">
-      <GlassCard>
+    <section className="space-y-4">
+      <GlassCard className="p-5">
         <p className="text-xs uppercase tracking-[0.24em] text-primary">Appearance</p>
-        <h1 className="mt-3 text-3xl font-semibold">테마</h1>
-        <div className="mt-6 flex items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-5">
-          <ThemeToggle />
-          <p className="text-sm text-muted-foreground">Dark / Light 토글을 문서 기준으로 먼저 제공합니다.</p>
-        </div>
+        <h1 className="mt-3 font-display text-4xl text-foreground">외형 및 레이아웃</h1>
+        <p className="mt-3 text-sm text-muted-foreground">AppearanceControls, GlassOpacityControl, BentoLayoutEditor 구조를 페이지 안에서 분리해 실제 편집 흐름에 더 가깝게 맞췄습니다.</p>
       </GlassCard>
-
-      <GlassCard>
-        <p className="text-xs uppercase tracking-[0.24em] text-primary">Dashboard Layout</p>
-        <h2 className="mt-3 text-3xl font-semibold">Bento 레이아웃</h2>
-        <p className="mt-3 text-sm text-muted-foreground">위젯 숨김, 순서 변경, 폰트 스케일 조정은 다음 단계에서 저장형 설정으로 연결합니다.</p>
+      <GlassCard className="p-5">
+        <AppearanceSettingsClient initial={overview} />
       </GlassCard>
     </section>
   );

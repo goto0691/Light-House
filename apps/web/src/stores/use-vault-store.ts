@@ -53,7 +53,14 @@ export const useVaultStore = create<VaultState>()(
         })),
       updateZettelTitle: (id, title) =>
         set((state) => ({
-          zettels: state.zettels.map((zettel) => (zettel.id === id ? { ...zettel, title } : zettel)),
+          zettels: state.zettels.map((zettel) =>
+            zettel.id === id
+              ? {
+                  ...zettel,
+                  title,
+                }
+              : zettel,
+          ),
         })),
       cycleMediaStatus: (id) =>
         set((state) => ({

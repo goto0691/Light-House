@@ -31,8 +31,11 @@ export function Breadcrumb() {
   );
 
   return (
-    <div className="sticky top-0 z-10 flex min-h-12 items-center border-b border-white/10 bg-[rgba(14,17,22,0.65)] px-6 backdrop-blur-xl">
+    <div className="sticky top-0 z-10 flex min-h-12 items-center border-b border-white/10 bg-[rgba(14,17,22,0.58)] px-6 backdrop-blur-xl">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <span className="mr-3 hidden rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.24em] text-primary md:inline-flex">
+          Light House
+        </span>
         {crumbs.map((crumb, index) => {
           const last = index === crumbs.length - 1;
           return (

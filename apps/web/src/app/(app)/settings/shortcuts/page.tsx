@@ -1,26 +1,20 @@
 import { GlassCard } from "@/components/shared/glass-card";
+import { ShortcutsSettingsClient } from "@/components/settings/shortcuts-settings-client";
+import { getShortcutSettingsOverview } from "@/lib/server/settings";
 
-const SHORTCUTS = [
-  ["Cmd+K", "Command Palette"],
-  ["Cmd+Shift+N", "Quick Capture"],
-  ["Cmd+\\", "LNB Toggle"],
-  ["?", "Hotkey Cheat Sheet"],
-  ["g d / a / v / p / l / s", "Domain Navigation"],
-];
+export default async function ShortcutsPage() {
+  const overview = await getShortcutSettingsOverview();
 
-export default function ShortcutsPage() {
   return (
-    <GlassCard>
-      <p className="text-xs uppercase tracking-[0.24em] text-primary">Shortcuts</p>
-      <h1 className="mt-3 text-3xl font-semibold">단축키</h1>
-      <div className="mt-5 space-y-3">
-        {SHORTCUTS.map(([combo, description]) => (
-          <div className="flex items-center justify-between rounded-3xl border border-white/10 bg-white/5 px-4 py-3" key={combo}>
-            <p className="text-sm text-foreground">{description}</p>
-            <code className="rounded-xl bg-black/20 px-2 py-1 text-xs text-primary">{combo}</code>
-          </div>
-        ))}
-      </div>
-    </GlassCard>
+    <section className="space-y-4">
+      <GlassCard className="p-5">
+        <p className="text-xs uppercase tracking-[0.24em] text-primary">Shortcuts</p>
+        <h1 className="mt-3 font-display text-4xl text-foreground">단축키</h1>
+        <p className="mt-3 text-sm text-muted-foreground">ShortcutTable 구조로 묶어서 카테고리별 바인딩과 활성 상태를 한 곳에서 편집하도록 정리했습니다.</p>
+      </GlassCard>
+      <GlassCard className="p-5">
+        <ShortcutsSettingsClient initial={overview} />
+      </GlassCard>
+    </section>
   );
 }

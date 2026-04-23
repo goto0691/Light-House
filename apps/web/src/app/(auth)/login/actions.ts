@@ -3,36 +3,27 @@
 import { redirect } from "next/navigation";
 
 import { createSession } from "@/lib/auth/session";
+import { authenticateUser } from "@/lib/server/auth";
 
 export type LoginActionState = {
   error?: string;
 };
 
-function getAdminConfig() {
-  return {
-    email: process.env.LIGHT_HOUSE_ADMIN_EMAIL ?? "keeper@lighthouse.local",
-    password: process.env.LIGHT_HOUSE_ADMIN_PASSWORD ?? "lighthouse",
-    displayName: process.env.LIGHT_HOUSE_ADMIN_NAME ?? "Light Keeper",
-  };
-}
-
 export async function loginAction(_: LoginActionState, formData: FormData): Promise<LoginActionState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-
-  const admin = getAdminConfig();
 
   if (!email || !password) {
     return { error: "이메일과 비밀번호를 모두 입력해 주세요." };
   }
 
-  if (email !== admin.email || password !== admin.password) {
-    return { error: "기본 관리자 계정과 일치하지 않습니다." };
+  const user = await authenticateUser(email, password);
+  if (!user) {
+    return { error: "계정 정보가 일치하지 않습니다." };
   }
 
   await createSession({
-    email: admin.email,
-    displayName: admin.displayName,
+    userId: user.id,
   });
 
   redirect("/dashboard");

@@ -1,4 +1,5 @@
 import {
+  Bell,
   Brain,
   Home,
   Plus,
@@ -36,6 +37,7 @@ export const DOMAINS: NavigationItem[] = [
 export const UTILITY: NavigationItem[] = [
   { key: "search", label: "Search", icon: Search, hotkey: "mod+k" },
   { key: "capture", label: "Quick Capture", icon: Plus, hotkey: "mod+shift+n" },
+  { key: "notifications", label: "Notifications", icon: Bell, hotkey: "g n" },
   { key: "user", label: "Account", icon: User, path: "/settings" },
 ];
 

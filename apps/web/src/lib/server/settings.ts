@@ -1,0 +1,343 @@
+import "server-only";
+
+import { queryD1 } from "@/lib/server/cloudflare-d1";
+import { resolveCurrentUser } from "@/lib/server/session-user";
+import { DEFAULT_DASHBOARD_LAYOUTS, DEFAULT_SHORTCUT_BINDINGS, listShortcutBindings, listWidgetLayouts } from "@/lib/server/ui-state";
+
+type UsageRow = {
+  count: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+};
+
+type ConversationRow = {
+  id: string;
+  purpose: string;
+  model: string;
+  createdAt: string;
+};
+
+type BackupRow = {
+  id: string;
+  createdAt: string;
+  snapshot: string | null;
+};
+
+type BackupSnapshotRow = {
+  id: string;
+  createdAt: string;
+  bucketKey: string;
+  status: string;
+  format: string;
+  sizeBytes: number | null;
+};
+
+type ImportRow = {
+  importBatchId: string | null;
+  createdAt: string;
+  fileName: string | null;
+  importSummary: string | null;
+  restoreSummary: string | null;
+};
+
+type ImportJobRow = {
+  id: string;
+  createdAt: string;
+  fileName: string;
+  status: string;
+  previewSummary: string | null;
+  resultSummary: string | null;
+};
+
+type CronRow = {
+  id: string;
+  action: string;
+  createdAt: string;
+  snapshot: string | null;
+};
+
+type CountRow = {
+  total: number | null;
+};
+
+export async function getSettingsHomeOverview() {
+  const user = await resolveCurrentUser();
+
+  return {
+    profile: {
+      displayName: user.displayName,
+      email: user.email,
+      locale: user.locale,
+      timezone: user.timezone,
+      theme: user.preferences.theme,
+    },
+  };
+}
+
+export async function getAppearanceSettingsOverview() {
+  const user = await resolveCurrentUser();
+  const dashboardLayouts = await listWidgetLayouts("dashboard");
+
+  return {
+    theme: user.preferences.theme,
+    glassOpacity: user.preferences.glassOpacity,
+    dashboardLayouts: dashboardLayouts.length
+      ? dashboardLayouts
+      : DEFAULT_DASHBOARD_LAYOUTS.map((item, index) => ({
+          id: `default-${item.widgetKey}`,
+          pageKey: "dashboard",
+          widgetKey: item.widgetKey,
+          titleOverride: item.titleOverride ?? null,
+          layout: item.layout,
+          isHidden: item.isHidden ?? false,
+          displayOrder: item.displayOrder ?? index,
+        })),
+  };
+}
+
+export async function getShortcutSettingsOverview() {
+  const bindings = await listShortcutBindings();
+
+  return {
+    bindings: bindings.length
+      ? bindings
+      : DEFAULT_SHORTCUT_BINDINGS.map((item, index) => ({
+          id: `default-${item.actionKey}`,
+          category: item.category,
+          actionKey: item.actionKey,
+          label: item.label,
+          binding: item.binding,
+          isEnabled: item.isEnabled ?? true,
+          isCustom: false,
+          displayOrder: item.displayOrder ?? index,
+        })),
+  };
+}
+
+export async function getAISettingsOverview() {
+  const user = await resolveCurrentUser();
+  const [usageResult, recentResult] = await Promise.all([
+    queryD1<UsageRow>(
+      `select
+         count(*) as count,
+         coalesce(sum(input_tokens), 0) as inputTokens,
+         coalesce(sum(output_tokens), 0) as outputTokens
+       from ai_conversations
+       where user_id = ?
+         and strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'localtime')`,
+      [user.id],
+    ),
+    queryD1<ConversationRow>(
+      `select id, purpose, model, created_at as createdAt
+       from ai_conversations
+       where user_id = ?
+       order by created_at desc
+       limit 6`,
+      [user.id],
+    ),
+  ]);
+
+  const usage = usageResult.rows[0];
+
+  return {
+    enabled: user.preferences.aiEnabled,
+    threshold: user.preferences.aiRoutingThreshold,
+    fallbackModel: user.preferences.aiFallbackModel,
+    usage: {
+      conversations: Number(usage?.count ?? 0),
+      inputTokens: Number(usage?.inputTokens ?? 0),
+      outputTokens: Number(usage?.outputTokens ?? 0),
+    },
+    recentConversations: recentResult.rows.map((row) => ({
+      id: row.id,
+      purpose: row.purpose,
+      model: row.model,
+      createdAt: row.createdAt,
+    })),
+  };
+}
+
+export async function getIntegrationSettingsOverview() {
+  const user = await resolveCurrentUser();
+  const cronResult = await queryD1<CronRow>(
+    `select id, action, created_at as createdAt, snapshot
+     from audit_logs
+     where user_id = ?
+       and action like 'cron.%'
+     order by created_at desc
+     limit 8`,
+    [user.id],
+  );
+
+  return {
+    integrations: [
+      { id: "d1", label: "Cloudflare D1", configured: Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_D1_DATABASE_ID) },
+      { id: "r2", label: "Cloudflare R2", configured: Boolean(process.env.R2_BUCKET && process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY) },
+      { id: "vectorize", label: "Cloudflare Vectorize", configured: Boolean(process.env.VECTORIZE_INDEX) },
+      { id: "gemini", label: "Google Gemini API", configured: Boolean(process.env.GEMINI_API_KEY) },
+      { id: "cron", label: "Cron Secret", configured: Boolean(process.env.CRON_SECRET) },
+    ],
+    recentRuns: cronResult.rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      createdAt: row.createdAt,
+      summary: row.snapshot,
+    })),
+  };
+}
+
+export async function getDataSettingsOverview() {
+  const user = await resolveCurrentUser();
+  const [projects, tasks, people, zettels, dailyLogs, backups, imports, relationStats] = await Promise.all([
+    queryD1<CountRow>(`select count(*) as total from projects where user_id = ? and deleted_at is null`, [user.id]),
+    queryD1<CountRow>(`select count(*) as total from tasks where user_id = ? and deleted_at is null`, [user.id]),
+    queryD1<CountRow>(`select count(*) as total from people where user_id = ?`, [user.id]),
+    queryD1<CountRow>(`select count(*) as total from zettels where user_id = ?`, [user.id]),
+    queryD1<CountRow>(`select count(*) as total from daily_logs where user_id = ?`, [user.id]),
+    queryD1<BackupSnapshotRow>(
+      `select
+         id,
+         created_at as createdAt,
+         bucket_key as bucketKey,
+         status,
+         format,
+         size_bytes as sizeBytes
+       from backup_snapshots
+       where user_id = ?
+         and deleted_at is null
+       order by created_at desc
+       limit 10`,
+      [user.id],
+    ),
+    queryD1<ImportJobRow>(
+      `select
+         id,
+         created_at as createdAt,
+         file_name as fileName,
+         status,
+         preview_summary as previewSummary,
+         result_summary as resultSummary
+       from import_jobs
+       where user_id = ?
+         and deleted_at is null
+       order by created_at desc
+       limit 12`,
+      [user.id],
+    ),
+    queryD1<{
+      taskProjects: number | null;
+      taskPeople: number | null;
+      taskZettels: number | null;
+      zettelPeople: number | null;
+      mediaPeople: number | null;
+      importedProjects: number | null;
+      importedTasks: number | null;
+      importedZettels: number | null;
+      importedMedia: number | null;
+    }>(
+      `select
+         (select count(*) from tasks where user_id = ? and project_id is not null and deleted_at is null) as taskProjects,
+         (select count(*) from task_people_relations tpr inner join tasks t on t.id = tpr.task_id where t.user_id = ?) as taskPeople,
+         (select count(*) from task_zettel_relations tzr inner join tasks t on t.id = tzr.task_id where t.user_id = ?) as taskZettels,
+         (select count(*) from zettel_people_relations zpr inner join zettels z on z.id = zpr.zettel_id where z.user_id = ?) as zettelPeople,
+         (select count(*) from media_people_relations mpr inner join media_logs m on m.id = mpr.media_id where m.user_id = ?) as mediaPeople,
+         (select count(*) from projects where user_id = ? and import_batch_id is not null and deleted_at is null) as importedProjects,
+         (select count(*) from tasks where user_id = ? and import_batch_id is not null and deleted_at is null) as importedTasks,
+         (select count(*) from zettels where user_id = ? and import_batch_id is not null and deleted_at is null) as importedZettels,
+         (select count(*) from media_logs where user_id = ? and import_batch_id is not null and deleted_at is null) as importedMedia`,
+      [user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id],
+    ),
+  ]);
+
+  const relation = relationStats.rows[0];
+
+  let backupItems: Array<{ id: string; createdAt: string; summary: string }> = backups.rows.map((row) => ({
+    id: row.id,
+    createdAt: row.createdAt,
+    summary: `${row.bucketKey} · ${row.format.toUpperCase()} · ${row.status}${row.sizeBytes ? ` · ${row.sizeBytes} bytes` : ""}`,
+  }));
+
+  if (!backupItems.length) {
+    const fallbackBackups = await queryD1<BackupRow>(
+      `select id, created_at as createdAt, snapshot
+       from audit_logs
+       where user_id = ? and action = 'cron.daily_backup'
+       order by created_at desc
+       limit 10`,
+      [user.id],
+    );
+
+    backupItems = fallbackBackups.rows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt,
+      summary: row.snapshot ?? "백업 메타 정보가 없습니다.",
+    }));
+  }
+
+  let importItems: Array<{
+    id: string;
+    importBatchId: string | null;
+    createdAt: string;
+    fileName: string;
+    summary: string;
+    restoreSummary: string;
+  }> = imports.rows.map((row) => ({
+    id: row.id,
+    importBatchId: row.id,
+    createdAt: row.createdAt,
+    fileName: row.fileName,
+    summary: row.previewSummary ?? `상태: ${row.status}`,
+    restoreSummary: row.resultSummary ?? "실행 결과가 아직 없습니다.",
+  }));
+
+  if (!importItems.length) {
+    const fallbackImports = await queryD1<ImportRow>(
+      `select
+         import_batch_id as importBatchId,
+         max(created_at) as createdAt,
+         max(case when action = 'settings.data.notion_import' then entity_id end) as fileName,
+         max(case when action = 'settings.data.notion_import' then snapshot end) as importSummary,
+         max(case when action = 'settings.data.notion_restore' then snapshot end) as restoreSummary
+       from audit_logs
+       where user_id = ?
+         and import_batch_id is not null
+         and action in ('settings.data.notion_import', 'settings.data.notion_restore')
+       group by import_batch_id
+       order by max(created_at) desc
+       limit 12`,
+      [user.id],
+    );
+
+    importItems = fallbackImports.rows.map((row) => ({
+      id: row.importBatchId ?? row.createdAt,
+      importBatchId: row.importBatchId,
+      createdAt: row.createdAt,
+      fileName: row.fileName ?? "배치 파일명 없음",
+      summary: row.importSummary ?? "가져오기 메타 정보가 없습니다.",
+      restoreSummary: row.restoreSummary ?? "관계 복원 기록이 아직 없습니다.",
+    }));
+  }
+
+  return {
+    entityCounts: {
+      projects: Number(projects.rows[0]?.total ?? 0),
+      tasks: Number(tasks.rows[0]?.total ?? 0),
+      people: Number(people.rows[0]?.total ?? 0),
+      zettels: Number(zettels.rows[0]?.total ?? 0),
+      dailyLogs: Number(dailyLogs.rows[0]?.total ?? 0),
+    },
+    relationHealth: {
+      taskProjects: Number(relation?.taskProjects ?? 0),
+      taskPeople: Number(relation?.taskPeople ?? 0),
+      taskZettels: Number(relation?.taskZettels ?? 0),
+      zettelPeople: Number(relation?.zettelPeople ?? 0),
+      mediaPeople: Number(relation?.mediaPeople ?? 0),
+      importedProjects: Number(relation?.importedProjects ?? 0),
+      importedTasks: Number(relation?.importedTasks ?? 0),
+      importedZettels: Number(relation?.importedZettels ?? 0),
+      importedMedia: Number(relation?.importedMedia ?? 0),
+    },
+    backups: backupItems,
+    recentImports: importItems,
+  };
+}

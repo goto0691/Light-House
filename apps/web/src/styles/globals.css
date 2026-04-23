@@ -1,21 +1,59 @@
 @layer base {
   :root {
-    --background: 222 20% 7%;
-    --background-elevated: 222 16% 11%;
-    --foreground: 210 20% 96%;
+    --color-surface-base: 222 20% 7%;
+    --color-surface-raised: 222 16% 11%;
+    --color-surface-overlay: 222 14% 15%;
+    --color-surface-sunken: 222 22% 5%;
+    --color-text-primary: 210 20% 96%;
+    --color-text-secondary: 215 18% 75%;
+    --color-text-muted: 215 15% 62%;
+    --color-text-disabled: 215 10% 38%;
+    --color-border-default: 220 14% 20%;
+    --color-border-subtle: 220 14% 14%;
+    --color-border-focus: 38 96% 62%;
+    --color-border-strong: 220 14% 30%;
+    --color-brand-accent: 38 96% 62%;
+    --color-brand-accent-fg: 222 20% 7%;
+    --color-brand-accent-subtle: 38 96% 62% / 0.12;
+    --color-interactive-default: 38 96% 62%;
+    --color-interactive-hover: 38 96% 72%;
+    --color-interactive-active: 38 96% 52%;
+    --color-interactive-disabled: 215 10% 30%;
+    --color-interactive-focus-ring: 38 96% 62% / 0.6;
+    --color-feedback-success: 142 71% 45%;
+    --color-feedback-warning: 38 92% 58%;
+    --color-feedback-danger: 0 84% 60%;
+    --color-feedback-info: 199 89% 48%;
+    --color-domain-priority-p1: 0 84% 60%;
+    --color-domain-priority-p2: 38 92% 58%;
+    --color-domain-priority-p3: 215 15% 55%;
+    --color-domain-energy-hyperfocus: 271 91% 65%;
+    --color-domain-energy-normal: 199 89% 48%;
+    --color-domain-energy-routine: 142 71% 45%;
+    --color-domain-dunbar-5: 0 84% 60%;
+    --color-domain-dunbar-15: 38 92% 58%;
+    --color-domain-dunbar-50: 199 89% 48%;
+    --color-domain-dunbar-150: 215 15% 55%;
+    --color-glass-bg: 222 20% 12% / 0.55;
+    --color-glass-border: 220 15% 40% / 0.18;
+    --color-glass-highlight: 210 40% 96% / 0.08;
+    --glass-opacity-scale: 1;
+    --background: var(--color-surface-base);
+    --background-elevated: var(--color-surface-raised);
+    --foreground: var(--color-text-primary);
     --muted: 222 12% 18%;
-    --muted-foreground: 215 15% 62%;
-    --border: 220 14% 20%;
-    --border-subtle: 220 14% 14%;
-    --primary: 38 96% 62%;
-    --primary-foreground: 222 20% 7%;
-    --success: 142 71% 45%;
-    --warning: 38 92% 58%;
-    --danger: 0 84% 60%;
-    --info: 199 89% 48%;
-    --glass-bg: 222 20% 12% / 0.55;
-    --glass-border: 220 15% 40% / 0.18;
-    --glass-highlight: 210 40% 96% / 0.08;
+    --muted-foreground: var(--color-text-muted);
+    --border: var(--color-border-default);
+    --border-subtle: var(--color-border-subtle);
+    --primary: var(--color-brand-accent);
+    --primary-foreground: var(--color-brand-accent-fg);
+    --success: var(--color-feedback-success);
+    --warning: var(--color-feedback-warning);
+    --danger: var(--color-feedback-danger);
+    --info: var(--color-feedback-info);
+    --glass-bg: var(--color-glass-bg);
+    --glass-border: var(--color-glass-border);
+    --glass-highlight: var(--color-glass-highlight);
     --shadow-sm: 0 1px 2px 0 hsl(222 30% 3% / 0.4);
     --shadow-md: 0 4px 12px -2px hsl(222 30% 3% / 0.5);
     --shadow-lg: 0 16px 40px -8px hsl(222 30% 3% / 0.6);
@@ -24,20 +62,42 @@
     --radius-md: 10px;
     --radius-lg: 14px;
     --radius-xl: 20px;
-    --font-sans: "Inter", system-ui, sans-serif;
-    --font-serif: "Noto Serif KR", serif;
-    --font-mono: "JetBrains Mono", monospace;
+    --font-display: "Noto Serif KR", "Source Serif 4", serif;
+    --font-sans: "Pretendard Variable", "Pretendard", "Noto Sans KR", sans-serif;
+    --font-serif: var(--font-display);
+    --font-mono: "JetBrains Mono", "Fira Code", monospace;
+    --spacing-touch-scale: 1;
   }
 
   :root[data-theme="light"] {
-    --background: 210 20% 98%;
-    --background-elevated: 0 0% 100%;
-    --foreground: 222 20% 12%;
+    --color-surface-base: 210 20% 98%;
+    --color-surface-raised: 0 0% 100%;
+    --color-surface-overlay: 0 0% 100%;
+    --color-surface-sunken: 210 14% 95%;
+    --color-text-primary: 222 20% 12%;
+    --color-text-secondary: 222 14% 35%;
+    --color-text-muted: 215 15% 42%;
+    --color-text-disabled: 215 10% 65%;
+    --color-border-default: 220 14% 88%;
+    --color-border-subtle: 220 14% 93%;
+    --color-glass-bg: 210 40% 98% / 0.6;
+    --color-glass-border: 220 15% 60% / 0.2;
+    --background: var(--color-surface-base);
+    --background-elevated: var(--color-surface-raised);
+    --foreground: var(--color-text-primary);
     --muted: 220 14% 94%;
-    --muted-foreground: 215 15% 42%;
-    --border: 220 14% 88%;
-    --glass-bg: 210 40% 98% / 0.6;
-    --glass-border: 220 15% 60% / 0.2;
+    --muted-foreground: var(--color-text-muted);
+    --border: var(--color-border-default);
+    --glass-bg: var(--color-glass-bg);
+    --glass-border: var(--color-glass-border);
+  }
+
+  [data-glass-opacity="low"] {
+    --glass-opacity-scale: 0.72;
+  }
+
+  [data-glass-opacity="off"] {
+    --glass-opacity-scale: 0.2;
   }
 }
 
@@ -47,6 +107,11 @@
 
 html {
   color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {
@@ -54,6 +119,12 @@ body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(circle at top, hsl(var(--primary) / 0.11), transparent 28%),
+    radial-gradient(circle at bottom right, hsl(var(--info) / 0.08), transparent 26%),
+    linear-gradient(180deg, hsl(222 18% 10% / 0.76), hsl(var(--background)));
 }
 
 a {
@@ -71,8 +142,17 @@ button {
   cursor: pointer;
 }
 
+::selection {
+  background: hsl(var(--primary) / 0.24);
+  color: hsl(var(--foreground));
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
 .glass {
-  background: hsl(var(--glass-bg));
+  background: hsl(var(--glass-bg) / var(--glass-opacity-scale));
   border: 1px solid hsl(var(--glass-border));
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
@@ -80,21 +160,112 @@ button {
 }
 
 .glass-elevated {
-  background: hsl(222 18% 16% / 0.7);
+  background: hsl(222 18% 16% / calc(0.7 * var(--glass-opacity-scale)));
   border: 1px solid hsl(var(--glass-border));
   backdrop-filter: blur(32px) saturate(160%);
   -webkit-backdrop-filter: blur(32px) saturate(160%);
   box-shadow: inset 0 1px 0 0 hsl(var(--glass-highlight)), var(--shadow-lg);
 }
 
+.text-balance {
+  text-wrap: balance;
+}
+
+.text-pretty {
+  text-wrap: pretty;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary) / 0.55);
+}
+
+.hover-lift {
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+@media (hover: hover) {
+  .hover-lift:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.float-illustration {
+  animation: float-gentle 3s ease-in-out infinite;
+}
+
+.skeleton-shimmer {
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes float-gentle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.surface-raised {
+  background: hsl(var(--color-surface-raised));
+}
+
+.surface-overlay {
+  background: hsl(var(--color-surface-overlay));
+}
+
+.elevation-l0 {
+  box-shadow: var(--shadow-sm);
+}
+
+.elevation-l1 {
+  box-shadow: var(--shadow-md);
+}
+
+.elevation-l2,
+.elevation-l3 {
+  box-shadow: var(--shadow-lg);
+}
+
 .input-base {
   width: 100%;
   border: 1px solid hsl(var(--border));
-  background: hsl(222 18% 12% / 0.8);
+  background: hsl(var(--color-surface-sunken) / 0.92);
   color: hsl(var(--foreground));
   border-radius: 16px;
   padding: 0.875rem 1rem;
   outline: none;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
 }
 
 .input-base:focus {
@@ -136,6 +307,16 @@ button {
 
 .font-sans {
   font-family: var(--font-sans);
+}
+
+@media (max-width: 768px) {
+  :root {
+    --spacing-touch-scale: 1.25;
+  }
+
+  html {
+    font-size: 17px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

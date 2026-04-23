@@ -1,5 +1,5 @@
 export type SearchItem = {
-  type: "person" | "task" | "zettel" | "media" | "place" | "action";
+  type: "person" | "task" | "zettel" | "media" | "place" | "tag" | "action";
   id: string;
   title: string;
   snippet: string;

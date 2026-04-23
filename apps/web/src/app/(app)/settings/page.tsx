@@ -1,12 +1,15 @@
 import { getSession } from "@/lib/auth/session";
+import { getSettingsHomeOverview } from "@/lib/server/settings";
 
 import { GlassCard } from "@/components/shared/glass-card";
 import { LogoutForm } from "@/components/shared/logout-form";
+import { ProfileSettingsClient } from "@/components/settings/profile-settings-client";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import Link from "next/link";
 
 export default async function SettingsPage() {
   const session = await getSession();
+  const overview = await getSettingsHomeOverview();
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -17,12 +20,16 @@ export default async function SettingsPage() {
           P0에서는 단일 관리자 계정과 세션 보호 흐름을 먼저 연결했습니다.
         </p>
 
-        <div className="mt-8 space-y-3 rounded-3xl border border-white/10 bg-white/5 p-5">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Signed In As</p>
-            <p className="mt-2 text-lg font-medium text-foreground">{session?.displayName ?? "Light Keeper"}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{session?.email ?? "keeper@lighthouse.local"}</p>
-          </div>
+        <ProfileSettingsClient
+          profile={{
+            displayName: overview.profile.displayName ?? session?.displayName ?? "Light Keeper",
+            email: overview.profile.email ?? session?.email ?? "keeper@lighthouse.local",
+            locale: overview.profile.locale,
+            timezone: overview.profile.timezone,
+            theme: overview.profile.theme,
+          }}
+        />
+        <div className="mt-3">
           <LogoutForm />
         </div>
       </GlassCard>

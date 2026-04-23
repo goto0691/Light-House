@@ -1,0 +1,129 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
+
+import { ProjectCard } from "@/components/action-hub/project-card";
+import { FilterBar } from "@/components/shared/filter-bar";
+import { GlassCard } from "@/components/shared/glass-card";
+import { postSnapshotMutation } from "@/lib/snapshot-client";
+import { useActionHubStore } from "@/stores/use-action-hub-store";
+
+export function ActionHubHomeClient() {
+  const [isPending, startTransition] = useTransition();
+  const projects = useActionHubStore((state) => state.projects);
+  const replaceSnapshot = useActionHubStore((state) => state.replaceSnapshot);
+  const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<"project" | "area">("project");
+  const [category, setCategory] = useState("");
+  const [filter, setFilter] = useState<"all" | "project" | "area" | "archived">("all");
+  const [query, setQuery] = useState("");
+
+  const visibleProjects = projects.filter((project) => {
+    if (filter === "project" && project.kind !== "project") return false;
+    if (filter === "area" && project.kind !== "area") return false;
+    if (filter === "archived") return false;
+    if (query && !`${project.title} ${project.category}`.toLowerCase().includes(query.toLowerCase())) return false;
+    return true;
+  });
+
+  return (
+    <section className="space-y-6">
+      <GlassCard>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div>
+            <p className="text-xs uppercase tracking-[0.28em] text-primary">Action Hub</p>
+            <h1 className="mt-3 font-display text-4xl text-foreground">프로젝트 랜딩</h1>
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+              프로젝트/영역 랜딩, Inbox, Kanban, List, Calendar, Zen Workspace 흐름에 이어 프로젝트 생성까지 실제로 연결했습니다.
+            </p>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              {([
+                ["all", "All"],
+                ["project", "Project"],
+                ["area", "Area"],
+                ["archived", "Archived"],
+              ] as const).map(([key, label]) => (
+                <button
+                  className={`rounded-full px-3 py-2 text-xs uppercase tracking-[0.18em] transition ${
+                    filter === key ? "border border-primary/20 bg-primary/10 text-primary" : "border border-white/10 bg-white/5 text-muted-foreground hover:bg-white/8 hover:text-foreground"
+                  }`}
+                  key={key}
+                  onClick={() => setFilter(key)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-black/10 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-primary">새 프로젝트</p>
+            <div className="mt-3 space-y-3">
+              <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setTitle(event.target.value)} placeholder="프로젝트 이름" value={title} />
+              <div className="grid gap-3 md:grid-cols-2">
+                <select className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setKind(event.target.value as "project" | "area")} value={kind}>
+                  <option value="project">Project</option>
+                  <option value="area">Area</option>
+                </select>
+                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setCategory(event.target.value)} placeholder="카테고리" value={category} />
+              </div>
+              <button
+                className="rounded-2xl bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                disabled={isPending}
+                onClick={() => {
+                  startTransition(async () => {
+                    try {
+                      await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                        "/api/action-hub/projects",
+                        { title, kind, category },
+                        replaceSnapshot,
+                      );
+                      setTitle("");
+                      setCategory("");
+                      toast.success("프로젝트를 만들었습니다.");
+                    } catch (error) {
+                      toast.error("프로젝트 생성에 실패했습니다.", {
+                        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+                      });
+                    }
+                  });
+                }}
+                type="button"
+              >
+                생성
+              </button>
+            </div>
+          </div>
+        </div>
+      </GlassCard>
+
+      <FilterBar
+        filters={[
+          {
+            kind: "select",
+            key: "kind",
+            label: "Kind",
+            options: [
+              { value: "project", label: "Project" },
+              { value: "area", label: "Area" },
+            ],
+          },
+        ]}
+        onChange={(state) => {
+          setQuery(state.q);
+        }}
+        rightSlot={<span className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{visibleProjects.length} items</span>}
+        searchPlaceholder="프로젝트, 영역, 카테고리 검색"
+      />
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        {visibleProjects.map((project) => (
+          <ProjectCard key={project.id} project={project} />
+        ))}
+      </div>
+    </section>
+  );
+}

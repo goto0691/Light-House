@@ -1,74 +1,108 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { KanbanBoard } from "@/components/action-hub/kanban-board";
+import { ProjectHeader } from "@/components/action-hub/project-header";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { TaskCard } from "@/components/action-hub/task-card";
-import { GlassCard } from "@/components/shared/glass-card";
+import { EmptyState } from "@/components/shared/empty-state";
+import { FilterBar } from "@/components/shared/filter-bar";
 import { useActionHubStore } from "@/stores/use-action-hub-store";
+import type { ProjectMock, TaskMock } from "@/lib/mock/action-hub";
 
-const COLUMNS = [
-  { key: "todo", label: "Backlog" },
-  { key: "in_progress", label: "In Progress" },
-  { key: "review", label: "Review" },
-  { key: "done", label: "Done" },
-  { key: "blocked", label: "Blocked" },
-] as const;
-
-export function KanbanClient({ projectId }: { projectId: string }) {
+export function KanbanClient({ project }: { project: ProjectMock }) {
   const [isPending, startTransition] = useTransition();
-  const tasks = useActionHubStore((state) => state.tasks.filter((task) => task.projectId === projectId));
+  const tasks = useActionHubStore((state) => state.tasks.filter((task) => task.projectId === project.id));
   const replaceSnapshot = useActionHubStore((state) => state.replaceSnapshot);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const visibleTasks = tasks.filter((task) => {
+    if (statusFilter && task.status !== statusFilter) return false;
+    if (query && !`${task.title} ${task.content}`.toLowerCase().includes(query.toLowerCase())) return false;
+    return true;
+  });
+
+  function renderTask(task: TaskMock) {
+    return (
+      <div key={task.id}>
+        <TaskCard projectId={project.id} task={task} />
+        <div className="mt-2 flex justify-end">
+          <button
+            className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+            disabled={isPending}
+            onClick={() => {
+              startTransition(async () => {
+                try {
+                  await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                    `/api/action-hub/tasks/${task.id}/cycle-status`,
+                    undefined,
+                    replaceSnapshot,
+                  );
+                  toast.success("태스크 상태를 다음 단계로 이동했습니다.");
+                } catch (error) {
+                  toast.error("상태 이동에 실패했습니다.", {
+                    description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+                  });
+                }
+              });
+            }}
+            type="button"
+          >
+            상태 이동
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-5">
-      {COLUMNS.map((column) => {
-        const items = tasks.filter((task) => task.status === column.key);
-        return (
-          <GlassCard className="min-h-[420px]" key={column.key}>
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-medium text-foreground">{column.label}</h2>
-              <span className="rounded-full bg-white/8 px-2 py-1 text-[11px] text-muted-foreground">{items.length}</span>
-            </div>
-            <div className="mt-4 space-y-3">
-              {items.map((task) => (
-                <div key={task.id}>
-                  <TaskCard projectId={projectId} task={task} />
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      className="rounded-2xl border border-white/10 px-3 py-2 text-xs text-muted-foreground"
-                      disabled={isPending}
-                      onClick={() => {
-                        startTransition(async () => {
-                          try {
-                            await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                              `/api/action-hub/tasks/${task.id}/cycle-status`,
-                              undefined,
-                              replaceSnapshot,
-                            );
-                            toast.success("태스크 상태를 다음 단계로 이동했습니다.");
-                          } catch (error) {
-                            toast.error("상태 이동에 실패했습니다.", {
-                              description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-                            });
-                          }
-                        });
-                      }}
-                      type="button"
-                    >
-                      상태 이동
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {!items.length ? (
-                <div className="rounded-3xl border border-dashed border-white/15 bg-white/5 p-4 text-sm text-muted-foreground">비어 있습니다.</div>
-              ) : null}
-            </div>
-          </GlassCard>
-        );
-      })}
-    </div>
+    <section className="space-y-4">
+      <ProjectHeader currentView="kanban" project={project} />
+      <FilterBar
+        filters={[
+          {
+            kind: "select",
+            key: "status",
+            label: "Status",
+            options: [
+              { value: "todo", label: "Backlog" },
+              { value: "in_progress", label: "In Progress" },
+              { value: "review", label: "Review" },
+              { value: "done", label: "Done" },
+              { value: "blocked", label: "Blocked" },
+            ],
+          },
+        ]}
+        onChange={(state) => {
+          setQuery(state.q);
+          setStatusFilter(typeof state.filters.status === "string" ? state.filters.status : "");
+        }}
+        rightSlot={
+          <span className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+            {visibleTasks.length} tasks
+          </span>
+        }
+        searchPlaceholder="태스크 제목, 메모, 연결 키워드 검색"
+      />
+      <KanbanBoard
+        tasks={visibleTasks}
+        renderTask={renderTask}
+      />
+      {!visibleTasks.length ? (
+        <EmptyState
+          cta={{
+            label: "빠른 입력",
+            hotkey: "Cmd+Shift+N",
+            onClick: () => window.dispatchEvent(new CustomEvent("light-house:open-quick-capture")),
+          }}
+          description="필터를 넓히거나 빠른 입력으로 새 태스크를 던져보세요."
+          illustration="task"
+          title="이 보드에는 아직 움직이는 카드가 없어요"
+        />
+      ) : null}
+    </section>
   );
 }

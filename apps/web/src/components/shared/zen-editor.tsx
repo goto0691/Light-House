@@ -1,10 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-const PEOPLE = ["재민", "민서", "은지"];
-const ENTITIES = ["존재의 불안", "듄: 파트 2", "호떡집 본점"];
-const TAGS = ["심리학", "실존주의", "비즈니스"];
+import { KeyHint } from "@/components/shared/key-hint";
+import { useSearchSuggestions } from "@/hooks/use-search-suggestions";
+import type { SearchItem } from "@/lib/mock/search";
+import { resolveEditorPrefix } from "@/lib/utils/search-prefix";
+
+function formatSuggestion(item: SearchItem, mode: Exclude<SuggestionMode, null>) {
+  if (mode === "person") return `@${item.title}`;
+  if (mode === "zettel") return `[[${item.title}]]`;
+  return `#${item.title}`;
+}
+
+type SuggestionMode = "person" | "zettel" | "tag" | null;
+
+function getFallbackSuggestions(query: string, mode: Exclude<SuggestionMode, null>) {
+  const source =
+    mode === "person"
+      ? ["재민", "민서", "은지"]
+      : mode === "zettel"
+        ? ["존재의 불안", "듄: 파트 2", "호떡집 본점"]
+        : ["심리학", "실존주의", "비즈니스"];
+  return source
+    .filter((item) => item.includes(query))
+    .map((item) => (mode === "person" ? `@${item}` : mode === "zettel" ? `[[${item}]]` : `#${item}`));
+}
 
 export function ZenEditor({
   placeholder = "생각을 적어 보세요. @사람, [[지식]], #태그 스텁이 열립니다.",
@@ -18,46 +39,110 @@ export function ZenEditor({
   onChange?: (value: string) => void;
 }) {
   const [internalValue, setInternalValue] = useState("");
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const currentValue = value ?? internalValue;
+  const autoSaveKey = `zen-editor:${placeholder}`;
+  const suggestionContext = useMemo(() => resolveEditorPrefix(currentValue), [currentValue]);
+  const remoteResults = useSearchSuggestions({
+    query: suggestionContext.query,
+    types:
+      suggestionContext.mode === "person"
+        ? ["person"]
+        : suggestionContext.mode === "zettel"
+          ? ["zettel", "media", "place"]
+          : suggestionContext.mode === "tag"
+            ? ["tag"]
+            : undefined,
+    enabled: Boolean(suggestionContext.mode),
+  });
 
   const suggestions = useMemo(() => {
-    if (currentValue.endsWith("@")) return PEOPLE.map((item) => `@${item}`);
-    if (currentValue.endsWith("[[")) return ENTITIES.map((item) => `[[${item}]]`);
-    if (currentValue.endsWith("#")) return TAGS.map((item) => `#${item}`);
-    return [];
-  }, [currentValue]);
+    if (!suggestionContext.mode) return [];
+    if (remoteResults.length) return remoteResults.map((item) => formatSuggestion(item, suggestionContext.mode));
+    return getFallbackSuggestions(suggestionContext.query, suggestionContext.mode);
+  }, [remoteResults, suggestionContext]);
+
+  useEffect(() => {
+    setSelectedSuggestionIndex(0);
+  }, [suggestions.length, currentValue]);
+
+  useEffect(() => {
+    if (value !== undefined) return;
+    const restored = window.localStorage.getItem(autoSaveKey);
+    if (restored) {
+      setInternalValue(restored);
+    }
+  }, [autoSaveKey, value]);
 
   const setValue = (next: string) => {
     if (value === undefined) {
       setInternalValue(next);
+      window.localStorage.setItem(autoSaveKey, next);
     }
     onChange?.(next);
+  };
+
+  const replaceTrailingToken = (suggestion: string) => {
+    const next = currentValue.replace(/(?:\[\[[^\s\]]*|[@#][^\s]*)$/, `${suggestion} `);
+    setValue(next);
   };
 
   return (
     <div className="glass rounded-[24px] p-5">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Zen Editor Stub</p>
-        <p className="text-xs text-muted-foreground">{currentValue.length} chars</p>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>{currentValue.length} chars</span>
+          {suggestionContext.mode ? <span>{suggestionContext.mode} lookup</span> : null}
+          <KeyHint keys="Cmd+/" />
+        </div>
       </div>
       <textarea
         className={cnEditor(serif)}
         onChange={(event) => setValue(event.target.value)}
+        onKeyDown={(event) => {
+          if (!suggestions.length) return;
+
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setSelectedSuggestionIndex((current) => (current + 1) % suggestions.length);
+            return;
+          }
+
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setSelectedSuggestionIndex((current) => (current - 1 + suggestions.length) % suggestions.length);
+            return;
+          }
+
+          if (event.key === "Tab" || event.key === "Enter") {
+            event.preventDefault();
+            replaceTrailingToken(suggestions[selectedSuggestionIndex] ?? suggestions[0]);
+          }
+        }}
         placeholder={placeholder}
         value={currentValue}
       />
       {suggestions.length ? (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 rounded-2xl border border-white/10 bg-black/10 p-3">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Suggestion</p>
+          <div className="mt-3 flex flex-wrap gap-2">
           {suggestions.map((suggestion) => (
             <button
-              className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-xs text-primary"
+              className={`focus-ring rounded-full border px-3 py-1 text-xs transition ${
+                suggestions[selectedSuggestionIndex] === suggestion
+                  ? "border-primary/30 bg-primary/12 text-primary"
+                  : "border-white/10 bg-white/8 text-primary [@media(hover:hover)]:hover:bg-primary/12"
+              }`}
               key={suggestion}
-              onClick={() => setValue(`${currentValue}${suggestion} `)}
+              onClick={() => replaceTrailingToken(suggestion)}
+              onMouseEnter={() => setSelectedSuggestionIndex(suggestions.indexOf(suggestion))}
               type="button"
             >
               {suggestion}
             </button>
           ))}
+          </div>
         </div>
       ) : null}
     </div>

@@ -1,11 +1,15 @@
 import "server-only";
 
-import type { PersonMock } from "@/lib/mock/prm";
+import { ulid } from "ulidx";
+
+import type { GiftMock, NetworkEdgeMock, PersonMock } from "@/lib/mock/prm";
 import { getSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
 
 export type PRMSnapshot = {
   people: PersonMock[];
+  gifts: GiftMock[];
+  networkEdges: NetworkEdgeMock[];
 };
 
 type UserRow = { id: string };
@@ -27,6 +31,7 @@ type PersonRow = {
   tasksCount: number;
 };
 type TimelineRow = {
+  id: string;
   personId: string;
   date: string;
   title: string;
@@ -35,10 +40,19 @@ type TimelineRow = {
 type GiftRow = {
   id: string;
   personId: string;
-  direction: string;
+  direction: GiftMock["direction"];
   title: string;
   occurredAt: string;
   satisfaction: string | null;
+  notes: string | null;
+};
+type NetworkEdgeRow = {
+  id: string;
+  sourcePersonId: string;
+  targetPersonId: string;
+  relationType: string | null;
+  strength: number | null;
+  notes: string | null;
 };
 
 async function resolveUser() {
@@ -98,11 +112,11 @@ export async function seedPRMSupportData() {
 
   await executeD1(
     `insert or ignore into gifts
-      (id, user_id, person_id, direction, title, occurred_at, satisfaction, created_at, updated_at)
+      (id, user_id, person_id, direction, title, occurred_at, satisfaction, notes, created_at, updated_at)
      values
-      ('gift-1', ?, 'person-jaemin', 'given', '원두 세트', '2026-02-11', '성공', datetime('now'), datetime('now')),
-      ('gift-2', ?, 'person-eunji', 'received', '전시 도록', '2026-03-01', '대만족', datetime('now'), datetime('now')),
-      ('gift-3', ?, 'person-minseo', 'given', '기도 노트', '2025-12-24', '성공', datetime('now'), datetime('now'))`,
+      ('gift-1', ?, 'person-jaemin', 'given', '원두 세트', '2026-02-11', '성공', null, datetime('now'), datetime('now')),
+      ('gift-2', ?, 'person-eunji', 'received', '전시 도록', '2026-03-01', '대만족', null, datetime('now'), datetime('now')),
+      ('gift-3', ?, 'person-minseo', 'given', '기도 노트', '2025-12-24', '성공', null, datetime('now'), datetime('now'))`,
     [userId, userId, userId],
   );
 
@@ -116,11 +130,20 @@ export async function seedPRMSupportData() {
       ('interaction-4', ?, 'person-daniel', '2026-01-20', 'message', '근황 메시지', '이직 후 근황을 짧게 확인', datetime('now'), datetime('now'))`,
     [userId, userId, userId, userId],
   );
+
+  await executeD1(
+    `insert or ignore into network_edges
+      (id, user_id, source_person_id, target_person_id, relation_type, strength, notes, created_at, updated_at)
+     values
+      ('edge-1', ?, 'person-minseo', 'person-jaemin', 'church', 4, '공동체 안에서 자주 연결됨', datetime('now'), datetime('now')),
+      ('edge-2', ?, 'person-jaemin', 'person-eunji', 'creative', 3, '전시와 프로젝트 대화로 연결됨', datetime('now'), datetime('now'))`,
+    [userId, userId],
+  );
 }
 
 export async function getPRMSnapshot(): Promise<PRMSnapshot> {
   const { id: userId } = await resolveUser();
-  const [peopleResult, interactionTimeline, giftTimeline, taskTimeline, zettelTimeline] = await Promise.all([
+  const [peopleResult, interactionTimeline, giftTimeline, taskTimeline, zettelTimeline, giftsResult, networkEdgeResult] = await Promise.all([
     queryD1<PersonRow>(
       `select
          p.id, p.name, p.nickname, p.groups, p.dunbar_layer as dunbarLayer, p.status, p.is_favorite as isFavorite,
@@ -135,29 +158,43 @@ export async function getPRMSnapshot(): Promise<PRMSnapshot> {
       [userId],
     ),
     queryD1<TimelineRow>(
-      `select person_id as personId, occurred_at as date, summary as title, 'interaction' as kind
+      `select id, person_id as personId, occurred_at as date, summary as title, 'interaction' as kind
        from interactions
-       where user_id = ?`,
+       where user_id = ? and deleted_at is null`,
       [userId],
     ),
     queryD1<TimelineRow>(
-      `select person_id as personId, occurred_at as date, title, 'gift' as kind
+      `select id, person_id as personId, occurred_at as date, title, 'gift' as kind
        from gifts
-       where user_id = ?`,
+       where user_id = ? and deleted_at is null`,
       [userId],
     ),
     queryD1<TimelineRow>(
-      `select tpr.person_id as personId, coalesce(t.updated_at, t.created_at) as date, t.title, 'task' as kind
+      `select t.id as id, tpr.person_id as personId, coalesce(t.updated_at, t.created_at) as date, t.title, 'task' as kind
        from task_people_relations tpr
        inner join tasks t on t.id = tpr.task_id
        where t.user_id = ? and t.deleted_at is null`,
       [userId],
     ),
     queryD1<TimelineRow>(
-      `select zpr.person_id as personId, coalesce(z.updated_at, z.created_at) as date, z.title, 'zettel' as kind
+      `select z.id as id, zpr.person_id as personId, coalesce(z.updated_at, z.created_at) as date, z.title, 'zettel' as kind
        from zettel_people_relations zpr
        inner join zettels z on z.id = zpr.zettel_id
        where z.user_id = ?`,
+      [userId],
+    ),
+    queryD1<GiftRow>(
+      `select id, person_id as personId, direction, title, occurred_at as occurredAt, satisfaction, notes
+       from gifts
+       where user_id = ? and deleted_at is null
+       order by occurred_at desc, created_at desc`,
+      [userId],
+    ),
+    queryD1<NetworkEdgeRow>(
+      `select id, source_person_id as sourcePersonId, target_person_id as targetPersonId, relation_type as relationType, strength, notes
+       from network_edges
+       where user_id = ? and deleted_at is null
+       order by updated_at desc, created_at desc`,
       [userId],
     ),
   ]);
@@ -165,7 +202,7 @@ export async function getPRMSnapshot(): Promise<PRMSnapshot> {
   const timelineMap = new Map<string, PersonMock["timeline"]>();
   for (const row of [...interactionTimeline.rows, ...giftTimeline.rows, ...taskTimeline.rows, ...zettelTimeline.rows]) {
     const list = timelineMap.get(row.personId) ?? [];
-    list.push({ date: row.date.slice(0, 10), title: row.title, kind: row.kind });
+    list.push({ id: row.id, date: row.date.slice(0, 10), title: row.title, kind: row.kind });
     timelineMap.set(row.personId, list);
   }
   for (const [id, items] of timelineMap) {
@@ -192,7 +229,26 @@ export async function getPRMSnapshot(): Promise<PRMSnapshot> {
     timeline: timelineMap.get(row.id) ?? [],
   }));
 
-  return { people };
+  const gifts: GiftMock[] = giftsResult.rows.map((row) => ({
+    id: row.id,
+    personId: row.personId,
+    direction: row.direction,
+    title: row.title,
+    occurredAt: row.occurredAt,
+    satisfaction: row.satisfaction,
+    notes: row.notes,
+  }));
+
+  const networkEdges: NetworkEdgeMock[] = networkEdgeResult.rows.map((row) => ({
+    id: row.id,
+    sourcePersonId: row.sourcePersonId,
+    targetPersonId: row.targetPersonId,
+    relationType: row.relationType,
+    strength: Number(row.strength ?? 3),
+    notes: row.notes,
+  }));
+
+  return { people, gifts, networkEdges };
 }
 
 export async function getPRMPerson(personId: string) {
@@ -201,14 +257,8 @@ export async function getPRMPerson(personId: string) {
 }
 
 export async function getPRMGifts() {
-  const { id: userId } = await resolveUser();
-  return queryD1<GiftRow>(
-    `select id, person_id as personId, direction, title, occurred_at as occurredAt, satisfaction
-     from gifts
-     where user_id = ?
-     order by occurred_at desc`,
-    [userId],
-  );
+  const snapshot = await getPRMSnapshot();
+  return { rows: snapshot.gifts };
 }
 
 export async function markPersonContacted(personId: string) {
@@ -220,7 +270,7 @@ export async function markPersonContacted(personId: string) {
   await executeD1(
     `insert into interactions (id, user_id, person_id, occurred_at, type, summary, content, created_at, updated_at)
      values (?, ?, ?, date('now'), 'message', '직접 연락 완료', 'PRM에서 연락 완료로 마킹', datetime('now'), datetime('now'))`,
-    [`interaction-${Date.now()}`, userId, personId],
+    [ulid(), userId, personId],
   );
   return getPRMSnapshot();
 }
@@ -230,5 +280,63 @@ export async function togglePersonFavorite(personId: string) {
   const current = await queryD1<{ isFavorite: number }>("select is_favorite as isFavorite from people where id = ? and user_id = ? limit 1", [personId, userId]);
   const next = current.rows[0]?.isFavorite ? 0 : 1;
   await executeD1(`update people set is_favorite = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [next, personId, userId]);
+  return getPRMSnapshot();
+}
+
+export async function createPersonInteraction(personId: string, input: { summary: string; type?: string; occurredAt?: string; content?: string }) {
+  const { id: userId } = await resolveUser();
+  const summary = input.summary.trim();
+  if (!summary) throw new Error("상호작용 요약은 비워둘 수 없습니다.");
+
+  await executeD1(
+    `insert into interactions (id, user_id, person_id, occurred_at, type, summary, content, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+    [ulid(), userId, personId, input.occurredAt ?? new Date().toISOString().slice(0, 10), input.type ?? "message", summary, input.content?.trim() || null],
+  );
+  await executeD1(`update people set last_contacted_at = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [input.occurredAt ?? new Date().toISOString().slice(0, 10), personId, userId]);
+  return getPRMSnapshot();
+}
+
+export async function deleteInteraction(interactionId: string) {
+  const { id: userId } = await resolveUser();
+  await executeD1(`update interactions set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [interactionId, userId]);
+  return getPRMSnapshot();
+}
+
+export async function createGift(personId: string, input: { title: string; direction: GiftMock["direction"]; occurredAt?: string; satisfaction?: string; notes?: string }) {
+  const { id: userId } = await resolveUser();
+  const title = input.title.trim();
+  if (!title) throw new Error("선물 이름은 비워둘 수 없습니다.");
+
+  await executeD1(
+    `insert into gifts (id, user_id, person_id, direction, title, occurred_at, satisfaction, notes, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+    [ulid(), userId, personId, input.direction, title, input.occurredAt ?? new Date().toISOString().slice(0, 10), input.satisfaction?.trim() || null, input.notes?.trim() || null],
+  );
+  return getPRMSnapshot();
+}
+
+export async function deleteGift(giftId: string) {
+  const { id: userId } = await resolveUser();
+  await executeD1(`update gifts set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [giftId, userId]);
+  return getPRMSnapshot();
+}
+
+export async function createNetworkEdge(input: { sourcePersonId: string; targetPersonId: string; relationType?: string; strength?: number; notes?: string }) {
+  const { id: userId } = await resolveUser();
+  if (!input.sourcePersonId || !input.targetPersonId) throw new Error("연결할 두 사람을 모두 선택해 주세요.");
+  if (input.sourcePersonId === input.targetPersonId) throw new Error("같은 사람끼리는 연결할 수 없습니다.");
+
+  await executeD1(
+    `insert into network_edges (id, user_id, source_person_id, target_person_id, relation_type, strength, notes, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+    [ulid(), userId, input.sourcePersonId, input.targetPersonId, input.relationType?.trim() || null, Math.max(1, Math.min(5, Math.round(input.strength ?? 3))), input.notes?.trim() || null],
+  );
+  return getPRMSnapshot();
+}
+
+export async function deleteNetworkEdge(edgeId: string) {
+  const { id: userId } = await resolveUser();
+  await executeD1(`update network_edges set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [edgeId, userId]);
   return getPRMSnapshot();
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { TaskDrawer } from "@/components/action-hub/task-drawer";
@@ -77,6 +77,7 @@ export function SideDrawerHost() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const entities = parseDetail(searchParams.get("detail"));
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -85,11 +86,42 @@ export function SideDrawerHost() {
         params.delete("detail");
         router.replace(params.size ? `${pathname}?${params.toString()}` : pathname);
       }
+
+      if (event.key === "Tab" && entities.length && containerRef.current) {
+        const focusables = Array.from(
+          containerRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter((node) => !node.hasAttribute("disabled"));
+
+        if (!focusables.length) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+
+        if (!event.shiftKey && active === last) {
+          event.preventDefault();
+          first.focus();
+        }
+
+        if (event.shiftKey && active === first) {
+          event.preventDefault();
+          last.focus();
+        }
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [entities.length, pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!entities.length || !containerRef.current) return;
+    const focusables = containerRef.current.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    focusables[0]?.focus();
+  }, [entities]);
 
   if (!entities.length) return null;
 
@@ -101,23 +133,27 @@ export function SideDrawerHost() {
 
   return (
     <div className="pointer-events-none fixed inset-0 z-40 flex justify-end bg-black/20 backdrop-blur-[2px]" onClick={closeAll}>
-      <div className="pointer-events-none flex h-full items-stretch gap-3 p-3">
+      <div className="pointer-events-none flex h-full items-stretch gap-3 p-3" ref={containerRef}>
         {entities.map((entity, index) => (
           <aside
+            aria-modal="true"
             className={cn(
               "glass-elevated pointer-events-auto h-full w-[min(480px,92vw)] rounded-[28px] border border-white/10 p-5 shadow-2xl transition",
-              index === 0 ? "translate-x-0" : "translate-x-0",
+              index === 0 ? "translate-x-0" : "w-[min(420px,88vw)] translate-x-0",
             )}
             key={`${entity.type}:${entity.id}`}
             onClick={(event) => event.stopPropagation()}
+            role="dialog"
           >
             <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.24em] text-primary">{entity.type}</p>
-                <h2 className="mt-2 text-xl font-semibold text-foreground">{titleFor(entity)}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">URL 기반 Drawer 스택이 연결되었습니다.</p>
+                <h2 className="mt-2 font-display text-3xl text-foreground">{titleFor(entity)}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {index === 0 ? "현재 포커스된 상세 패널입니다." : "보조 패널로 겹쳐 열린 상태입니다."}
+                </p>
               </div>
-              <button className="rounded-2xl border border-white/10 px-3 py-2 text-sm text-muted-foreground" onClick={closeAll} type="button">
+              <button className="focus-ring rounded-2xl border border-white/10 px-3 py-2 text-sm text-muted-foreground transition [@media(hover:hover)]:hover:bg-white/8 [@media(hover:hover)]:hover:text-foreground" onClick={closeAll} type="button">
                 닫기
               </button>
             </div>

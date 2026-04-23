@@ -1,0 +1,37 @@
+import { CalendarClock } from "lucide-react";
+
+import { EmptyState } from "@/components/shared/empty-state";
+import { GlassCard } from "@/components/shared/glass-card";
+import { Tag } from "@/components/shared/tag";
+import type { TaskMock } from "@/lib/mock/action-hub";
+
+type TaskCalendarProps = {
+  tasks: TaskMock[];
+};
+
+export function TaskCalendar({ tasks }: TaskCalendarProps) {
+  if (!tasks.length) {
+    return <EmptyState description="마감일이 있는 태스크가 아직 없습니다." icon={CalendarClock} title="일정을 기다리는 중" />;
+  }
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {tasks.map((task) => (
+        <GlassCard className="p-5" interactive key={task.id}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-primary">{task.dueAt}</p>
+              <h3 className="mt-2 line-clamp-2 font-display text-2xl text-foreground">{task.title}</h3>
+            </div>
+            <Tag value={task.priority} variant="priority" />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Tag value={task.status} variant="status" />
+            <Tag value={task.brainEnergy} variant="energy" />
+          </div>
+          <p className="mt-4 line-clamp-3 text-sm leading-6 text-muted-foreground">{task.content}</p>
+        </GlassCard>
+      ))}
+    </div>
+  );
+}

@@ -9,6 +9,8 @@ export const projects = sqliteTable(
   {
     id: id(),
     userId: userId(),
+    notionSourceId: text("notion_source_id"),
+    importBatchId: text("import_batch_id"),
     title: text("title").notNull(),
     slug: text("slug").notNull(),
     description: text("description"),
@@ -27,6 +29,7 @@ export const projects = sqliteTable(
   (table) => ({
     userStatusIndex: index("idx_proj_user_status").on(table.userId, table.status),
     slugUnique: index("idx_proj_slug").on(table.userId, table.slug),
+    notionSourceIndex: index("idx_proj_notion_source").on(table.userId, table.notionSourceId),
   }),
 );
 
@@ -35,6 +38,8 @@ export const tasks = sqliteTable(
   {
     id: id(),
     userId: userId(),
+    notionSourceId: text("notion_source_id"),
+    importBatchId: text("import_batch_id"),
     projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     kind: text("kind").notNull().default("development"),
@@ -55,6 +60,7 @@ export const tasks = sqliteTable(
     userStatusIndex: index("idx_task_user_status").on(table.userId, table.status),
     dueIndex: index("idx_task_due").on(table.dueAt),
     kindIndex: index("idx_task_kind").on(table.kind),
+    notionSourceIndex: index("idx_task_notion_source").on(table.userId, table.notionSourceId),
   }),
 );
 

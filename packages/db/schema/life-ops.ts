@@ -7,6 +7,8 @@ export const dailyLogs = sqliteTable(
   {
     id: id(),
     userId: userId(),
+    notionSourceId: text("notion_source_id"),
+    importBatchId: text("import_batch_id"),
     date: text("date").notNull(),
     mood: integer("mood"),
     energyLevel: integer("energy_level"),
@@ -20,6 +22,7 @@ export const dailyLogs = sqliteTable(
   },
   (table) => ({
     userDateUnique: index("idx_dl_user_date").on(table.userId, table.date),
+    notionSourceIndex: index("idx_dl_notion_source").on(table.userId, table.notionSourceId),
   }),
 );
 
@@ -71,6 +74,8 @@ export const workouts = sqliteTable(
   {
     id: id(),
     userId: userId(),
+    notionSourceId: text("notion_source_id"),
+    importBatchId: text("import_batch_id"),
     date: text("date").notNull(),
     categories: text("categories").notNull(),
     durationMinutes: integer("duration_minutes"),
@@ -80,6 +85,7 @@ export const workouts = sqliteTable(
   },
   (table) => ({
     userDateIndex: index("idx_wo_user_date").on(table.userId, table.date),
+    notionSourceIndex: index("idx_wo_notion_source").on(table.userId, table.notionSourceId),
   }),
 );
 
@@ -114,6 +120,8 @@ export const careerHistory = sqliteTable(
   {
     id: id(),
     userId: userId(),
+    notionSourceId: text("notion_source_id"),
+    importBatchId: text("import_batch_id"),
     organization: text("organization").notNull(),
     role: text("role").notNull(),
     category: text("category").notNull(),
@@ -127,5 +135,6 @@ export const careerHistory = sqliteTable(
   },
   (table) => ({
     userStartIndex: index("idx_career_user_start").on(table.userId, table.startDate),
+    notionSourceIndex: index("idx_career_notion_source").on(table.userId, table.notionSourceId),
   }),
 );

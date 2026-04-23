@@ -13,7 +13,8 @@
     "typecheck": "npm run typecheck --workspace @light-house/web",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
-    "db:seed": "tsx ./scripts/seed-demo.ts"
+    "db:seed": "tsx ./scripts/seed-demo.ts",
+    "db:notion-import": "tsx ./scripts/notion-import.ts"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.4",

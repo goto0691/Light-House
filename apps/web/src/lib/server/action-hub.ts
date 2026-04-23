@@ -2,20 +2,26 @@ import "server-only";
 
 import { ulid } from "ulidx";
 
-import type { PendingCaptureMock, ProjectMock, TaskMock } from "@/lib/mock/action-hub";
+import type { ActionHubReference, PendingCaptureMock, ProjectMock, TaskMock } from "@/lib/mock/action-hub";
 import { getSession } from "@/lib/auth/session";
-import { queryD1, executeD1 } from "@/lib/server/cloudflare-d1";
+import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
+import { analyzeQuickCaptureWithAI } from "@/lib/server/gemini";
+import { attachTaskRelationsFromContent } from "@/lib/server/relations";
+import { syncTagsForEntity } from "@/lib/server/tagging";
 
 export type ActionHubSnapshot = {
   projects: ProjectMock[];
   tasks: TaskMock[];
   pendingCaptures: PendingCaptureMock[];
+  referencePeople: ActionHubReference[];
+  referenceZettels: ActionHubReference[];
 };
 
 export type CaptureContext = {
   domain?: string;
   projectId?: string | null;
   personId?: string | null;
+  forceDomain?: "task" | "interaction" | "zettel" | "diary_entry" | "habit_log" | "media_log" | "workout_log" | null;
 };
 
 export type CaptureSuggestion = {
@@ -30,10 +36,7 @@ export type CaptureSuggestion = {
   snapshot: ActionHubSnapshot;
 };
 
-type UserRow = {
-  id: string;
-};
-
+type UserRow = { id: string };
 type ProjectRow = {
   id: string;
   title: string;
@@ -45,7 +48,6 @@ type ProjectRow = {
   targetDate: string | null;
   updatedAt: string;
 };
-
 type TaskRow = {
   id: string;
   projectId: string | null;
@@ -59,23 +61,11 @@ type TaskRow = {
   checklistTotal: number;
   checklistCompleted: number;
 };
-
-type TaskPersonRow = {
-  taskId: string;
-  personName: string;
-};
-
-type TaskZettelRow = {
-  taskId: string;
-  zettelTitle: string;
-};
-
-type CaptureRow = {
-  id: string;
-  rawText: string;
-  suggestedDomain: string | null;
-  confidence: number | null;
-};
+type TaskPersonRow = { taskId: string; personName: string };
+type TaskZettelRow = { taskId: string; zettelTitle: string };
+type ChecklistRow = { id: string; taskId: string; content: string; isCompleted: number | null };
+type ReferenceRow = { id: string; title: string };
+type CaptureRow = { id: string; rawText: string; suggestedDomain: string | null; confidence: number | null };
 
 const STATUS_ORDER: TaskMock["status"][] = ["todo", "in_progress", "review", "done", "blocked"];
 
@@ -88,42 +78,17 @@ function startOfDayIso(daysAgo: number) {
 
 function formatDueLabel(date: string | null) {
   if (!date) return "상시";
-
   const target = new Date(`${date}T00:00:00+09:00`);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diffDays = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
   if (diffDays > 0) return `D-${diffDays}`;
   if (diffDays === 0) return "오늘";
   return `D+${Math.abs(diffDays)}`;
 }
 
 function formatRecentActivity(updatedAt: string) {
-  const updated = new Date(updatedAt);
-  return `${updated.toLocaleDateString("ko-KR")} 업데이트`;
-}
-
-async function resolveUser() {
-  const session = await getSession();
-  if (!session) {
-    throw new Error("세션이 없습니다.");
-  }
-
-  const found = await queryD1<UserRow>("select id from users where email = ? limit 1", [session.email]);
-  const existing = found.rows[0];
-  if (existing) {
-    return { id: existing.id, session };
-  }
-
-  const userId = "user-light-keeper";
-  await executeD1(
-    `insert into users (id, email, display_name, locale, timezone, preferences, created_at, updated_at)
-     values (?, ?, ?, 'ko-KR', 'Asia/Seoul', '{"theme":"system"}', datetime('now'), datetime('now'))`,
-    [userId, session.email, session.displayName],
-  );
-
-  return { id: userId, session };
+  return `${new Date(updatedAt).toLocaleDateString("ko-KR")} 업데이트`;
 }
 
 function withDefaultContent(value: string | null) {
@@ -141,10 +106,56 @@ function summarizeTitle(text: string) {
   return text.length > 40 ? `${text.slice(0, 40)}...` : text;
 }
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 64);
+}
+
+async function resolveUser() {
+  const session = await getSession();
+  if (!session) throw new Error("세션이 없습니다.");
+
+  const found = await queryD1<UserRow>("select id from users where email = ? limit 1", [session.email]);
+  const existing = found.rows[0];
+  if (existing) return { id: existing.id, session };
+
+  const userId = "user-light-keeper";
+  await executeD1(
+    `insert into users (id, email, display_name, locale, timezone, preferences, created_at, updated_at)
+     values (?, ?, ?, 'ko-KR', 'Asia/Seoul', '{"theme":"system"}', datetime('now'), datetime('now'))`,
+    [userId, session.email, session.displayName],
+  );
+  return { id: userId, session };
+}
+
+async function refreshProjectProgress(userId: string, projectId: string) {
+  const stats = await queryD1<{ total: number | null; done: number | null }>(
+    `select count(*) as total, sum(case when status = 'done' then 1 else 0 end) as done
+     from tasks
+     where user_id = ? and project_id = ? and deleted_at is null`,
+    [userId, projectId],
+  );
+  const total = Number(stats.rows[0]?.total ?? 0);
+  const done = Number(stats.rows[0]?.done ?? 0);
+  const progress = total ? Math.round((done / total) * 100) : 0;
+
+  await executeD1(
+    `update projects
+     set progress = ?, updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [progress, projectId, userId],
+  );
+}
+
 export async function getActionHubSnapshot(): Promise<ActionHubSnapshot> {
   const { id: userId } = await resolveUser();
 
-  const [projectResult, taskResult, taskPeopleResult, taskZettelResult, captureResult] = await Promise.all([
+  const [projectResult, taskResult, taskPeopleResult, taskZettelResult, checklistResult, captureResult, referencePeopleResult, referenceZettelsResult] = await Promise.all([
     queryD1<ProjectRow>(
       `select id, title, kind, category, icon, color, progress, target_date as targetDate, updated_at as updatedAt
        from projects
@@ -188,6 +199,14 @@ export async function getActionHubSnapshot(): Promise<ActionHubSnapshot> {
        where t.user_id = ?`,
       [userId],
     ),
+    queryD1<ChecklistRow>(
+      `select c.id, c.task_id as taskId, c.content, c.is_completed as isCompleted
+       from checklists c
+       inner join tasks t on t.id = c.task_id
+       where t.user_id = ?
+       order by c.display_order asc, c.created_at asc`,
+      [userId],
+    ),
     queryD1<CaptureRow>(
       `select id, raw_text as rawText, suggested_domain as suggestedDomain, confidence
        from quick_captures
@@ -195,6 +214,8 @@ export async function getActionHubSnapshot(): Promise<ActionHubSnapshot> {
        order by created_at desc`,
       [userId],
     ),
+    queryD1<ReferenceRow>(`select id, name as title from people where user_id = ? and deleted_at is null order by is_favorite desc, name asc`, [userId]),
+    queryD1<ReferenceRow>(`select id, title from zettels where user_id = ? and deleted_at is null order by pinned desc, updated_at desc`, [userId]),
   ]);
 
   const taskPeopleMap = new Map<string, string[]>();
@@ -209,6 +230,13 @@ export async function getActionHubSnapshot(): Promise<ActionHubSnapshot> {
     const current = taskZettelMap.get(row.taskId) ?? [];
     current.push(row.zettelTitle);
     taskZettelMap.set(row.taskId, current);
+  }
+
+  const checklistMap = new Map<string, TaskMock["checklistItems"]>();
+  for (const row of checklistResult.rows) {
+    const current = checklistMap.get(row.taskId) ?? [];
+    current.push({ id: row.id, content: row.content, completed: Boolean(row.isCompleted) });
+    checklistMap.set(row.taskId, current);
   }
 
   const projects: ProjectMock[] = projectResult.rows.map((row) => ({
@@ -236,6 +264,7 @@ export async function getActionHubSnapshot(): Promise<ActionHubSnapshot> {
       total: Number(row.checklistTotal ?? 0),
       completed: Number(row.checklistCompleted ?? 0),
     },
+    checklistItems: checklistMap.get(row.id) ?? [],
     linkedPeople: taskPeopleMap.get(row.id) ?? [],
     linkedZettels: taskZettelMap.get(row.id) ?? [],
     content: withDefaultContent(row.content),
@@ -252,6 +281,8 @@ export async function getActionHubSnapshot(): Promise<ActionHubSnapshot> {
     projects,
     tasks,
     pendingCaptures,
+    referencePeople: referencePeopleResult.rows,
+    referenceZettels: referenceZettelsResult.rows,
   };
 }
 
@@ -267,41 +298,62 @@ export async function getActionHubTask(projectId: string, taskId: string) {
 
 export async function ingestActionHubCapture(text: string, context?: CaptureContext): Promise<CaptureSuggestion> {
   const payload = text.trim();
-  if (!payload) {
-    throw new Error("텍스트가 비어 있습니다.");
-  }
+  if (!payload) throw new Error("텍스트가 비어 있습니다.");
 
   const { id: userId } = await resolveUser();
-  const domain = inferDomain(payload);
+  const aiAnalysis = await analyzeQuickCaptureWithAI({ text: payload, context });
+  const forcedDomain = context?.forceDomain ?? null;
+  const domain =
+    forcedDomain ||
+    (aiAnalysis?.domain === "task" || aiAnalysis?.domain === "interaction" || aiAnalysis?.domain === "zettel" ? aiAnalysis.domain : inferDomain(payload));
   const captureId = ulid();
-  const confidence = domain === "task" ? 0.83 : 0.74;
+  const confidence = aiAnalysis?.confidence ?? (domain === "task" ? 0.83 : 0.74);
   const suggested = {
     domain,
     fields: {
-      title: summarizeTitle(payload),
-      priority: "P2",
+      title: aiAnalysis?.title?.trim() || summarizeTitle(payload),
+      priority: aiAnalysis?.priority ?? "P2",
       projectId: context?.projectId ?? null,
+      summary: aiAnalysis?.summary?.trim() || payload,
+      dueAt: aiAnalysis?.dueAt ?? null,
+      brainEnergy: aiAnalysis?.brainEnergy ?? "normal",
     },
     confidence,
   };
 
   let taskId: string | undefined;
-
-  if (domain === "task") {
+  if (domain === "task" && (aiAnalysis?.shouldAutoRoute ?? true)) {
     taskId = ulid();
+    const taskContent = aiAnalysis?.summary?.trim() || payload;
     await executeD1(
       `insert into tasks
         (id, user_id, project_id, title, kind, content, status, priority, brain_energy, due_at, display_order, created_at, updated_at)
        values (?, ?, ?, ?, 'research', ?, 'todo', 'P2', 'normal', null, 0, datetime('now'), datetime('now'))`,
-      [taskId, userId, context?.projectId ?? null, summarizeTitle(payload), payload],
+      [taskId, userId, context?.projectId ?? null, aiAnalysis?.title?.trim() || summarizeTitle(payload), taskContent],
     );
-
+    await executeD1(
+      `update tasks
+       set priority = ?, brain_energy = ?, due_at = coalesce(?, due_at), updated_at = datetime('now')
+       where id = ? and user_id = ?`,
+      [aiAnalysis?.priority ?? "P2", aiAnalysis?.brainEnergy ?? "normal", aiAnalysis?.dueAt ?? null, taskId, userId],
+    );
     await executeD1(
       `insert into checklists
         (id, task_id, content, is_completed, display_order, completed_at, created_at)
        values (?, ?, '프로젝트 라우팅', 0, 0, null, datetime('now'))`,
       [ulid(), taskId],
     );
+    await syncTagsForEntity({
+      userId,
+      taggableType: "task",
+      taggableId: taskId,
+      content: taskContent,
+    });
+    await attachTaskRelationsFromContent({
+      userId,
+      taskId,
+      content: taskContent,
+    });
   } else {
     await executeD1(
       `insert into quick_captures
@@ -311,14 +363,12 @@ export async function ingestActionHubCapture(text: string, context?: CaptureCont
     );
   }
 
-  const snapshot = await getActionHubSnapshot();
-
   return {
     captureId,
     status: domain === "task" ? "routed" : "pending",
     suggested,
     taskId,
-    snapshot,
+    snapshot: await getActionHubSnapshot(),
   };
 }
 
@@ -330,7 +380,6 @@ export async function dismissPendingCapture(captureId: string) {
      where id = ? and user_id = ?`,
     [captureId, userId],
   );
-
   return getActionHubSnapshot();
 }
 
@@ -342,60 +391,183 @@ export async function routeInboxTaskToProject(taskId: string, projectId: string)
      where id = ? and user_id = ?`,
     [projectId, taskId, userId],
   );
-
+  await refreshProjectProgress(userId, projectId);
   return getActionHubSnapshot();
 }
 
 export async function cycleActionHubTaskStatus(taskId: string) {
   const { id: userId } = await resolveUser();
-  const found = await queryD1<{ status: TaskMock["status"] }>(
-    `select status from tasks where id = ? and user_id = ? limit 1`,
+  const found = await queryD1<{ status: TaskMock["status"]; projectId: string | null }>(
+    `select status, project_id as projectId from tasks where id = ? and user_id = ? limit 1`,
     [taskId, userId],
   );
   const current = found.rows[0];
-  if (!current) {
-    throw new Error("태스크를 찾지 못했습니다.");
-  }
+  if (!current) throw new Error("태스크를 찾지 못했습니다.");
 
   const currentIndex = STATUS_ORDER.indexOf(current.status);
   const nextStatus = STATUS_ORDER[(currentIndex + 1) % STATUS_ORDER.length];
-
   await executeD1(
     `update tasks
      set status = ?, updated_at = datetime('now')
      where id = ? and user_id = ?`,
     [nextStatus, taskId, userId],
   );
-
+  if (current.projectId) {
+    await refreshProjectProgress(userId, current.projectId);
+  }
   return getActionHubSnapshot();
 }
 
 export async function updateActionHubTaskTitle(taskId: string, title: string) {
   const { id: userId } = await resolveUser();
   const nextTitle = title.trim();
-  if (!nextTitle) {
-    throw new Error("제목은 비워둘 수 없습니다.");
-  }
-
-  await executeD1(
-    `update tasks
-     set title = ?, updated_at = datetime('now')
-     where id = ? and user_id = ?`,
-    [nextTitle, taskId, userId],
-  );
-
+  if (!nextTitle) throw new Error("제목은 비워둘 수 없습니다.");
+  await executeD1(`update tasks set title = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [nextTitle, taskId, userId]);
   return getActionHubSnapshot();
 }
 
 export async function updateActionHubTaskContent(taskId: string, content: string) {
   const { id: userId } = await resolveUser();
-  await executeD1(
-    `update tasks
-     set content = ?, updated_at = datetime('now')
-     where id = ? and user_id = ?`,
-    [content.trim(), taskId, userId],
-  );
+  const nextContent = content.trim();
+  await executeD1(`update tasks set content = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [nextContent, taskId, userId]);
+  await syncTagsForEntity({
+    userId,
+    taggableType: "task",
+    taggableId: taskId,
+    content: nextContent,
+  });
+  await attachTaskRelationsFromContent({
+    userId,
+    taskId,
+    content: nextContent,
+  });
+  return getActionHubSnapshot();
+}
 
+export async function createActionHubProject(input: {
+  title: string;
+  kind?: ProjectMock["kind"];
+  category?: string;
+  icon?: string;
+  color?: string;
+  targetDate?: string | null;
+}) {
+  const { id: userId } = await resolveUser();
+  const title = input.title.trim();
+  if (!title) throw new Error("프로젝트 제목은 비워둘 수 없습니다.");
+  const id = ulid();
+  await executeD1(
+    `insert into projects
+      (id, user_id, title, slug, description, icon, color, kind, status, category, target_date, progress, pinned, display_order, created_at, updated_at)
+     values (?, ?, ?, ?, '', ?, ?, ?, 'active', ?, ?, 0, 0, 999, datetime('now'), datetime('now'))`,
+    [id, userId, title, `${slugify(title)}-${id.slice(-6).toLowerCase()}`, input.icon?.trim() || "🛟", input.color?.trim() || "gold", input.kind ?? "project", input.category?.trim() || "미분류", input.targetDate ?? null],
+  );
+  return getActionHubSnapshot();
+}
+
+export async function createChecklistItem(taskId: string, content: string) {
+  const { id: userId } = await resolveUser();
+  const cleaned = content.trim();
+  if (!cleaned) throw new Error("체크리스트 내용은 비워둘 수 없습니다.");
+
+  const task = await queryD1<{ id: string }>("select id from tasks where id = ? and user_id = ? and deleted_at is null limit 1", [taskId, userId]);
+  if (!task.rows[0]) throw new Error("태스크를 찾지 못했습니다.");
+
+  const maxOrder = await queryD1<{ nextOrder: number | null }>(
+    `select coalesce(max(display_order), -1) + 1 as nextOrder from checklists where task_id = ?`,
+    [taskId],
+  );
+  await executeD1(
+    `insert into checklists (id, task_id, content, is_completed, display_order, completed_at, created_at)
+     values (?, ?, ?, 0, ?, null, datetime('now'))`,
+    [ulid(), taskId, cleaned, Number(maxOrder.rows[0]?.nextOrder ?? 0)],
+  );
+  return getActionHubSnapshot();
+}
+
+export async function toggleChecklistItem(checklistId: string) {
+  const { id: userId } = await resolveUser();
+  const found = await queryD1<{ isCompleted: number | null; taskId: string; projectId: string | null }>(
+    `select c.is_completed as isCompleted, c.task_id as taskId, t.project_id as projectId
+     from checklists c
+     inner join tasks t on t.id = c.task_id
+     where c.id = ? and t.user_id = ?
+     limit 1`,
+    [checklistId, userId],
+  );
+  const item = found.rows[0];
+  if (!item) throw new Error("체크리스트를 찾지 못했습니다.");
+
+  const next = item.isCompleted ? 0 : 1;
+  await executeD1(
+    `update checklists
+     set is_completed = ?, completed_at = case when ? = 1 then datetime('now') else null end
+     where id = ?`,
+    [next, next, checklistId],
+  );
+  if (item.projectId) {
+    await refreshProjectProgress(userId, item.projectId);
+  }
+  return getActionHubSnapshot();
+}
+
+export async function deleteChecklistItem(checklistId: string) {
+  const { id: userId } = await resolveUser();
+  const found = await queryD1<{ projectId: string | null }>(
+    `select t.project_id as projectId
+     from checklists c
+     inner join tasks t on t.id = c.task_id
+     where c.id = ? and t.user_id = ?
+     limit 1`,
+    [checklistId, userId],
+  );
+  if (!found.rows[0]) throw new Error("체크리스트를 찾지 못했습니다.");
+  await executeD1(`delete from checklists where id = ?`, [checklistId]);
+  if (found.rows[0].projectId) {
+    await refreshProjectProgress(userId, found.rows[0].projectId);
+  }
+  return getActionHubSnapshot();
+}
+
+export async function attachTaskPerson(taskId: string, personId: string) {
+  const { id: userId } = await resolveUser();
+  await executeD1(
+    `insert or ignore into task_people_relations (task_id, person_id, role_context, created_at)
+     select ?, ?, null, datetime('now')
+     where exists (select 1 from tasks where id = ? and user_id = ? and deleted_at is null)
+       and exists (select 1 from people where id = ? and user_id = ? and deleted_at is null)`,
+    [taskId, personId, taskId, userId, personId, userId],
+  );
+  return getActionHubSnapshot();
+}
+
+export async function detachTaskPerson(taskId: string, personName: string) {
+  const { id: userId } = await resolveUser();
+  const person = await queryD1<{ id: string }>("select id from people where name = ? and user_id = ? limit 1", [personName, userId]);
+  const personId = person.rows[0]?.id;
+  if (!personId) throw new Error("연결할 인물을 찾지 못했습니다.");
+  await executeD1(`delete from task_people_relations where task_id = ? and person_id = ?`, [taskId, personId]);
+  return getActionHubSnapshot();
+}
+
+export async function attachTaskZettel(taskId: string, zettelId: string) {
+  const { id: userId } = await resolveUser();
+  await executeD1(
+    `insert or ignore into task_zettel_relations (task_id, zettel_id, created_at)
+     select ?, ?, datetime('now')
+     where exists (select 1 from tasks where id = ? and user_id = ? and deleted_at is null)
+       and exists (select 1 from zettels where id = ? and user_id = ? and deleted_at is null)`,
+    [taskId, zettelId, taskId, userId, zettelId, userId],
+  );
+  return getActionHubSnapshot();
+}
+
+export async function detachTaskZettel(taskId: string, zettelTitle: string) {
+  const { id: userId } = await resolveUser();
+  const zettel = await queryD1<{ id: string }>("select id from zettels where title = ? and user_id = ? and deleted_at is null limit 1", [zettelTitle, userId]);
+  const zettelId = zettel.rows[0]?.id;
+  if (!zettelId) throw new Error("연결할 메모를 찾지 못했습니다.");
+  await executeD1(`delete from task_zettel_relations where task_id = ? and zettel_id = ?`, [taskId, zettelId]);
   return getActionHubSnapshot();
 }
 
@@ -408,7 +580,7 @@ export async function seedActionHubSupportData() {
      values
       ('person-jaemin', ?, '김재민', '재민', '["비즈니스","친구"]', 15, '실행력과 감각이 빠르다.', '호떡집 비즈니스와 신메뉴 실험을 함께하는 파트너.', ?, 10, 'active', 1, datetime('now'), datetime('now')),
       ('person-minseo', ?, '박민서', '민서', '["핵심","교회"]', 5, '정직하고 오래 보는 시선.', '가장 깊은 대화를 나누는 핵심 인물.', ?, 7, 'active', 1, datetime('now'), datetime('now')),
-      ('person-eunji', ?, '최은지', '은지', '["친구","커뮤니티"]', 50, '섬세한 감각과 기록 습관.', '책과 전시에 대한 감상을 자주 나누는 친구.', ?, 21, 'active', 0, datetime('now'), datetime('now'))`,
+      ('person-eunji', ?, '최은지', '은지', '["친구","커뮤니티"]', 50, '섬세한 감각과 기록 습관.', '책과 전화를 자주 나누는 친구.', ?, 21, 'active', 0, datetime('now'), datetime('now'))`,
     [userId, startOfDayIso(12), userId, startOfDayIso(3), userId, startOfDayIso(29)],
   );
 
@@ -506,8 +678,5 @@ export async function seedActionHubSupportData() {
     [userId, userId],
   );
 
-  return {
-    userId,
-    email: session.email,
-  };
+  return { userId, email: session.email };
 }

@@ -5,6 +5,7 @@ export type ZettelMock = {
   category: string;
   summary: string;
   content: string;
+  outgoingLinks: Array<{ id: string; targetId: string; title: string }>;
   backlinks: string[];
   related: string[];
 };
@@ -42,6 +43,7 @@ export const ZETTELS_MOCK: ZettelMock[] = [
     category: "실존주의",
     summary: "불안은 회피 대상이 아니라 선택의 자유를 드러내는 신호다.",
     content: "실존적 불안은 방향 상실이 아니라 자유의 무게를 체감하는 순간에 발생한다.",
+    outgoingLinks: [],
     backlinks: ["기도와 불안의 언어", "호떡집 브랜딩과 진정성"],
     related: ["사르트르 입문 메모", "듄: 파트 2 감상"],
   },
@@ -52,6 +54,7 @@ export const ZETTELS_MOCK: ZettelMock[] = [
     category: "묵상",
     summary: "기도는 불안을 없애기보다 들고 견디는 방식이다.",
     content: "불안을 없애 달라는 요청이 아니라, 그 불안을 들고 걸을 힘을 달라는 기도로 이동한다.",
+    outgoingLinks: [{ id: "zlink-1", targetId: "zettel-anxiety", title: "존재의 불안과 실존주의" }],
     backlinks: ["존재의 불안과 실존주의"],
     related: ["시편 23편 메모"],
   },
@@ -62,6 +65,7 @@ export const ZETTELS_MOCK: ZettelMock[] = [
     category: "비즈니스",
     summary: "브랜드 언어는 메뉴보다 먼저 관계의 온도를 설명해야 한다.",
     content: "호떡집이 파는 것은 간식보다 위로일 수 있다.",
+    outgoingLinks: [{ id: "zlink-2", targetId: "zettel-anxiety", title: "존재의 불안과 실존주의" }],
     backlinks: ["존재의 불안과 실존주의"],
     related: ["호떡집 본점"],
   },

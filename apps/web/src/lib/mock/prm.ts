@@ -14,7 +14,26 @@ export type PersonMock = {
   giftsCount: number;
   interactionsCount: number;
   tasksCount: number;
-  timeline: Array<{ date: string; title: string; kind: "interaction" | "gift" | "task" | "zettel" }>;
+  timeline: Array<{ id: string; date: string; title: string; kind: "interaction" | "gift" | "task" | "zettel" }>;
+};
+
+export type GiftMock = {
+  id: string;
+  personId: string;
+  direction: "given" | "received";
+  title: string;
+  occurredAt: string;
+  satisfaction?: string | null;
+  notes?: string | null;
+};
+
+export type NetworkEdgeMock = {
+  id: string;
+  sourcePersonId: string;
+  targetPersonId: string;
+  relationType?: string | null;
+  strength: number;
+  notes?: string | null;
 };
 
 export const PEOPLE_MOCK: PersonMock[] = [
@@ -35,10 +54,10 @@ export const PEOPLE_MOCK: PersonMock[] = [
     interactionsCount: 18,
     tasksCount: 4,
     timeline: [
-      { date: "2026-04-23", title: "겨울 메뉴 미팅", kind: "interaction" },
-      { date: "2026-04-22", title: "호떡집 리서치 Task 연결", kind: "task" },
-      { date: "2026-04-15", title: "실존주의 메모 추천", kind: "zettel" },
-      { date: "2026-02-11", title: "생일 선물 전달", kind: "gift" },
+      { id: "interaction-1", date: "2026-04-23", title: "겨울 메뉴 미팅", kind: "interaction" },
+      { id: "task-hotteok-research", date: "2026-04-22", title: "호떡집 리서치 Task 연결", kind: "task" },
+      { id: "zettel-anxiety", date: "2026-04-15", title: "실존주의 메모 추천", kind: "zettel" },
+      { id: "gift-1", date: "2026-02-11", title: "생일 선물 전달", kind: "gift" },
     ],
   },
   {
@@ -57,8 +76,8 @@ export const PEOPLE_MOCK: PersonMock[] = [
     interactionsCount: 31,
     tasksCount: 2,
     timeline: [
-      { date: "2026-04-21", title: "주간 회고 대화", kind: "interaction" },
-      { date: "2026-04-10", title: "기도 노트 공유", kind: "zettel" },
+      { id: "interaction-2", date: "2026-04-21", title: "주간 회고 대화", kind: "interaction" },
+      { id: "zettel-life-ops-ui", date: "2026-04-10", title: "기도 노트 공유", kind: "zettel" },
     ],
   },
   {
@@ -76,8 +95,8 @@ export const PEOPLE_MOCK: PersonMock[] = [
     interactionsCount: 11,
     tasksCount: 0,
     timeline: [
-      { date: "2026-03-25", title: "전시 관람 후기 공유", kind: "interaction" },
-      { date: "2026-03-01", title: "도서 선물 추천", kind: "gift" },
+      { id: "interaction-3", date: "2026-03-25", title: "전시 관람 후기 공유", kind: "interaction" },
+      { id: "gift-2", date: "2026-03-01", title: "도서 선물 추천", kind: "gift" },
     ],
   },
   {
@@ -94,15 +113,20 @@ export const PEOPLE_MOCK: PersonMock[] = [
     interactionsCount: 4,
     tasksCount: 1,
     timeline: [
-      { date: "2026-01-20", title: "근황 메시지", kind: "interaction" },
+      { id: "interaction-4", date: "2026-01-20", title: "근황 메시지", kind: "interaction" },
     ],
   },
 ];
 
-export const GIFT_MOCK = [
+export const GIFT_MOCK: GiftMock[] = [
   { id: "gift-1", personId: "person-jaemin", direction: "given", title: "원두 세트", occurredAt: "2026-02-11", satisfaction: "성공" },
   { id: "gift-2", personId: "person-eunji", direction: "received", title: "전시 도록", occurredAt: "2026-03-01", satisfaction: "대만족" },
   { id: "gift-3", personId: "person-minseo", direction: "given", title: "기도 노트", occurredAt: "2025-12-24", satisfaction: "성공" },
+];
+
+export const NETWORK_EDGE_MOCK: NetworkEdgeMock[] = [
+  { id: "edge-1", sourcePersonId: "person-minseo", targetPersonId: "person-jaemin", relationType: "church", strength: 4 },
+  { id: "edge-2", sourcePersonId: "person-jaemin", targetPersonId: "person-eunji", relationType: "creative", strength: 3 },
 ];
 
 export function getPersonMock(id: string) {
