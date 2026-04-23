@@ -1,0 +1,35 @@
+"use client";
+
+import { useVaultStore } from "@/stores/use-vault-store";
+
+export function ZettelDrawer({ id }: { id: string }) {
+  const zettel = useVaultStore((state) => state.zettels.find((item) => item.id === id));
+
+  if (!zettel) {
+    return <div className="rounded-3xl border border-dashed border-white/15 bg-white/5 p-4 text-sm text-muted-foreground">메모를 찾지 못했습니다.</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-primary">{zettel.type}</p>
+        <h3 className="mt-2 text-2xl font-semibold text-foreground">{zettel.title}</h3>
+        <p className="mt-2 text-sm text-muted-foreground">{zettel.summary}</p>
+      </section>
+      <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-primary">Content</p>
+        <p className="mt-3 text-sm text-foreground">{zettel.content}</p>
+      </section>
+      <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-primary">Backlinks</p>
+        <div className="mt-3 space-y-2">
+          {zettel.backlinks.map((item) => (
+            <p className="text-sm text-muted-foreground" key={item}>
+              {item}
+            </p>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}

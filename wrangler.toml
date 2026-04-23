@@ -1,0 +1,22 @@
+name = "project-light-house"
+compatibility_date = "2026-04-23"
+
+[vars]
+NEXT_PUBLIC_APP_URL = "http://localhost:3000"
+NEXT_PUBLIC_FLAG_AI_ROUTING = "1"
+NEXT_PUBLIC_FLAG_SEMANTIC_SEARCH = "1"
+NEXT_PUBLIC_FLAG_PWA = "0"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "light-house-db"
+database_id = "b3cc2425-7bd4-4fce-a8b3-cade57c3c5e2"
+
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "light-house-assets"
+
+[[vectorize]]
+binding = "VECTOR_INDEX"
+index_name = "zettel-embeddings"
+

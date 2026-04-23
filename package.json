@@ -1,0 +1,22 @@
+{
+  "name": "project-light-house",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @light-house/web",
+    "build": "npm run build --workspace @light-house/web",
+    "lint": "npm run lint --workspace @light-house/web",
+    "typecheck": "npm run typecheck --workspace @light-house/web",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "drizzle-kit check",
+    "db:seed": "tsx ./scripts/seed-demo.ts"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.4",
+    "tsx": "^4.20.6"
+  }
+}
