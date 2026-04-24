@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { usePRMStore } from "@/stores/use-prm-store";
@@ -26,7 +27,13 @@ export function PersonDrawer({ id }: { id: string }) {
   }
 
   return (
-    <div className="space-y-4">
+    <ContextBundlePanel
+      density="drawer"
+      enableAttach
+      entityId={id}
+      entityType="person"
+      mainSlot={() => (
+        <div className="space-y-4">
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs uppercase tracking-[0.2em] text-primary">Person</p>
         <h3 className="mt-2 text-2xl font-semibold text-foreground">{person.name}</h3>
@@ -297,6 +304,9 @@ export function PersonDrawer({ id }: { id: string }) {
         </div>
       </section>
     </div>
+      )}
+      railDefaultLens="people"
+    />
   );
 }
 

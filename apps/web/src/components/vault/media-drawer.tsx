@@ -1,5 +1,6 @@
 "use client";
 
+import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
 import { useVaultStore } from "@/stores/use-vault-store";
 
@@ -11,7 +12,13 @@ export function MediaDrawer({ id }: { id: string }) {
   }
 
   return (
-    <div className="space-y-4">
+    <ContextBundlePanel
+      density="drawer"
+      enableAttach
+      entityId={id}
+      entityType="media"
+      mainSlot={() => (
+        <div className="space-y-4">
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs uppercase tracking-[0.2em] text-primary">{media.mediaType}</p>
         <h3 className="mt-2 text-2xl font-semibold text-foreground">{media.title}</h3>
@@ -23,5 +30,8 @@ export function MediaDrawer({ id }: { id: string }) {
       </section>
       <SourceDocumentPanel sourceDocument={media.sourceDocument} />
     </div>
+      )}
+      railDefaultLens="source"
+    />
   );
 }

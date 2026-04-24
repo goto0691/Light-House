@@ -8,6 +8,8 @@ import { DailyDataColumn } from "@/components/life-ops/daily-data-column";
 import { DailyTopStrip } from "@/components/life-ops/daily-top-strip";
 import { HabitTrackerGrid } from "@/components/life-ops/habit-tracker-grid";
 import { JournalingTabs } from "@/components/life-ops/journaling-tabs";
+import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
+import { ContextMapMini } from "@/components/shared/context/context-map-mini";
 import { GlassCard } from "@/components/shared/glass-card";
 import { Heatmap } from "@/components/shared/heatmap";
 import { PageBody, PageLayout } from "@/components/shared/page-layout";
@@ -220,6 +222,25 @@ export function DailyLogClient({ date }: { date: string }) {
 
       </PageBody>
 
+      <ContextBundlePanel
+        density="page"
+        enableAttach
+        entityId={date}
+        entityType="daily_log"
+        mainSlot={(bundle) => (
+          <div className="space-y-4">
+            <section className="grid gap-3 md:grid-cols-4">
+              <DailyContextMetric label="People" value={String(bundle.grouped.people.length)} />
+              <DailyContextMetric label="Tasks" value={String(bundle.grouped.projects.length)} />
+              <DailyContextMetric label="Notes" value={String(bundle.grouped.zettels.length)} />
+              <DailyContextMetric label="Events" value={String(bundle.timeline.length)} />
+            </section>
+            <ContextMapMini bundle={bundle} />
+          </div>
+        )}
+        railDefaultLens="dates"
+      />
+
       <GlassCard priority="secondary">
         <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Year Heatmap</p>
         <div className="mt-4">
@@ -227,5 +248,14 @@ export function DailyLogClient({ date }: { date: string }) {
         </div>
       </GlassCard>
     </PageLayout>
+  );
+}
+
+function DailyContextMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-foreground">{value}</p>
+    </div>
   );
 }

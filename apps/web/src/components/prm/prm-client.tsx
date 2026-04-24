@@ -15,6 +15,7 @@ export function PRMClient() {
   const people = usePRMStore((state) => state.people);
   const [filter, setFilter] = useState<PersonFilterKey>("all");
   const [query, setQuery] = useState("");
+  const [groupTags, setGroupTags] = useState<string[]>([]);
   const needsContact = people
     .filter((person) => person.daysSinceContact > person.cadenceDays)
     .sort((a, b) => b.daysSinceContact - a.daysSinceContact);
@@ -22,6 +23,7 @@ export function PRMClient() {
     if (filter === "needs-contact" && person.daysSinceContact <= person.cadenceDays) return false;
     if (filter === "favorites" && !person.favorite) return false;
     if ((filter === "5" || filter === "15" || filter === "50" || filter === "150") && `${person.layer}` !== filter) return false;
+    if (groupTags.length && !groupTags.some((tag) => person.groups.some((group) => group.toLowerCase().includes(tag.toLowerCase())))) return false;
     if (query && !`${person.name} ${person.nickname ?? ""} ${person.bio} ${person.groups.join(" ")}`.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
@@ -47,8 +49,11 @@ export function PRMClient() {
       <PersonFilterTabs onChange={setFilter} value={filter} />
       <PageToolbar>
         <FilterBar
-          filters={[]}
-          onChange={(state) => setQuery(state.q)}
+          filters={[{ kind: "tag", key: "group", label: "Group tag" }]}
+          onChange={(state) => {
+            setQuery(state.q);
+            setGroupTags(Array.isArray(state.filters.group) ? state.filters.group : []);
+          }}
           rightSlot={<span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{visiblePeople.length} people</span>}
           searchPlaceholder="이름, 그룹, 메모 키워드 검색"
         />

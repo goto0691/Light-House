@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import { BacklinkPanel } from "@/components/vault/backlink-panel";
 import { ZettelCard } from "@/components/vault/zettel-card";
+import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
+import { ContextMapMini } from "@/components/shared/context/context-map-mini";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
@@ -31,11 +33,14 @@ export function ZettelsClient() {
   const [semanticResults, setSemanticResults] = useState<SearchItem[]>([]);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [categoryTags, setCategoryTags] = useState<string[]>([]);
+  const [contextRefreshKey, setContextRefreshKey] = useState(0);
 
   const selected = zettels.find((item) => item.id === selectedZettelId) ?? zettels[0];
   const linkCandidates = useMemo(() => zettels.filter((item) => item.id !== selected?.id), [selected?.id, zettels]);
   const visibleZettels = zettels.filter((item) => {
     if (typeFilter && item.type !== typeFilter) return false;
+    if (categoryTags.length && !categoryTags.some((tag) => item.category.toLowerCase().includes(tag.toLowerCase()))) return false;
     if (query && !`${item.title} ${item.summary} ${item.category}`.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
@@ -119,10 +124,12 @@ export function ZettelsClient() {
                 { value: "moc", label: "MOC" },
               ],
             },
+            { kind: "tag", key: "category", label: "Category tag" },
           ]}
           onChange={(state) => {
             setQuery(state.q);
             setTypeFilter(typeof state.filters.type === "string" ? state.filters.type : "");
+            setCategoryTags(Array.isArray(state.filters.category) ? state.filters.category : []);
           }}
           searchPlaceholder="메모 제목, 요약, 카테고리 검색"
         />
@@ -191,6 +198,16 @@ export function ZettelsClient() {
               onSelectSemantic={(id) => selectZettel(id)}
               semanticResults={semanticResults}
               zettel={selected}
+            />
+
+            <ContextBundlePanel
+              density="drawer"
+              enableAttach
+              entityId={selected.id}
+              entityType="zettel"
+              mainSlot={(bundle) => <ContextMapMini bundle={bundle} />}
+              railDefaultLens="zettels"
+              refreshKey={`${selected.id}:${contextRefreshKey}`}
             />
           </div>
         }
@@ -319,6 +336,7 @@ export function ZettelsClient() {
                         { content: contentDraft },
                         replaceSnapshot,
                       );
+                      setContextRefreshKey((value) => value + 1);
                       toast.success("Zettel 변경사항을 저장했습니다.");
                     } catch (error) {
                       toast.error("Zettel 저장에 실패했습니다.", {

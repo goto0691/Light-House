@@ -5,6 +5,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 
 import { postSnapshotMutation } from "@/lib/snapshot-client";
+import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
+import { ContextMapMini } from "@/components/shared/context/context-map-mini";
 import { GlassCard } from "@/components/shared/glass-card";
 import { ZenEditor } from "@/components/shared/zen-editor";
 import { useActionHubStore } from "@/stores/use-action-hub-store";
@@ -21,6 +23,7 @@ export function TaskWorkspaceClient({ projectId, taskId }: { projectId: string; 
   const [checklistDraft, setChecklistDraft] = useState("");
   const [personId, setPersonId] = useState("");
   const [zettelId, setZettelId] = useState("");
+  const [contextRefreshKey, setContextRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!task) return;
@@ -97,6 +100,7 @@ export function TaskWorkspaceClient({ projectId, taskId }: { projectId: string; 
                       { content: contentDraft },
                       replaceSnapshot,
                     );
+                    setContextRefreshKey((value) => value + 1);
                     toast.success("작업 내용을 D1에 저장했습니다.");
                   } catch (error) {
                     toast.error("저장에 실패했습니다.", {
@@ -116,7 +120,7 @@ export function TaskWorkspaceClient({ projectId, taskId }: { projectId: string; 
         </div>
       </GlassCard>
 
-      <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)_360px]">
         <GlassCard className="h-fit">
           <p className="text-xs uppercase tracking-[0.2em] text-primary">Meta</p>
           <div className="mt-4 space-y-4">
@@ -334,8 +338,40 @@ export function TaskWorkspaceClient({ projectId, taskId }: { projectId: string; 
         </GlassCard>
 
         <ZenEditor onChange={setContentDraft} serif={task.kind === "writing"} value={contentDraft} />
+
+        <ContextBundlePanel
+          density="compact"
+          enableAttach
+          entityId={task.id}
+          entityType="task"
+          mainSlot={(bundle) => (
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-primary">Context Workspace</p>
+                <p className="mt-2 text-sm text-muted-foreground">{project.title}</p>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <MiniMetric label="People" value={bundle.grouped.people.length} />
+                  <MiniMetric label="Docs" value={bundle.grouped.zettels.length} />
+                  <MiniMetric label="Dates" value={bundle.grouped.dates.length} />
+                </div>
+              </div>
+              <ContextMapMini bundle={bundle} />
+            </div>
+          )}
+          railDefaultLens="overview"
+          refreshKey={contextRefreshKey}
+        />
       </div>
     </section>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/10 px-2 py-2">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
+    </div>
   );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { LOCAL_NAV, type DomainKey } from "@/constants/navigation";
@@ -20,6 +21,7 @@ export function LocalNav({ domain }: { domain: DomainKey }) {
   const items = LOCAL_NAV[domain];
   const collapsed = useShellStore((state) => state.lnbCollapsed);
   const toggle = useShellStore((state) => state.toggleLNB);
+  const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
 
   return (
     <aside
@@ -39,7 +41,7 @@ export function LocalNav({ domain }: { domain: DomainKey }) {
           onClick={toggle}
           type="button"
         >
-          {collapsed ? ">" : "<"}
+          <ToggleIcon className="h-4 w-4" />
         </button>
       </div>
 

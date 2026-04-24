@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Noto_Sans_KR, Noto_Serif_KR, Source_Serif_4 } from "next/font/google";
 
 import { ThemeProvider } from "@/components/providers/theme-provider";
@@ -30,6 +30,20 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Project Light House",
   description: "Personal second-brain workspace for action, knowledge, relationships, and life ops.",
+  applicationName: "Project Light House",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Light House",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#111827",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

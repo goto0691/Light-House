@@ -1,0 +1,129 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
+import { ContextMapMini } from "@/components/shared/context/context-map-mini";
+import { ContextNodeCard } from "@/components/shared/context/context-node-card";
+import { EntityContextShell } from "@/components/shared/context/entity-context-shell";
+import { SmartAttachPanel } from "@/components/shared/context/smart-attach-panel";
+import type { ContextBundle, ContextNode } from "@/lib/context/types";
+import { cn } from "@/lib/utils/cn";
+
+type Person360Lens = "timeline" | "media" | "projects" | "notes" | "places" | "gifts" | "source";
+
+const LENSES: Array<{ key: Person360Lens; label: string }> = [
+  { key: "timeline", label: "Timeline" },
+  { key: "media", label: "Media" },
+  { key: "projects", label: "Projects" },
+  { key: "notes", label: "Notes" },
+  { key: "places", label: "Places" },
+  { key: "gifts", label: "Gifts" },
+  { key: "source", label: "Source" },
+];
+
+function edgeNodes(bundle: ContextBundle, predicate: (node: ContextNode) => boolean) {
+  return bundle.nodes.filter((node) => !(node.type === bundle.focus.type && node.id === bundle.focus.id)).filter(predicate);
+}
+
+export function Person360Client({ bundle }: { bundle: ContextBundle }) {
+  const [activeLens, setActiveLens] = useState<Person360Lens>("timeline");
+  const [currentBundle, setCurrentBundle] = useState(bundle);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const lensNodes = useMemo(() => {
+    return {
+      timeline: edgeNodes(currentBundle, (node) => ["daily_log", "interaction", "gift", "task", "zettel"].includes(node.type)),
+      media: currentBundle.grouped.media,
+      projects: currentBundle.grouped.projects,
+      notes: currentBundle.grouped.zettels,
+      places: currentBundle.grouped.places,
+      gifts: edgeNodes(currentBundle, (node) => node.type === "gift"),
+      source: currentBundle.grouped.source,
+    };
+  }, [currentBundle]);
+
+  function openNode(node: ContextNode) {
+    if (node.type === "source_document" || node.type === "tag") {
+      router.push(node.href);
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("detail", `${currentBundle.focus.type}:${currentBundle.focus.id},${node.type}:${node.id}`);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  const mainSlot = (
+    <div className="space-y-4">
+      <section className="grid gap-3 md:grid-cols-4">
+        <Metric label="Edges" value={String(currentBundle.edges.length)} />
+        <Metric label="Media" value={String(lensNodes.media.length)} />
+        <Metric label="Notes" value={String(lensNodes.notes.length)} />
+        <Metric label="Review" value={String(currentBundle.quality.unresolvedCount)} />
+      </section>
+
+      <ContextMapMini bundle={currentBundle} onOpenNode={openNode} />
+
+      <section className="rounded-lg border border-white/10 bg-white/5 p-4">
+        <div className="flex flex-wrap gap-2">
+          {LENSES.map((lens) => (
+            <button
+              className={cn(
+                "focus-ring min-h-9 rounded-full border px-3 text-xs transition",
+                activeLens === lens.key ? "border-primary/40 bg-primary/12 text-primary" : "border-white/10 bg-black/10 text-muted-foreground hover:bg-white/8 hover:text-foreground",
+              )}
+              key={lens.key}
+              onClick={() => setActiveLens(lens.key)}
+              type="button"
+            >
+              {lens.label} {lensNodes[lens.key].length}
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {lensNodes[activeLens].length ? (
+            lensNodes[activeLens].map((node) => (
+              <ContextNodeCard
+                edges={currentBundle.edges.filter((edge) => edge.from.id === node.id || edge.to.id === node.id)}
+                key={`${node.type}:${node.id}`}
+                node={node}
+                onOpen={openNode}
+              />
+            ))
+          ) : (
+            <div className="rounded-lg border border-dashed border-white/15 bg-white/5 p-4 text-sm text-muted-foreground">이 렌즈에는 아직 연결된 데이터가 없습니다.</div>
+          )}
+        </div>
+      </section>
+
+      <SmartAttachPanel focusId={currentBundle.focus.id} focusType="person" onAttached={setCurrentBundle} />
+    </div>
+  );
+
+  return (
+    <EntityContextShell
+      bundle={currentBundle}
+      density="page"
+      mainSlot={mainSlot}
+      onBundleUpdate={setCurrentBundle}
+      onDetachEdge={(edge) => {
+        void fetch(`/api/context/edges/${encodeURIComponent(edge.id)}?focusType=person&focusId=${encodeURIComponent(currentBundle.focus.id)}`, { method: "DELETE" })
+          .then((response) => response.json() as Promise<{ bundle: ContextBundle }>)
+          .then((payload) => setCurrentBundle(payload.bundle));
+      }}
+      onOpenNode={openNode}
+      railDefaultLens="people"
+    />
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-foreground">{value}</p>
+    </div>
+  );
+}

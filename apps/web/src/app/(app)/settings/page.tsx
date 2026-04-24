@@ -52,7 +52,9 @@ export default async function SettingsPage() {
         <div className="mt-5 grid gap-3">
           {[
             ["/settings/appearance", "Appearance"],
+            ["/settings/profile", "Profile"],
             ["/settings/data", "Data"],
+            ["/settings/data/qa", "Migration QA"],
             ["/settings/integrations", "Integrations"],
             ["/settings/shortcuts", "Shortcuts"],
             ["/settings/ai", "AI"],

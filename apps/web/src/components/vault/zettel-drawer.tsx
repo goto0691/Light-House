@@ -1,5 +1,6 @@
 "use client";
 
+import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 export function ZettelDrawer({ id }: { id: string }) {
@@ -10,7 +11,13 @@ export function ZettelDrawer({ id }: { id: string }) {
   }
 
   return (
-    <div className="space-y-4">
+    <ContextBundlePanel
+      density="drawer"
+      enableAttach
+      entityId={id}
+      entityType="zettel"
+      mainSlot={() => (
+        <div className="space-y-4">
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs uppercase tracking-[0.2em] text-primary">{zettel.type}</p>
         <h3 className="mt-2 text-2xl font-semibold text-foreground">{zettel.title}</h3>
@@ -45,5 +52,8 @@ export function ZettelDrawer({ id }: { id: string }) {
         </div>
       </section>
     </div>
+      )}
+      railDefaultLens="zettels"
+    />
   );
 }

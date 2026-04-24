@@ -21,7 +21,7 @@ export function PlacesClient() {
         <div className="mt-5 space-y-3">
           {places.map((place) => (
             <div className="block rounded-3xl border border-white/10 bg-white/5 p-4" key={place.id}>
-              <Link className="block" href={`/vault?detail=place:${place.id}`}>
+              <Link className="block" href={`/vault/places/${place.id}`}>
                 <p className="text-sm font-medium text-foreground">{place.name}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{place.address}</p>
                 <p className="mt-2 text-xs uppercase tracking-[0.2em] text-primary">{place.category}</p>

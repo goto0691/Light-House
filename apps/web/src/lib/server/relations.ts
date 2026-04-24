@@ -104,6 +104,12 @@ export async function attachTaskRelationsFromContent(input: {
     findZettelsByMention(input.userId, extractZettelMentions(input.content)),
   ]);
 
+  await executeD1(
+    `delete from task_people_relations
+     where task_id = ? and role_context = 'editor_mention'`,
+    [input.taskId],
+  );
+
   for (const person of people) {
     await executeD1(
       `insert or ignore into task_people_relations (task_id, person_id, role_context, created_at)

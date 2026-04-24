@@ -1,5 +1,6 @@
 "use client";
 
+import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { useActionHubStore } from "@/stores/use-action-hub-store";
 
 export function TaskDrawer({ id }: { id: string }) {
@@ -14,7 +15,13 @@ export function TaskDrawer({ id }: { id: string }) {
   }
 
   return (
-    <div className="space-y-4">
+    <ContextBundlePanel
+      density="drawer"
+      enableAttach
+      entityId={id}
+      entityType="task"
+      mainSlot={() => (
+        <div className="space-y-4">
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs uppercase tracking-[0.2em] text-primary">{task.kind}</p>
         <h3 className="mt-2 text-2xl font-semibold text-foreground">{task.title}</h3>
@@ -40,6 +47,9 @@ export function TaskDrawer({ id }: { id: string }) {
         <p className="mt-1 text-sm text-muted-foreground">Zettels: {task.linkedZettels.join(", ") || "없음"}</p>
       </section>
     </div>
+      )}
+      railDefaultLens="overview"
+    />
   );
 }
 

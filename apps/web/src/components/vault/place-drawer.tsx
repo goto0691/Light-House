@@ -1,5 +1,6 @@
 "use client";
 
+import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 export function PlaceDrawer({ id }: { id: string }) {
@@ -10,7 +11,13 @@ export function PlaceDrawer({ id }: { id: string }) {
   }
 
   return (
-    <div className="space-y-4">
+    <ContextBundlePanel
+      density="drawer"
+      enableAttach
+      entityId={id}
+      entityType="place"
+      mainSlot={() => (
+        <div className="space-y-4">
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs uppercase tracking-[0.2em] text-primary">{place.category}</p>
         <h3 className="mt-2 text-2xl font-semibold text-foreground">{place.name}</h3>
@@ -21,5 +28,8 @@ export function PlaceDrawer({ id }: { id: string }) {
         <p className="mt-3 text-sm text-foreground">{place.review}</p>
       </section>
     </div>
+      )}
+      railDefaultLens="places"
+    />
   );
 }

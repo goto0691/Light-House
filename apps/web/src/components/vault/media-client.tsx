@@ -17,9 +17,11 @@ export function MediaClient() {
   const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
   const visibleItems = media.filter((item) => {
     if (typeFilter && item.mediaType !== typeFilter) return false;
+    if (statusFilter.length && !statusFilter.includes(item.status)) return false;
     if (query && !`${item.title} ${item.creator} ${item.review}`.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
@@ -51,10 +53,22 @@ export function MediaClient() {
               { value: "screen", label: "Screens" },
             ],
           },
+          {
+            kind: "multi",
+            key: "status",
+            label: "Status",
+            options: [
+              { value: "backlog", label: "Backlog" },
+              { value: "consuming", label: "Consuming" },
+              { value: "completed", label: "Completed" },
+              { value: "dropped", label: "Dropped" },
+            ],
+          },
         ]}
         onChange={(state) => {
           setQuery(state.q);
           setTypeFilter(typeof state.filters.mediaType === "string" ? state.filters.mediaType : "");
+          setStatusFilter(Array.isArray(state.filters.status) ? state.filters.status : []);
         }}
         searchPlaceholder="제목, 창작자, 리뷰 키워드 검색"
       />

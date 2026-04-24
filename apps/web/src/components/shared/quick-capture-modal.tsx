@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import type { ActionHubSnapshot } from "@/lib/server/action-hub";
+import { queueOfflineCapture, type OfflineCapturePayload } from "@/lib/offline-capture-queue";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { useShellStore } from "@/stores/use-shell-store";
 import { useActionHubStore } from "@/stores/use-action-hub-store";
@@ -62,21 +63,17 @@ export function QuickCaptureModal() {
     if (!payload) return;
 
     startTransition(async () => {
+      const capturePayload: OfflineCapturePayload = {
+        text: payload,
+        context: {
+          ...(context ?? { domain: "dashboard" }),
+          ...(forceDomain ? { forceDomain } : null),
+        },
+      };
       try {
         const result = await postSnapshotMutation<CaptureResponse, CaptureResponse["snapshot"]>(
           "/api/action-hub/capture",
-          {
-            text: payload,
-            context: context ?? { domain: "dashboard" },
-            ...(forceDomain
-              ? {
-                  context: {
-                    ...(context ?? { domain: "dashboard" }),
-                    forceDomain,
-                  },
-                }
-              : null),
-          },
+          capturePayload,
           replaceSnapshot,
         );
 
@@ -95,6 +92,16 @@ export function QuickCaptureModal() {
         router.push("/action-hub/inbox");
         close();
       } catch (error) {
+        const looksLikeNetworkFailure = error instanceof TypeError;
+        if (typeof navigator !== "undefined" && (!navigator.onLine || looksLikeNetworkFailure)) {
+          await queueOfflineCapture(capturePayload);
+          toast.warning("오프라인 큐에 저장했습니다", {
+            description: "네트워크가 돌아오면 Action Hub로 자동 전송합니다.",
+          });
+          close();
+          return;
+        }
+
         toast.error("빠른 입력 저장에 실패했습니다.", {
           description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
         });

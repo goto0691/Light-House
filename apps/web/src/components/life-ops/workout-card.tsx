@@ -1,6 +1,7 @@
 import { GlassCard } from "@/components/shared/glass-card";
 import { Tag } from "@/components/shared/tag";
 import type { WorkoutLog } from "@/lib/mock/life-ops";
+import Link from "next/link";
 
 type WorkoutCardProps = {
   workout: WorkoutLog;
@@ -19,7 +20,9 @@ export function WorkoutCard({ workout, onDelete }: WorkoutCardProps) {
           </button>
         </div>
       </div>
-      <p className="mt-2 text-sm text-foreground">{workout.categories}</p>
+      <Link className="mt-2 block text-sm text-foreground transition hover:text-primary" href={`/life-ops/workouts/${workout.id}`}>
+        {workout.categories}
+      </Link>
       <p className="mt-1 text-sm text-muted-foreground">{workout.duration} minutes</p>
     </GlassCard>
   );

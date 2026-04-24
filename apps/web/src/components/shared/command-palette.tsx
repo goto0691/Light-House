@@ -7,6 +7,7 @@ import { ArrowUpRight, Clock3, CornerDownLeft, Sparkles, Search } from "lucide-r
 
 import { DOMAINS } from "@/constants/navigation";
 import { useSearchSuggestions } from "@/hooks/use-search-suggestions";
+import type { ContextSearchResult } from "@/lib/context/types";
 import type { SearchItem } from "@/lib/mock/search";
 import { resolveSearchPrefix } from "@/lib/utils/search-prefix";
 import { useShellStore } from "@/stores/use-shell-store";
@@ -27,7 +28,14 @@ const ACTIONS = [
   { label: "오늘 로그 열기", href: "/life-ops", type: "action" },
 ] as const;
 
-type PaletteItem = Pick<SearchItem, "id" | "title" | "snippet" | "href" | "type">;
+type PaletteItem = {
+  id: string;
+  title: string;
+  snippet: string;
+  href?: string;
+  type: SearchItem["type"] | ContextSearchResult["type"];
+  score?: number;
+};
 
 export function CommandPalette() {
   const router = useRouter();
@@ -39,6 +47,7 @@ export function CommandPalette() {
   const openHotkeyDialog = useShellStore((state) => state.openHotkeyDialog);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [contextResults, setContextResults] = useState<PaletteItem[]>([]);
 
   const normalizedQuery = query.trim();
   const searchIntent = useMemo(() => resolveSearchPrefix(query), [query]);
@@ -50,6 +59,44 @@ export function CommandPalette() {
     enabled: Boolean(searchIntent.query) && !isActionMode && !isHelpMode,
     limit: 20,
   });
+
+  useEffect(() => {
+    if (!searchIntent.query || isActionMode || isHelpMode) {
+      setContextResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ include: "semantic", q: searchIntent.query });
+        if (searchIntent.types?.length) params.set("types", searchIntent.types.join(","));
+        const response = await fetch(`/api/context/search?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("context search failed");
+        const payload = (await response.json()) as { results?: ContextSearchResult[] };
+        setContextResults(
+          (payload.results ?? []).slice(0, 20).map((item) => ({
+            href: item.href,
+            id: item.id,
+            score: item.score,
+            snippet: item.preview ?? item.subtitle ?? item.type,
+            title: item.title,
+            type: item.type,
+          })),
+        );
+      } catch {
+        if (!controller.signal.aborted) setContextResults([]);
+      }
+    }, 120);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [isActionMode, isHelpMode, searchIntent.query, searchIntent.types]);
 
   useEffect(() => {
     if (!open) {
@@ -94,7 +141,9 @@ export function CommandPalette() {
           href: item.href,
           type: item.type,
         }))
-      : results
+      : contextResults.length
+        ? contextResults
+        : results
     : [
         ...DOMAINS.map((item) => ({
           id: item.path ?? item.key,
@@ -114,7 +163,7 @@ export function CommandPalette() {
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query, results.length, visibleActions.length]);
+  }, [contextResults.length, query, results.length, visibleActions.length]);
 
   return (
     <OverlayFrame
@@ -256,7 +305,7 @@ export function CommandPalette() {
                 title="도움말 모드"
               />
             ) : null}
-            {!isHelpMode && (visibleActions.length ? visibleActions : results).length ? (
+            {!isHelpMode && (visibleActions.length ? visibleActions : contextResults.length ? contextResults : results).length ? (
               (visibleActions.length
                 ? visibleActions.map((item) => ({
                     id: item.href,
@@ -265,7 +314,9 @@ export function CommandPalette() {
                     href: item.href,
                     type: item.type,
                   }))
-                : results
+                : contextResults.length
+                  ? contextResults
+                  : results
               ).map((item, index) => (
                 <button
                   className={`flex w-full items-start justify-between rounded-3xl border px-4 py-3 text-left transition ${
@@ -281,6 +332,9 @@ export function CommandPalette() {
                   <div>
                     <p className="text-sm font-medium text-foreground">{item.title}</p>
                     <p className="mt-1 text-sm text-muted-foreground">{item.snippet}</p>
+                    {"score" in item && typeof item.score === "number" ? (
+                      <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-primary">context score {(item.score * 100).toFixed(0)}</p>
+                    ) : null}
                   </div>
                   <span className="rounded-full bg-white/8 px-2 py-1 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                     {item.type}

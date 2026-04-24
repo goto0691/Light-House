@@ -139,10 +139,7 @@ body {
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  background-image:
-    radial-gradient(circle at top, hsl(var(--primary) / 0.11), transparent 28%),
-    radial-gradient(circle at bottom right, hsl(var(--info) / 0.08), transparent 26%),
-    linear-gradient(180deg, hsl(222 18% 10% / 0.76), hsl(var(--background)));
+  background-image: linear-gradient(180deg, hsl(222 18% 10% / 0.76), hsl(var(--background)));
 }
 
 a {
@@ -467,6 +464,18 @@ button {
     box-shadow 200ms ease,
     border-color 180ms ease,
     background-color 180ms ease;
+}
+
+@keyframes bento-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (hover: hover) {

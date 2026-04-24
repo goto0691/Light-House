@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import { BackupHistoryList } from "@/components/settings/backup-history-list";
@@ -222,8 +223,15 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
 
         <div className="space-y-4">
           <GlassCard className="p-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-primary">Data Health</p>
-            <h2 className="mt-3 font-display text-4xl text-foreground">현재 적재 상태</h2>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-primary">Data Health</p>
+                <h2 className="mt-3 font-display text-4xl text-foreground">현재 적재 상태</h2>
+              </div>
+              <Link className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground" href="/settings/data/qa">
+                Migration QA
+              </Link>
+            </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {ENTITY_LABELS.map(({ key, label }) => (
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-4" key={key}>

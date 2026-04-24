@@ -19,9 +19,13 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
   const replaceSnapshot = useActionHubStore((state) => state.replaceSnapshot);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
+  const [energyFilter, setEnergyFilter] = useState<string[]>([]);
 
   const visibleTasks = tasks.filter((task) => {
     if (statusFilter && task.status !== statusFilter) return false;
+    if (priorityFilter.length && !priorityFilter.includes(task.priority)) return false;
+    if (energyFilter.length && !energyFilter.includes(task.brainEnergy)) return false;
     if (query && !`${task.title} ${task.content}`.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
@@ -77,10 +81,32 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
                 { value: "blocked", label: "Blocked" },
               ],
             },
+            {
+              kind: "multi",
+              key: "priority",
+              label: "Priority",
+              options: [
+                { value: "P1", label: "P1" },
+                { value: "P2", label: "P2" },
+                { value: "P3", label: "P3" },
+              ],
+            },
+            {
+              kind: "multi",
+              key: "energy",
+              label: "Energy",
+              options: [
+                { value: "hyper_focus", label: "Hyper Focus" },
+                { value: "normal", label: "Normal" },
+                { value: "routine", label: "Routine" },
+              ],
+            },
           ]}
           onChange={(state) => {
             setQuery(state.q);
             setStatusFilter(typeof state.filters.status === "string" ? state.filters.status : "");
+            setPriorityFilter(Array.isArray(state.filters.priority) ? state.filters.priority : []);
+            setEnergyFilter(Array.isArray(state.filters.energy) ? state.filters.energy : []);
           }}
           rightSlot={
             <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">

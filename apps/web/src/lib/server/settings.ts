@@ -68,6 +68,9 @@ type MigrationReviewIssueRow = {
 
 type MigrationReviewItemRow = {
   id: string;
+  sourceDocumentId: string | null;
+  sourceTitle: string | null;
+  sourceDatabase: string | null;
   issueType: string;
   suggestedAction: string;
   entityType: string;
@@ -76,6 +79,45 @@ type MigrationReviewItemRow = {
   confidence: number | null;
   reason: string | null;
   createdAt: string;
+};
+
+type MigrationQaSummaryRow = {
+  sourceDocuments: number | null;
+  mappedDocuments: number | null;
+  unmappedDocuments: number | null;
+  unresolvedRelations: number | null;
+  openReviewItems: number | null;
+  duplicateSourceIds: number | null;
+};
+
+type MigrationQaDatabaseRow = {
+  sourceDatabase: string;
+  total: number | null;
+  mapped: number | null;
+  unmapped: number | null;
+  unresolvedRelations: number | null;
+  openReviews: number | null;
+};
+
+type MigrationQaSourceDocumentRow = {
+  id: string;
+  sourceDatabase: string | null;
+  sourceId: string;
+  title: string;
+  status: string;
+  canonicalEntityType: string | null;
+  canonicalEntityId: string | null;
+  propertyCount: number | null;
+  unresolvedRelations: number | null;
+  openReviews: number | null;
+  updatedAt: string;
+};
+
+type MigrationQaDuplicateRow = {
+  sourceDatabase: string | null;
+  sourceId: string;
+  count: number | null;
+  titles: string | null;
 };
 
 export async function getSettingsHomeOverview() {
@@ -200,6 +242,186 @@ export async function getIntegrationSettingsOverview() {
       action: row.action,
       createdAt: row.createdAt,
       summary: row.snapshot,
+    })),
+  };
+}
+
+export async function getMigrationQaOverview() {
+  const user = await resolveCurrentUser();
+  const [summary, databases, sourceDocuments, duplicateSources, reviewItems] = await Promise.all([
+    queryD1<MigrationQaSummaryRow>(
+      `select
+         (select count(*) from source_documents sd where sd.user_id = ? and sd.deleted_at is null) as sourceDocuments,
+         (select count(*) from source_documents sd where sd.user_id = ? and sd.deleted_at is null and sd.canonical_entity_type is not null and sd.canonical_entity_id is not null) as mappedDocuments,
+         (select count(*) from source_documents sd where sd.user_id = ? and sd.deleted_at is null and (sd.canonical_entity_type is null or sd.canonical_entity_id is null)) as unmappedDocuments,
+         (select count(*)
+          from source_document_relations sdr
+          inner join source_documents sd on sd.id = sdr.source_document_id
+          where sd.user_id = ? and sd.deleted_at is null and (sdr.resolved_entity_type is null or sdr.resolved_entity_id is null)) as unresolvedRelations,
+         (select count(*) from migration_review_items mri where mri.user_id = ? and mri.deleted_at is null and mri.status = 'open') as openReviewItems,
+         (select count(*)
+          from (
+            select coalesce(source_database, 'Unknown') as source_database, source_id
+            from source_documents
+            where user_id = ? and deleted_at is null
+            group by coalesce(source_database, 'Unknown'), source_id
+            having count(*) > 1
+          )) as duplicateSourceIds`,
+      [user.id, user.id, user.id, user.id, user.id, user.id],
+    ).catch(() => ({ rows: [] as MigrationQaSummaryRow[], meta: {} })),
+    queryD1<MigrationQaDatabaseRow>(
+      `select
+         coalesce(sd.source_database, 'Unknown') as sourceDatabase,
+         count(*) as total,
+         sum(case when sd.canonical_entity_type is not null and sd.canonical_entity_id is not null then 1 else 0 end) as mapped,
+         sum(case when sd.canonical_entity_type is null or sd.canonical_entity_id is null then 1 else 0 end) as unmapped,
+         (select count(*)
+          from source_document_relations sdr
+          inner join source_documents sd2 on sd2.id = sdr.source_document_id
+          where sd2.user_id = ?
+            and sd2.deleted_at is null
+            and coalesce(sd2.source_database, 'Unknown') = coalesce(sd.source_database, 'Unknown')
+            and (sdr.resolved_entity_type is null or sdr.resolved_entity_id is null)) as unresolvedRelations,
+         (select count(*)
+          from migration_review_items mri
+          inner join source_documents sd3 on sd3.id = mri.source_document_id
+          where mri.user_id = ?
+            and mri.deleted_at is null
+            and mri.status = 'open'
+            and sd3.deleted_at is null
+            and coalesce(sd3.source_database, 'Unknown') = coalesce(sd.source_database, 'Unknown')) as openReviews
+       from source_documents sd
+       where sd.user_id = ? and sd.deleted_at is null
+       group by coalesce(sd.source_database, 'Unknown')
+       order by unmapped desc, unresolvedRelations desc, total desc`,
+      [user.id, user.id, user.id],
+    ).catch(() => ({ rows: [] as MigrationQaDatabaseRow[], meta: {} })),
+    queryD1<MigrationQaSourceDocumentRow>(
+      `select
+         sd.id,
+         sd.source_database as sourceDatabase,
+         sd.source_id as sourceId,
+         sd.title,
+         sd.status,
+         sd.canonical_entity_type as canonicalEntityType,
+         sd.canonical_entity_id as canonicalEntityId,
+         (select count(*) from source_document_properties sdp where sdp.source_document_id = sd.id) as propertyCount,
+         (select count(*)
+          from source_document_relations sdr
+          where sdr.source_document_id = sd.id and (sdr.resolved_entity_type is null or sdr.resolved_entity_id is null)) as unresolvedRelations,
+         (select count(*)
+          from migration_review_items mri
+          where mri.user_id = ?
+            and mri.source_document_id = sd.id
+            and mri.deleted_at is null
+            and mri.status = 'open') as openReviews,
+         sd.updated_at as updatedAt
+       from source_documents sd
+       where sd.user_id = ?
+         and sd.deleted_at is null
+         and (
+          sd.canonical_entity_type is null
+          or sd.canonical_entity_id is null
+          or exists (
+            select 1 from source_document_relations sdr
+            where sdr.source_document_id = sd.id and (sdr.resolved_entity_type is null or sdr.resolved_entity_id is null)
+          )
+          or exists (
+            select 1 from migration_review_items mri
+            where mri.user_id = ? and mri.source_document_id = sd.id and mri.deleted_at is null and mri.status = 'open'
+          )
+         )
+       order by openReviews desc, unresolvedRelations desc, sd.updated_at desc
+       limit 80`,
+      [user.id, user.id, user.id],
+    ).catch(() => ({ rows: [] as MigrationQaSourceDocumentRow[], meta: {} })),
+    queryD1<MigrationQaDuplicateRow>(
+      `select
+         source_database as sourceDatabase,
+         source_id as sourceId,
+         count(*) as count,
+         group_concat(title, ' / ') as titles
+       from source_documents
+       where user_id = ? and deleted_at is null
+       group by coalesce(source_database, 'Unknown'), source_id
+       having count(*) > 1
+       order by count(*) desc, max(updated_at) desc
+       limit 20`,
+      [user.id],
+    ).catch(() => ({ rows: [] as MigrationQaDuplicateRow[], meta: {} })),
+    queryD1<MigrationReviewItemRow>(
+      `select
+         mri.id,
+         mri.source_document_id as sourceDocumentId,
+         sd.title as sourceTitle,
+         sd.source_database as sourceDatabase,
+         mri.issue_type as issueType,
+         mri.suggested_action as suggestedAction,
+         mri.entity_type as entityType,
+         mri.entity_id as entityId,
+         mri.status,
+         mri.confidence,
+         mri.reason,
+         mri.created_at as createdAt
+       from migration_review_items mri
+       left join source_documents sd on sd.id = mri.source_document_id
+       where mri.user_id = ? and mri.deleted_at is null
+       order by case when mri.status = 'open' then 0 else 1 end, mri.created_at desc
+       limit 40`,
+      [user.id],
+    ).catch(() => ({ rows: [] as MigrationReviewItemRow[], meta: {} })),
+  ]);
+
+  const totals = summary.rows[0];
+  return {
+    summary: {
+      sourceDocuments: Number(totals?.sourceDocuments ?? 0),
+      mappedDocuments: Number(totals?.mappedDocuments ?? 0),
+      unmappedDocuments: Number(totals?.unmappedDocuments ?? 0),
+      unresolvedRelations: Number(totals?.unresolvedRelations ?? 0),
+      openReviewItems: Number(totals?.openReviewItems ?? 0),
+      duplicateSourceIds: Number(totals?.duplicateSourceIds ?? 0),
+    },
+    databases: databases.rows.map((row) => ({
+      sourceDatabase: row.sourceDatabase,
+      total: Number(row.total ?? 0),
+      mapped: Number(row.mapped ?? 0),
+      unmapped: Number(row.unmapped ?? 0),
+      unresolvedRelations: Number(row.unresolvedRelations ?? 0),
+      openReviews: Number(row.openReviews ?? 0),
+    })),
+    sourceDocuments: sourceDocuments.rows.map((row) => ({
+      id: row.id,
+      sourceDatabase: row.sourceDatabase,
+      sourceId: row.sourceId,
+      title: row.title,
+      status: row.status,
+      canonicalEntityType: row.canonicalEntityType,
+      canonicalEntityId: row.canonicalEntityId,
+      propertyCount: Number(row.propertyCount ?? 0),
+      unresolvedRelations: Number(row.unresolvedRelations ?? 0),
+      openReviews: Number(row.openReviews ?? 0),
+      updatedAt: row.updatedAt,
+    })),
+    duplicateSources: duplicateSources.rows.map((row) => ({
+      sourceDatabase: row.sourceDatabase,
+      sourceId: row.sourceId,
+      count: Number(row.count ?? 0),
+      titles: row.titles,
+    })),
+    reviewItems: reviewItems.rows.map((row) => ({
+      id: row.id,
+      sourceDocumentId: row.sourceDocumentId,
+      sourceTitle: row.sourceTitle,
+      sourceDatabase: row.sourceDatabase,
+      issueType: row.issueType,
+      suggestedAction: row.suggestedAction,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      status: row.status,
+      confidence: row.confidence,
+      reason: row.reason,
+      createdAt: row.createdAt,
     })),
   };
 }
