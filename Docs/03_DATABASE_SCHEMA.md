@@ -204,8 +204,6 @@ export const sourceDocumentRelations = sqliteTable('source_document_relations', 
 });
 ```
 
-<<<<<<< Updated upstream
-=======
 ### 5.5. Migration Review Queue
 
 ```typescript
@@ -226,7 +224,6 @@ export const migrationReviewItems = sqliteTable('migration_review_items', {
 });
 ```
 
->>>>>>> Stashed changes
 ---
 
 ## 6. 🚀 Action Hub 스키마 (`schema/action-hub.ts`)

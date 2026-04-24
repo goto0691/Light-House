@@ -35,8 +35,6 @@ type DataSettingsClientProps = {
       importedPeople: number;
       importedDailyLogs: number;
       importedWorkouts: number;
-<<<<<<< Updated upstream
-=======
     };
     reviewHealth: {
       needsReviewZettels: number;
@@ -72,25 +70,7 @@ type DataSettingsClientProps = {
         reason: string | null;
         createdAt: string;
       }>;
->>>>>>> Stashed changes
     };
-    reviewHealth: {
-      needsReviewZettels: number;
-      hiddenAutoLogs: number;
-      activeImportedUntaggedZettels: number;
-    };
-    duplicateMedia: Array<{
-      title: string;
-      mediaType: string;
-      count: number;
-    }>;
-    savedViews: Array<{
-      id: string;
-      domain: string;
-      scope: string;
-      name: string;
-      query: string | null;
-    }>;
     backups: Array<{
       id: string;
       createdAt: string;
@@ -382,47 +362,6 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
         </div>
       </GlassCard>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <GlassCard className="p-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-primary">Saved Views</p>
-          <h2 className="mt-3 font-display text-3xl text-foreground">Migration lenses</h2>
-          <div className="mt-5 space-y-3">
-            {initial.savedViews.length ? (
-              initial.savedViews.map((view) => (
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3" key={view.id}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-sm font-medium text-foreground">{view.name}</h3>
-                    <Tag value={`${view.domain}/${view.scope}`} variant="neutral" />
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{view.query ?? "No query"}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No saved migration views yet.</p>
-            )}
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-primary">Duplicate Media</p>
-          <h2 className="mt-3 font-display text-3xl text-foreground">Merge candidates</h2>
-          <div className="mt-5 space-y-3">
-            {initial.duplicateMedia.length ? (
-              initial.duplicateMedia.map((item) => (
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 p-3" key={`${item.mediaType}:${item.title}`}>
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-medium text-foreground">{item.title}</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">{item.mediaType}</p>
-                  </div>
-                  <Tag value={`${item.count} copies`} variant="neutral" />
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No duplicate media titles detected.</p>
-            )}
-          </div>
-        </GlassCard>
-      </div>
 
       <GlassCard className="p-5">
         <p className="text-xs uppercase tracking-[0.24em] text-primary">Recent Import Jobs</p>

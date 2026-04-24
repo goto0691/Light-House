@@ -11,10 +11,7 @@ reclassify-*.json
 data-health-snapshot.json
 dev-server*.log
 .codex-git-index
-<<<<<<< Updated upstream
-=======
 .codex-git-index-*
->>>>>>> Stashed changes
 .codex-git-objects/
 *.tsbuildinfo
 apps/web/package-lock.json

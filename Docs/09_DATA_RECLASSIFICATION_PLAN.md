@@ -111,12 +111,9 @@ Implemented in this pass:
 - `packages/db/schema/prm.ts` now defines `gifts.notionSourceId` and `gifts.importBatchId`, matching the existing D1 migration.
 - `apps/web/src/lib/server/life-ops.ts` includes daily-log related people in the daily timeline.
 - `scripts/reclassify-data.ts` has been rewritten around clean Korean/English rules, dry-run/apply modes, Life Ops extraction, soft-hide, saved views, FTS refresh, and guarded hard-delete for audited auto logs.
-<<<<<<< Updated upstream
-=======
 - `migrations/0007_source_documents.sql` and `scripts/rebuild-source-documents.ts` preserve original Notion source document roles, properties, previews, and canonical entity mappings.
 - `migrations/0008_migration_review_items.sql` and `scripts/reconcile-migrated-data.ts` add the reconciliation workbench: safe duplicate merges are applied automatically, ambiguous records are queued for review, and source document relations are rebuilt.
 - The first reconciliation pass soft-hid 371 duplicate media rows and 214 duplicate workout rows, inserted 299 zettel-media relations, and rebuilt 7,751 source document relations.
->>>>>>> Stashed changes
 
 ## 2. Classification Principles
 

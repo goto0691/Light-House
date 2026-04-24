@@ -282,8 +282,6 @@ export const sourceDocumentRelations = sqliteTable(
     resolvedEntityIndex: index("idx_source_relation_resolved").on(table.resolvedEntityType, table.resolvedEntityId),
   }),
 );
-<<<<<<< Updated upstream
-=======
 
 export const migrationReviewItems = sqliteTable(
   "migration_review_items",
@@ -309,4 +307,3 @@ export const migrationReviewItems = sqliteTable(
     sourceDocumentIndex: index("idx_migration_review_source_document").on(table.sourceDocumentId),
   }),
 );
->>>>>>> Stashed changes

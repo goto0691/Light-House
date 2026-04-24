@@ -206,9 +206,6 @@ export async function getIntegrationSettingsOverview() {
 
 export async function getDataSettingsOverview() {
   const user = await resolveCurrentUser();
-<<<<<<< Updated upstream
-  const [projects, tasks, people, zettels, media, workouts, dailyLogs, backups, imports, relationStats, reviewStats, duplicateMedia, savedViews] = await Promise.all([
-=======
   const [
     projects,
     tasks,
@@ -226,7 +223,6 @@ export async function getDataSettingsOverview() {
     migrationReviewIssues,
     migrationReviewItems,
   ] = await Promise.all([
->>>>>>> Stashed changes
     queryD1<CountRow>(`select count(*) as total from projects where user_id = ? and deleted_at is null`, [user.id]),
     queryD1<CountRow>(`select count(*) as total from tasks where user_id = ? and deleted_at is null`, [user.id]),
     queryD1<CountRow>(`select count(*) as total from people where user_id = ?`, [user.id]),
@@ -332,8 +328,6 @@ export async function getDataSettingsOverview() {
       [user.id],
     ),
     listSavedViews(),
-<<<<<<< Updated upstream
-=======
     queryD1<MigrationReviewIssueRow>(
       `select issue_type as issueType, status, count(*) as count
        from migration_review_items
@@ -359,7 +353,6 @@ export async function getDataSettingsOverview() {
        limit 12`,
       [user.id],
     ).catch(() => ({ rows: [] as MigrationReviewItemRow[], meta: {} })),
->>>>>>> Stashed changes
   ]);
 
   const relation = relationStats.rows[0];
@@ -456,8 +449,6 @@ export async function getDataSettingsOverview() {
       importedPeople: Number(relation?.importedPeople ?? 0),
       importedDailyLogs: Number(relation?.importedDailyLogs ?? 0),
       importedWorkouts: Number(relation?.importedWorkouts ?? 0),
-<<<<<<< Updated upstream
-=======
     },
     reviewHealth: {
       needsReviewZettels: Number(reviewStats.rows[0]?.needsReviewZettels ?? 0),
@@ -493,25 +484,7 @@ export async function getDataSettingsOverview() {
         reason: row.reason,
         createdAt: row.createdAt,
       })),
->>>>>>> Stashed changes
     },
-    reviewHealth: {
-      needsReviewZettels: Number(reviewStats.rows[0]?.needsReviewZettels ?? 0),
-      hiddenAutoLogs: Number(reviewStats.rows[0]?.hiddenAutoLogs ?? 0),
-      activeImportedUntaggedZettels: Number(reviewStats.rows[0]?.activeImportedUntaggedZettels ?? 0),
-    },
-    duplicateMedia: duplicateMedia.rows.map((row) => ({
-      title: row.title,
-      mediaType: row.mediaType,
-      count: Number(row.count ?? 0),
-    })),
-    savedViews: savedViews.map((view) => ({
-      id: view.id,
-      domain: view.domain,
-      scope: view.scope,
-      name: view.name,
-      query: view.searchQuery,
-    })),
     backups: backupItems,
     recentImports: importItems,
   };
