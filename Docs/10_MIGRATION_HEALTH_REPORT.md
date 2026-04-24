@@ -1,6 +1,6 @@
 # Migration Health Report
 
-Checked on 2026-04-24 against the configured D1 database.
+Checked on 2026-04-24 against the configured D1 database after the second refinement pass.
 
 ## Verdict
 
@@ -10,23 +10,20 @@ The migration succeeded as a broad capture of the Notion workspace, but it is no
 
 | Area | Status | Evidence |
 | --- | --- | --- |
-| Vault import | Good coverage, noisy shape | 1,154 zettels total, 1,040 active, 1,139 imported |
+| Vault import | Much cleaner active surface | 557 active zettels, 543 active imported, 0 active imported zettels without tags |
 | Daily logs | Mostly usable | 91 active daily logs, 56 with journal text |
-| Media shelf | Captured but over-expanded | 856 active media rows, 482 imported |
-| People/PRM | Captured but mixed with artifacts | 322 people, 161 imported from Notion source IDs |
-| Relation memory | Valuable AS-IS strength preserved | 5,794 zettel-person links, 868 media-person links, 318 task-person links, 214 task-zettel links |
+| Media shelf | Captured and deduped | 486 active media rows after duplicate cleanup and one recovered media artifact |
+| People/PRM | Cleaned to real-person candidates | 10 active people after media artifacts and duplicate people were merged/hidden |
+| Relation memory | Valuable AS-IS strength preserved and redirected | 705 zettel-media links, 466 zettel-person links, 239 media-person links, 318 task-person links, 214 task-zettel links |
 | Auto daily shells | Cleaned from active Vault | 114 auto-log source pages hidden, 0 active detected auto shells |
-| Search seed | Available for current data | FTS tables contain zettels 1,154, media 856, people 322, daily 91 |
+| Review queue | Cleared | 1,385 migration review items are applied, 0 open |
+| Search seed | Available for current data | FTS tables now match active zettels and people after soft-hide cleanup |
 
 ## Main Gaps
 
 | Gap | Why It Matters | Next Action |
 | --- | --- | --- |
-| Media duplicates | Source exports and nested pages produced repeated rows, e.g. several titles have 4 copies | Add a media merge pass that keeps the richest canonical row and soft-hides duplicates |
-| People overcount | AS-IS relation artifacts and names became PRM rows | Split real people from extracted mentions/artifacts; add review queue before deletion |
-| Workout overcount | 324 active workouts is far above the meaningful source set | Collapse generated completion logs and duplicated workout pages |
-| Untagged imported zettels | 575 active imported zettels have no taggings, so they remain hard to browse | Add a second classifier pass using category, source folder, and content headings |
-| Missing cross-domain bridges | `zettel_media_relations` and `daily_log_people_relations` are currently empty | Rebuild links from source relations and content mentions |
+| Daily person links | Diary source pages mention people, but exact PRM alias matching is still conservative | Add an alias table or manual PRM review for names like nicknames/relationship aliases before creating daily-person links |
 | Saved views not fully operational | Views are seeded in DB, but main screens only expose basic filters today | Wire saved views into Vault, Media, Life Ops, and Settings/Data workflows |
 | FTS triggers incomplete | FTS tables are populated, but D1 API trigger creation failed | Apply full FTS migration through Wrangler or rely on app-level index refresh after writes |
 
@@ -40,15 +37,20 @@ Settings/Data now exposes migration review signals:
 - Saved migration views are visible.
 - Duplicate media candidates are visible.
 
+The second refinement pass also added `scripts/refine-migrated-data.ts` and ran it against D1:
+
+- Reclassified PRM media-title artifacts into media/zettel-media relations.
+- Merged duplicate person rows into canonical people.
+- Tagged every active imported zettel or moved it into a canonical surface.
+- Soft-hid generated media source pages and journal/meditation source pages after preserving their canonical data.
+- Kept archive-work and needs-review records in the database, but removed them from the default Vault zettel surface.
+
 ## Recommended Execution Order
 
-1. Media dedupe and merge.
-2. Workout generated-log cleanup.
-3. People/PRM artifact separation.
-4. Untagged zettel classification pass.
-5. Cross-domain relation rebuild for zettel-media and daily-people.
-6. Saved view integration in the main browsing screens.
-7. Full FTS trigger migration or app-level refresh verification.
+1. Alias-aware daily-log/person relation recovery.
+2. Saved view integration in the main browsing screens.
+3. Full FTS trigger migration or app-level refresh verification.
+4. Optional richer media subtype normalization for recovered `other` media rows.
 
 ## Decision
 

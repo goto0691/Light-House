@@ -114,6 +114,9 @@ Implemented in this pass:
 - `migrations/0007_source_documents.sql` and `scripts/rebuild-source-documents.ts` preserve original Notion source document roles, properties, previews, and canonical entity mappings.
 - `migrations/0008_migration_review_items.sql` and `scripts/reconcile-migrated-data.ts` add the reconciliation workbench: safe duplicate merges are applied automatically, ambiguous records are queued for review, and source document relations are rebuilt.
 - The first reconciliation pass soft-hid 371 duplicate media rows and 214 duplicate workout rows, inserted 299 zettel-media relations, and rebuilt 7,751 source document relations.
+- `scripts/refine-migrated-data.ts` runs the second refinement pass: PRM media-title artifacts are moved to media relations, duplicate people are merged, generated media source zettels are hidden after linking, journal/meditation source zettels are moved into Life Ops daily logs, and all active imported zettels receive a classification tag.
+- After the second pass, active PRM rows dropped from 322 to 10, active zettels dropped from 1,040 to 557, active imported untagged zettels dropped from 575 to 0, and open migration review items dropped from 800 to 0.
+- The default Vault zettel query now excludes `archive-work`, `needs-review`, and `auto-log` tags so operational notes are readable without archive/review noise.
 
 ## 2. Classification Principles
 

@@ -123,7 +123,16 @@ export async function getVaultSnapshot(): Promise<VaultSnapshot> {
     queryD1<ZettelRow>(
       `select id, title, type, category, summary, content
        from zettels
-       where user_id = ? and deleted_at is null
+       where user_id = ?
+         and deleted_at is null
+         and not exists (
+           select 1
+           from taggings tg
+           inner join tags t on t.id = tg.tag_id
+           where tg.taggable_type = 'zettel'
+             and tg.taggable_id = zettels.id
+             and t.slug in ('archive-work', 'needs-review', 'auto-log')
+         )
        order by pinned desc, updated_at desc`,
       [userId],
     ),

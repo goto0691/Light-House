@@ -15,7 +15,8 @@
     "db:check": "drizzle-kit check",
     "db:seed": "tsx ./scripts/seed-demo.ts",
     "db:notion-import": "tsx ./scripts/notion-import.ts",
-    "db:reclassify": "tsx ./scripts/reclassify-data.ts"
+    "db:reclassify": "tsx ./scripts/reclassify-data.ts",
+    "db:refine-migration": "tsx ./scripts/refine-migrated-data.ts"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.4",
