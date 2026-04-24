@@ -43,11 +43,11 @@ export function GlobalNav() {
   }, [pathname]);
 
   return (
-    <aside className="glass-elevated sticky top-0 flex h-screen w-16 flex-col items-center justify-between border-r border-white/10 px-2 py-4">
+    <aside className="glass-elevated sticky top-0 flex h-screen w-[68px] shrink-0 flex-col items-center justify-between border-r border-white/10 px-2 py-4">
       <div className="flex w-full flex-col items-center gap-3">
         <Link
           aria-label="Go to dashboard"
-          className="group relative flex h-11 w-11 items-center justify-center rounded-[18px] border border-primary/35 bg-primary/12 text-sm font-semibold text-primary shadow-[0_0_28px_rgba(251,191,36,0.16)] transition hover:-translate-y-0.5 hover:bg-primary/18"
+          className="focus-ring group relative flex h-11 w-11 items-center justify-center rounded-lg border border-primary/35 bg-primary/12 text-sm font-semibold text-primary shadow-[0_0_28px_rgba(251,191,36,0.16)] transition hover:-translate-y-0.5 hover:bg-primary/18"
           href="/dashboard"
         >
           <span className="font-display text-base tracking-[0.08em]">LH</span>
@@ -67,7 +67,7 @@ export function GlobalNav() {
                 aria-current={active ? "page" : undefined}
                 aria-label={item.label}
                 className={cn(
-                  "relative flex h-11 w-11 items-center justify-center rounded-[18px] text-muted-foreground transition hover:bg-white/6 hover:text-foreground",
+                  "focus-ring relative flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-white/6 hover:text-foreground",
                   active && "bg-white/8 text-primary shadow-[0_0_18px_rgba(251,191,36,0.12)]",
                 )}
                 href={item.path ?? "#"}
@@ -90,7 +90,7 @@ export function GlobalNav() {
             return (
               <button
                 aria-label={item.label}
-                className="relative flex h-11 w-11 items-center justify-center rounded-[18px] text-muted-foreground transition hover:bg-white/6 hover:text-foreground"
+                className="focus-ring relative flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-white/6 hover:text-foreground"
                 key={item.key}
                 onClick={
                   item.key === "search"
@@ -116,7 +116,7 @@ export function GlobalNav() {
               aria-current={active ? "page" : undefined}
               aria-label={item.label}
               className={cn(
-                "flex h-11 w-11 items-center justify-center rounded-[18px] text-muted-foreground transition hover:bg-white/6 hover:text-foreground",
+                "focus-ring flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-white/6 hover:text-foreground",
                 active && "bg-white/8 text-primary",
               )}
               href={item.path ?? "#"}
@@ -126,7 +126,7 @@ export function GlobalNav() {
             </Link>
           );
         })}
-        <div className="[&_button]:flex [&_button]:h-11 [&_button]:w-11 [&_button]:items-center [&_button]:justify-center [&_button]:rounded-2xl [&_button]:px-0 [&_button]:py-0">
+        <div className="[&_button]:flex [&_button]:h-11 [&_button]:w-11 [&_button]:items-center [&_button]:justify-center [&_button]:rounded-lg [&_button]:px-0 [&_button]:py-0">
           <LogoutForm iconOnly label="로그아웃" />
         </div>
       </div>

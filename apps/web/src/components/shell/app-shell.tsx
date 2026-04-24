@@ -35,16 +35,18 @@ export function AppShell({
 
   return (
     <ShellProvider>
-      <div className="min-h-screen bg-background text-foreground" data-glass-opacity={glassOpacity}>
+      <div className="min-h-screen bg-background text-foreground" data-app-shell data-glass-opacity={glassOpacity}>
         <div className="fixed inset-0 -z-20 bg-[linear-gradient(180deg,_rgba(22,26,34,0.84),_rgba(14,17,22,1))]" />
         <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_10%_0%,rgba(251,191,36,0.13),transparent_24%),radial-gradient(circle_at_100%_10%,rgba(14,165,233,0.09),transparent_28%),radial-gradient(circle_at_40%_100%,rgba(139,92,246,0.07),transparent_24%)]" />
         <div className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-40 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),transparent)]" />
         <div className="flex min-h-screen">
           <GlobalNav />
           <LocalNav domain={domain} />
-          <main className="flex min-h-screen min-w-0 flex-1 flex-col">
+          <main className="flex min-h-screen min-w-0 flex-1 flex-col overflow-x-hidden">
             <Breadcrumb />
-            <div className="flex-1 px-4 py-5 md:px-6 md:py-7 xl:px-8">{children}</div>
+            <div className="mx-auto flex w-full max-w-[1480px] flex-1 px-4 py-5 md:px-6 md:py-6 xl:px-8">
+              <div className="min-w-0 flex-1">{children}</div>
+            </div>
           </main>
         </div>
         <SideDrawerHost />

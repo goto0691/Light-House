@@ -54,8 +54,8 @@ export function FilterBar({
   }
 
   return (
-    <div className={cn("flex flex-col gap-3 rounded-[28px] border border-white/10 bg-white/5 p-3 md:flex-row md:items-center", className)}>
-      <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
+    <div className={cn("flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-3 md:flex-row md:items-center", className)}>
+      <div className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2">
         <Search className="h-4 w-4 text-muted-foreground" />
         <input
           className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
