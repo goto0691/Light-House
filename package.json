@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:seed": "tsx ./scripts/seed-demo.ts",
-    "db:notion-import": "tsx ./scripts/notion-import.ts"
+    "db:notion-import": "tsx ./scripts/notion-import.ts",
+    "db:reclassify": "tsx ./scripts/reclassify-data.ts"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.4",

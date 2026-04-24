@@ -94,12 +94,13 @@ export type NotionImportCareer = {
 export type NotionImportMediaLog = {
   notionSourceId: string;
   title: string;
-  mediaType: "game" | "video" | "book" | "other";
+  mediaType: "game" | "screen" | "book" | "other";
   creator?: string;
   studio?: string;
   genre?: string;
   rating?: number;
   review?: string;
+  content?: string;
   platformOrPublisher?: string;
   status?: string;
   completedAt?: string;
@@ -238,6 +239,26 @@ function normalizeDateTime(value: string | undefined) {
   return parsed.toISOString();
 }
 
+function inferDateFromText(...values: Array<string | undefined>) {
+  for (const value of values) {
+    if (!value) continue;
+    const normalized = value.replace(/[_./]/g, "-");
+    const iso = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (iso) {
+      const [, year, month, day] = iso;
+      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    }
+
+    const korean = value.match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
+    if (korean) {
+      const [, year, month, day] = korean;
+      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    }
+  }
+
+  return undefined;
+}
+
 function normalizeStatus(value: string | undefined): NotionImportTask["status"] {
   const normalized = value?.trim().toLowerCase();
   if (!normalized) return "todo";
@@ -364,20 +385,39 @@ function classifyCsv(headers: string[], filename: string): CsvKind {
 
   if (/(화면이름|아이디어 내용|반응)/.test(joined)) return "tasks";
   if (/(외출자 특이사항|외출목적|외출자 이름|외출할 곳|연락처)/.test(joined)) return "zettels";
-  if (/제목 없음/.test(filename) && joined.includes("이름")) return "projects";
-  if (/(3 네트워크|네트워크|그룹|생일|마지막 연락일|핵심 가치|즐겨찾기)/.test(joined)) return "people";
-  if (/(2 프로젝트|뇌 에너지 소모|대분류|작업기간|중요도)/.test(joined)) return "projects";
+  if (/(영상 로그|게임 로그|도서 로그|컨텐츠 로그|감독\/크리에이터|개발사|저자|출판사|플랫폼|플레이 타임|시청상태|다시 볼 가치|한줄평)/.test(joined)) return "media";
   if (/(운동 로그|운동 종류)/.test(joined)) return "workouts";
-  if (/(선물|품목명|선물 사유|사람|사이즈\/옵션)/.test(joined)) return "gifts";
   if (/(라이프 로그|오늘 묵상|오늘 운동|오늘 일기)/.test(joined)) return "dailyLogs";
   if (/(일기|감정|라이프 로그|태그)/.test(joined)) return "dailyLogs";
   if (/(묵상|본문말씀|배경지식)/.test(joined)) return "dailyLogs";
+  if (/제목 없음/.test(filename) && joined.includes("이름")) return "projects";
+  if (/(3 네트워크|^네트워크| 그룹 |생일|마지막 연락일|핵심 가치|즐겨찾기)/.test(joined)) return "people";
+  if (/(2 프로젝트|뇌 에너지 소모|대분류|작업기간|중요도)/.test(joined)) return "projects";
+  if (/(선물|품목명|선물 사유|사람|사이즈\/옵션)/.test(joined)) return "gifts";
   if (/(커리어|조직\/소속|근무기간)/.test(joined)) return "career";
-  if (/(영상 로그|게임 로그|도서 로그|감독\/크리에이터|개발사|저자|출판사|플랫폼|플레이 타임)/.test(joined)) return "media";
   if (/(에피소드 db|작품|priority|deadline|due|status|task|todo)/.test(joined)) return "tasks";
   if (/(1 지식 창고|한 줄 요약|유형|카테고리|출처|관련인물)/.test(joined)) return "zettels";
   if (/(note|zettel|summary|content|slug|category)/.test(joined)) return "zettels";
   return "unknown";
+}
+
+function markdownCorpus(filename: string, content: string, title: string) {
+  return `${filename}\n${title}\n${content}`.toLowerCase();
+}
+
+function inferMediaType(value: string) {
+  if (/(게임|game|플레이|playtime|play time)/i.test(value)) return "game" as const;
+  if (/(도서|책|독서|저자|출판사|book)/i.test(value)) return "book" as const;
+  if (/(영상|영화|드라마|애니|웹툰|감독|시청|관람|screen|movie|anime|series)/i.test(value)) return "screen" as const;
+  return "other" as const;
+}
+
+function stripNotionProperties(content: string) {
+  return content
+    .split(/\r?\n/)
+    .filter((line) => !/^(날짜|생성 일시|태그|카테고리|유형|출처|한 줄 요약):/.test(line.trim()))
+    .join("\n")
+    .trim();
 }
 
 function parseMarkdownEntry(filename: string, text: string, bundle: NotionImportBundle) {
@@ -386,13 +426,38 @@ function parseMarkdownEntry(filename: string, text: string, bundle: NotionImport
   if (!content) return;
 
   const title = extractHeading(content) ?? slugToTitle(filename);
-  const dateMatch = filename.match(/(\d{4})[-_](\d{2})[-_](\d{2})/);
+  const corpus = markdownCorpus(filename, content, title);
+  const date = inferDateFromText(filename, content);
+  const body = stripNotionProperties(content);
 
-  if (dateMatch && /(daily|journal|diary|log)/i.test(filename)) {
+  if (date && /(일기|감사일기|라이프 로그|오늘의 일기|journal|diary|daily log|daily)/i.test(corpus)) {
     bundle.dailyLogs.push({
-      notionSourceId: stableSourceId(identity.fileIdentity, `${title}:${dateMatch[0]}`),
-      date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
-      journal: content,
+      notionSourceId: identity.notionId ?? stableSourceId(identity.fileIdentity, `${title}:${date}`),
+      date,
+      journal: body || content,
+    });
+    return;
+  }
+
+  if (date && /(운동|달리기|러닝|헬스|workout|running|fitness)/i.test(corpus)) {
+    bundle.workouts.push({
+      notionSourceId: identity.notionId ?? stableSourceId(identity.fileIdentity, `${title}:${date}:workout`),
+      date,
+      categories: /(달리기|러닝|running)/i.test(corpus) ? ["러닝"] : ["운동"],
+      notes: body || title,
+    });
+    return;
+  }
+
+  if (/(컨텐츠 보관소|추천받았던 (애니메이션|영화)|즐겼던 게임|시청 기록|감상 기록|도서 기록|게임 기록)/i.test(corpus)) {
+    bundle.mediaLogs.push({
+      notionSourceId: identity.notionId ?? stableSourceId(identity.fileIdentity, `${title}:media`),
+      title,
+      mediaType: inferMediaType(corpus),
+      status: /추천받았던|볼 것|읽을|backlog/i.test(corpus) ? "backlog" : "completed",
+      completedAt: date,
+      review: body.slice(0, 1200) || undefined,
+      content,
     });
     return;
   }
@@ -559,18 +624,19 @@ function parseCareerRow(fileIdentity: string, row: Record<string, string>, bundl
   });
 }
 
-function parseMediaRow(fileIdentity: string, row: Record<string, string>, bundle: NotionImportBundle, source: "video" | "game" | "book" | "content") {
+function parseMediaRow(fileIdentity: string, row: Record<string, string>, bundle: NotionImportBundle, source: "screen" | "game" | "book" | "content") {
   const title = row["이름"] || row.title || row.name;
   if (!title) return;
 
-  const mediaType = source === "game" ? "game" : source === "book" ? "book" : source === "video" ? "video" : "other";
+  const rowType = inferMediaType(`${row["유형"] || ""} ${row["분류"] || ""} ${row["게임 로그"] || ""} ${row["도서 로그"] || ""} ${row["영상 로그"] || ""}`);
+  const mediaType = source === "game" ? "game" : source === "book" ? "book" : source === "screen" ? "screen" : rowType;
   const status = row["시청상태"] || row["상태"] || undefined;
 
   bundle.mediaLogs.push({
     notionSourceId: stableSourceId(fileIdentity, `${source}:${title}`),
     title,
     mediaType,
-    creator: row["감독/크리에이터"] || row["개발사"] || undefined,
+    creator: row["감독/크리에이터"] || row["감독"] || row["개발사"] || undefined,
     studio: row["제작사"] || undefined,
     genre: row["장르"] || row["분류"] || undefined,
     rating: normalizeRating(row["평점"] || row["평가"]),
@@ -627,7 +693,7 @@ function parseCsvEntry(filename: string, text: string, bundle: NotionImportBundl
     }
 
     if (kind === "media") {
-      const source = /게임 로그/.test(filename) ? "game" : /도서 로그/.test(filename) ? "book" : /영상 로그/.test(filename) ? "video" : "content";
+      const source = /게임 로그/.test(filename) ? "game" : /도서 로그/.test(filename) ? "book" : /영상 로그/.test(filename) ? "screen" : "content";
       parseMediaRow(identity.fileIdentity, row, bundle, source);
       continue;
     }

@@ -394,6 +394,7 @@ async function insertMediaLogs(userId: string, importBatchId: string, bundle: No
              rating = ?,
              evaluation = ?,
              review = ?,
+             content = ?,
              platform_or_publisher = ?,
              play_time = ?,
              author = ?,
@@ -401,16 +402,16 @@ async function insertMediaLogs(userId: string, importBatchId: string, bundle: No
              import_batch_id = ?,
              updated_at = datetime('now')
          where id = ?`,
-        [entry.notionSourceId, entry.mediaType, entry.title, entry.creator ?? null, entry.studio ?? null, entry.genre ?? null, entry.status ?? "completed", entry.rating ?? null, entry.evaluation ?? null, entry.review ?? null, entry.platformOrPublisher ?? null, entry.playTime ?? null, entry.author ?? null, entry.completedAt ?? null, importBatchId, matchedId],
+        [entry.notionSourceId, entry.mediaType, entry.title, entry.creator ?? null, entry.studio ?? null, entry.genre ?? null, entry.status ?? "completed", entry.rating ?? null, entry.evaluation ?? null, entry.review ?? null, entry.content ?? null, entry.platformOrPublisher ?? null, entry.playTime ?? null, entry.author ?? null, entry.completedAt ?? null, importBatchId, matchedId],
       );
       continue;
     }
 
     await executeD1(
       `insert into media_logs
-        (id, user_id, notion_source_id, import_batch_id, media_type, title, creator, studio, genre, status, rating, evaluation, review, platform_or_publisher, play_time, author, completed_at, created_at, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      [ulid(), userId, entry.notionSourceId, importBatchId, entry.mediaType, entry.title, entry.creator ?? null, entry.studio ?? null, entry.genre ?? null, entry.status ?? "completed", entry.rating ?? null, entry.evaluation ?? null, entry.review ?? null, entry.platformOrPublisher ?? null, entry.playTime ?? null, entry.author ?? null, entry.completedAt ?? null],
+        (id, user_id, notion_source_id, import_batch_id, media_type, title, creator, studio, genre, status, rating, evaluation, review, content, platform_or_publisher, play_time, author, completed_at, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      [ulid(), userId, entry.notionSourceId, importBatchId, entry.mediaType, entry.title, entry.creator ?? null, entry.studio ?? null, entry.genre ?? null, entry.status ?? "completed", entry.rating ?? null, entry.evaluation ?? null, entry.review ?? null, entry.content ?? null, entry.platformOrPublisher ?? null, entry.playTime ?? null, entry.author ?? null, entry.completedAt ?? null],
     );
     created += 1;
   }
