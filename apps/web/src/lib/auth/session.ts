@@ -77,13 +77,10 @@ export async function getSession() {
 
   const session = found.rows[0];
   if (!session) {
-    store.delete(SESSION_COOKIE);
     return null;
   }
 
   if (session.expiresAt <= Date.now()) {
-    await deleteSessionById(session.sessionId);
-    store.delete(SESSION_COOKIE);
     return null;
   }
 
