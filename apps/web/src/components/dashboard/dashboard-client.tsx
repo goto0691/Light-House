@@ -10,6 +10,7 @@ import { RecentZettelsWidget } from "@/components/dashboard/widgets/recent-zette
 import { StreakHeatmapWidget } from "@/components/dashboard/widgets/streak-heatmap-widget";
 import { TodaysAnchorWidget } from "@/components/dashboard/widgets/todays-anchor-widget";
 import { UpcomingBirthdaysWidget } from "@/components/dashboard/widgets/upcoming-birthdays-widget";
+import { PageHeader, PageLayout } from "@/components/shared/page-layout";
 import { getHeatmapMock, getTodayString } from "@/lib/mock/life-ops";
 import type { TaskMock } from "@/lib/mock/action-hub";
 import type { DailyLogMock } from "@/lib/mock/life-ops";
@@ -53,7 +54,19 @@ export function DashboardClient({
   const hasAnyData = Boolean(tasks.length || people.length || zettels.length || media.length || log);
 
   return (
-    <section className="space-y-6">
+    <PageLayout>
+      <PageHeader
+        eyebrow="Light House"
+        title="Dashboard"
+        description="오늘의 작업, 관계, 기록, 에너지를 한 화면에서 스캔합니다."
+        meta={
+          <>
+            <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">{tasks.length} tasks</span>
+            <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">{people.length} people</span>
+            <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">{zettels.length} zettels</span>
+          </>
+        }
+      />
       {hasAnyData ? (
         <DashboardGrid>
           <TodaysAnchorWidget dailyLog={log} date={today} />
@@ -68,6 +81,6 @@ export function DashboardClient({
       ) : (
         <OnboardingChecklist />
       )}
-    </section>
+    </PageLayout>
   );
 }

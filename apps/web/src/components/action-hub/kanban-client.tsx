@@ -9,6 +9,7 @@ import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { TaskCard } from "@/components/action-hub/task-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FilterBar } from "@/components/shared/filter-bar";
+import { PageLayout, PageToolbar } from "@/components/shared/page-layout";
 import { useActionHubStore } from "@/stores/use-action-hub-store";
 import type { ProjectMock, TaskMock } from "@/lib/mock/action-hub";
 
@@ -59,34 +60,36 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
   }
 
   return (
-    <section className="space-y-4">
+    <PageLayout>
       <ProjectHeader currentView="kanban" project={project} />
-      <FilterBar
-        filters={[
-          {
-            kind: "select",
-            key: "status",
-            label: "Status",
-            options: [
-              { value: "todo", label: "Backlog" },
-              { value: "in_progress", label: "In Progress" },
-              { value: "review", label: "Review" },
-              { value: "done", label: "Done" },
-              { value: "blocked", label: "Blocked" },
-            ],
-          },
-        ]}
-        onChange={(state) => {
-          setQuery(state.q);
-          setStatusFilter(typeof state.filters.status === "string" ? state.filters.status : "");
-        }}
-        rightSlot={
-          <span className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            {visibleTasks.length} tasks
-          </span>
-        }
-        searchPlaceholder="태스크 제목, 메모, 연결 키워드 검색"
-      />
+      <PageToolbar>
+        <FilterBar
+          filters={[
+            {
+              kind: "select",
+              key: "status",
+              label: "Status",
+              options: [
+                { value: "todo", label: "Backlog" },
+                { value: "in_progress", label: "In Progress" },
+                { value: "review", label: "Review" },
+                { value: "done", label: "Done" },
+                { value: "blocked", label: "Blocked" },
+              ],
+            },
+          ]}
+          onChange={(state) => {
+            setQuery(state.q);
+            setStatusFilter(typeof state.filters.status === "string" ? state.filters.status : "");
+          }}
+          rightSlot={
+            <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              {visibleTasks.length} tasks
+            </span>
+          }
+          searchPlaceholder="태스크 제목, 메모, 연결 키워드 검색"
+        />
+      </PageToolbar>
       <KanbanBoard
         tasks={visibleTasks}
         renderTask={renderTask}
@@ -103,6 +106,6 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
           title="이 보드에는 아직 움직이는 카드가 없어요"
         />
       ) : null}
-    </section>
+    </PageLayout>
   );
 }

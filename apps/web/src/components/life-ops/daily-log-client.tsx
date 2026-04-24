@@ -10,6 +10,7 @@ import { HabitTrackerGrid } from "@/components/life-ops/habit-tracker-grid";
 import { JournalingTabs } from "@/components/life-ops/journaling-tabs";
 import { GlassCard } from "@/components/shared/glass-card";
 import { Heatmap } from "@/components/shared/heatmap";
+import { PageBody, PageLayout } from "@/components/shared/page-layout";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { getHeatmapMock } from "@/lib/mock/life-ops";
 import { useLifeOpsStore } from "@/stores/use-life-ops-store";
@@ -39,7 +40,7 @@ export function DailyLogClient({ date }: { date: string }) {
   if (!log) return null;
 
   return (
-    <section className="space-y-6">
+    <PageLayout>
       <DailyTopStrip
         date={log.date}
         disabled={isPending}
@@ -82,62 +83,67 @@ export function DailyLogClient({ date }: { date: string }) {
         }}
       />
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <GlassCard className="p-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Habit Tracker</p>
-          <div className="mt-4">
-            <HabitTrackerGrid
+      <PageBody
+        aside={
+          <div className="space-y-4">
+            <DailyDataColumn
+              deepWorkDraft={deepWorkDraft}
+              deepWorkMinutes={log.deepWorkMinutes}
               disabled={isPending}
-              habits={log.habits}
-              onToggle={(habitId) => {
+              onDeepWorkDraftChange={setDeepWorkDraft}
+              onSave={() => {
                 startTransition(async () => {
                   try {
                     await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                      `/api/life-ops/logs/${date}/habits/${habitId}/toggle`,
-                      undefined,
+                      "/api/life-ops/health-metrics",
+                      { date, sleepHours: sleepDraft, deepWorkMinutes: deepWorkDraft },
                       replaceSnapshot,
                     );
-                    const habit = log.habits.find((item) => item.id === habitId);
-                    toast.success(`${habit?.title ?? "습관"} 상태를 갱신했습니다.`);
+                    toast.success("Health metrics를 저장했습니다.");
                   } catch (error) {
-                    toast.error("습관 상태 저장에 실패했습니다.", {
+                    toast.error("Health metrics 저장에 실패했습니다.", {
                       description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
                     });
                   }
                 });
               }}
+              onSleepDraftChange={setSleepDraft}
+              sleepDraft={sleepDraft}
+              sleepHours={log.sleepHours}
             />
+            <DailyAutoJoinFeed items={log.timeline} />
           </div>
-        </GlassCard>
+        }
+        asideWidth="lg"
+      >
+        <div className="space-y-4">
+          <GlassCard priority="secondary">
+            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Habit Tracker</p>
+            <div className="mt-4">
+              <HabitTrackerGrid
+                disabled={isPending}
+                habits={log.habits}
+                onToggle={(habitId) => {
+                  startTransition(async () => {
+                    try {
+                      await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                        `/api/life-ops/logs/${date}/habits/${habitId}/toggle`,
+                        undefined,
+                        replaceSnapshot,
+                      );
+                      const habit = log.habits.find((item) => item.id === habitId);
+                      toast.success(`${habit?.title ?? "습관"} 상태를 갱신했습니다.`);
+                    } catch (error) {
+                      toast.error("습관 상태 저장에 실패했습니다.", {
+                        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+                      });
+                    }
+                  });
+                }}
+              />
+            </div>
+          </GlassCard>
 
-        <DailyDataColumn
-          deepWorkDraft={deepWorkDraft}
-          deepWorkMinutes={log.deepWorkMinutes}
-          disabled={isPending}
-          onDeepWorkDraftChange={setDeepWorkDraft}
-          onSave={() => {
-            startTransition(async () => {
-              try {
-                await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                  "/api/life-ops/health-metrics",
-                  { date, sleepHours: sleepDraft, deepWorkMinutes: deepWorkDraft },
-                  replaceSnapshot,
-                );
-                toast.success("Health metrics를 저장했습니다.");
-              } catch (error) {
-                toast.error("Health metrics 저장에 실패했습니다.", {
-                  description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-                });
-              }
-            });
-          }}
-          onSleepDraftChange={setSleepDraft}
-          sleepDraft={sleepDraft}
-          sleepHours={log.sleepHours}
-        />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
         <JournalingTabs
           disabled={isPending}
           gratitude={gratitudeDraft}
@@ -164,7 +170,7 @@ export function DailyLogClient({ date }: { date: string }) {
             });
           }}
         />
-        <GlassCard>
+        <GlassCard priority="secondary">
           <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Meditation & Gratitude</p>
           <div className="mt-4 space-y-4">
             <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
@@ -208,16 +214,16 @@ export function DailyLogClient({ date }: { date: string }) {
             </div>
           </div>
         </GlassCard>
-      </div>
+        </div>
 
-      <GlassCard>
+      </PageBody>
+
+      <GlassCard priority="secondary">
         <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Year Heatmap</p>
         <div className="mt-4">
           <Heatmap data={getHeatmapMock()} />
         </div>
       </GlassCard>
-
-      <DailyAutoJoinFeed items={log.timeline} />
-    </section>
+    </PageLayout>
   );
 }

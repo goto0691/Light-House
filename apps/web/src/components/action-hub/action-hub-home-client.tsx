@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { ProjectCard } from "@/components/action-hub/project-card";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
+import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shared/page-layout";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { useActionHubStore } from "@/stores/use-action-hub-store";
 
@@ -28,17 +29,13 @@ export function ActionHubHomeClient() {
   });
 
   return (
-    <section className="space-y-6">
-      <GlassCard>
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-primary">Action Hub</p>
-            <h1 className="mt-3 font-display text-4xl text-foreground">프로젝트 랜딩</h1>
-            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-              프로젝트/영역 랜딩, Inbox, Kanban, List, Calendar, Zen Workspace 흐름에 이어 프로젝트 생성까지 실제로 연결했습니다.
-            </p>
-
-            <div className="mt-6 flex flex-wrap gap-2">
+    <PageLayout>
+      <PageHeader
+        eyebrow="Action Hub"
+        title="프로젝트"
+        description="프로젝트와 영역을 만들고, 작업 보드로 진입하는 시작점입니다."
+        actions={
+          <div className="flex flex-wrap gap-2">
               {([
                 ["all", "All"],
                 ["project", "Project"],
@@ -56,10 +53,13 @@ export function ActionHubHomeClient() {
                   {label}
                 </button>
               ))}
-            </div>
           </div>
+        }
+      />
 
-          <div className="rounded-3xl border border-white/10 bg-black/10 p-4">
+      <PageBody
+        aside={
+          <GlassCard priority="secondary">
             <p className="text-xs uppercase tracking-[0.2em] text-primary">새 프로젝트</p>
             <div className="mt-3 space-y-3">
               <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setTitle(event.target.value)} placeholder="프로젝트 이름" value={title} />
@@ -96,34 +96,37 @@ export function ActionHubHomeClient() {
                 생성
               </button>
             </div>
-          </div>
+          </GlassCard>
+        }
+        asideWidth="md"
+      >
+        <PageToolbar>
+          <FilterBar
+            filters={[
+              {
+                kind: "select",
+                key: "kind",
+                label: "Kind",
+                options: [
+                  { value: "project", label: "Project" },
+                  { value: "area", label: "Area" },
+                ],
+              },
+            ]}
+            onChange={(state) => {
+              setQuery(state.q);
+            }}
+            rightSlot={<span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{visibleProjects.length} items</span>}
+            searchPlaceholder="프로젝트, 영역, 카테고리 검색"
+          />
+        </PageToolbar>
+
+        <div className="app-grid app-grid-cards mt-4">
+          {visibleProjects.map((project) => (
+            <ProjectCard key={project.id} project={project} />
+          ))}
         </div>
-      </GlassCard>
-
-      <FilterBar
-        filters={[
-          {
-            kind: "select",
-            key: "kind",
-            label: "Kind",
-            options: [
-              { value: "project", label: "Project" },
-              { value: "area", label: "Area" },
-            ],
-          },
-        ]}
-        onChange={(state) => {
-          setQuery(state.q);
-        }}
-        rightSlot={<span className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{visibleProjects.length} items</span>}
-        searchPlaceholder="프로젝트, 영역, 카테고리 검색"
-      />
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        {visibleProjects.map((project) => (
-          <ProjectCard key={project.id} project={project} />
-        ))}
-      </div>
-    </section>
+      </PageBody>
+    </PageLayout>
   );
 }

@@ -170,6 +170,7 @@ button {
 [data-app-shell] {
   --ui-section-gap: 1rem;
   --ui-panel-padding: 1.25rem;
+  --page-aside-width: 320px;
 }
 
 [data-app-shell] section {
@@ -247,6 +248,152 @@ button {
   opacity: 0.56;
 }
 
+.app-page {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.app-page-header {
+  display: flex;
+  min-height: 7rem;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border-bottom: 1px solid hsl(var(--border-subtle));
+  padding: 0.25rem 0 1rem;
+}
+
+.app-page-eyebrow {
+  color: hsl(var(--primary));
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.app-page-title {
+  margin-top: 0.45rem;
+  color: hsl(var(--foreground));
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 2.4vw, 2.4rem);
+  font-weight: 600;
+  line-height: 1.08;
+}
+
+.app-page-description {
+  margin-top: 0.65rem;
+  max-width: 52rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.app-page-meta {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.app-page-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.app-page-toolbar {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.app-page-body {
+  min-width: 0;
+}
+
+.app-page-body-with-aside {
+  display: grid;
+  align-items: start;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, var(--page-aside-width));
+}
+
+.app-page-body-aside-sm {
+  --page-aside-width: 280px;
+}
+
+.app-page-body-aside-lg {
+  --page-aside-width: 380px;
+}
+
+.app-page-body-aside-left {
+  grid-template-columns: minmax(280px, var(--page-aside-width)) minmax(0, 1fr);
+}
+
+.app-page-body-aside-left .app-page-main {
+  grid-column: 2;
+}
+
+.app-page-body-aside-left .app-page-aside {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.app-page-main,
+.app-page-aside {
+  min-width: 0;
+}
+
+.app-page-aside {
+  position: sticky;
+  top: 4rem;
+}
+
+.app-grid {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.app-grid-cards {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+}
+
+.app-grid-dense {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+
+.app-panel {
+  border: 1px solid hsl(var(--glass-border));
+  border-radius: var(--radius-lg);
+  background: hsl(var(--glass-bg) / var(--glass-opacity-scale));
+  box-shadow: inset 0 1px 0 0 hsl(var(--glass-highlight)), var(--shadow-sm);
+}
+
+.app-panel-pad {
+  padding: var(--ui-panel-padding);
+}
+
+@media (max-width: 1279px) {
+  .app-page-body-with-aside,
+  .app-page-body-aside-left {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-page-body-aside-left .app-page-main,
+  .app-page-body-aside-left .app-page-aside {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .app-page-aside {
+    position: static;
+  }
+}
+
 @media (max-width: 1023px) {
   [data-app-shell] {
     padding-bottom: env(safe-area-inset-bottom);
@@ -261,6 +408,17 @@ button {
   [data-app-shell] .text-4xl {
     font-size: 1.625rem !important;
     line-height: 2rem !important;
+  }
+
+  .app-page-header {
+    min-height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: 0;
+  }
+
+  .app-page-actions {
+    justify-content: flex-start;
   }
 }
 

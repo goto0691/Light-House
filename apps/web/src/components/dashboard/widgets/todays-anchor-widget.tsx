@@ -33,11 +33,11 @@ export function TodaysAnchorWidget({ date, dailyLog }: TodaysAnchorWidgetProps) 
             <span>·</span>
             <span>{greeting.label} 브리핑</span>
           </div>
-          <h1 className="relative mt-4 font-display text-4xl leading-[1.08] text-foreground md:text-5xl">
+          <h2 className="relative mt-4 font-display text-3xl leading-[1.12] text-foreground">
             오늘의 방향을
             <br />
             차분하게 고정합니다.
-          </h1>
+          </h2>
           <p className="relative mt-4 max-w-3xl text-sm leading-6 text-muted-foreground">
             {dailyLog?.journal || "아직 오늘의 의도가 비어 있습니다. Life Ops에서 오늘의 감정과 에너지를 먼저 잡아보세요."}
           </p>
@@ -58,4 +58,3 @@ export function TodaysAnchorWidget({ date, dailyLog }: TodaysAnchorWidgetProps) 
 function Pill({ label }: { label: string }) {
   return <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</span>;
 }
-
