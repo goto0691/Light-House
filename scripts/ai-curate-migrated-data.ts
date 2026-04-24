@@ -65,6 +65,9 @@ const offset = Number(process.argv.find((arg) => arg.startsWith("--offset="))?.s
 const includeAllImported = args.has("--all-imported");
 const delayMs = Number(process.argv.find((arg) => arg.startsWith("--delay-ms="))?.split("=")[1] ?? 4500);
 const minConfidenceForAutoReview = Number(process.argv.find((arg) => arg.startsWith("--min-confidence="))?.split("=")[1] ?? 0.65);
+const maxRequests = Number(process.argv.find((arg) => arg.startsWith("--max-requests="))?.split("=")[1] ?? limit);
+const maxRuntimeMinutes = Number(process.argv.find((arg) => arg.startsWith("--max-runtime-minutes="))?.split("=")[1] ?? 0);
+const maxRuntimeMs = maxRuntimeMinutes > 0 ? maxRuntimeMinutes * 60 * 1000 : Number.POSITIVE_INFINITY;
 
 function loadEnv() {
   for (const file of [".env.local", ".env"]) {
@@ -247,6 +250,31 @@ async function callGemini(row: CandidateRow): Promise<{ curation: AiCuration; us
   };
 }
 
+function isQuotaError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /429|quota|rate\s*limit|resource_exhausted|too many requests|exceeded/i.test(message);
+}
+
+function isTransientGeminiError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /500|502|503|504|internal|unavailable|deadline|temporarily/i.test(message);
+}
+
+async function callGeminiWithRetry(row: CandidateRow) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await callGemini(row);
+    } catch (error) {
+      lastError = error;
+      if (isQuotaError(error)) throw error;
+      if (!isTransientGeminiError(error) && attempt >= 2) throw error;
+      if (attempt < 3) await sleep(1500 * attempt * attempt);
+    }
+  }
+  throw lastError;
+}
+
 function parseGeminiJson(text: string) {
   try {
     return JSON.parse(text) as unknown;
@@ -403,18 +431,25 @@ async function main() {
 
   const candidates = (await fetchCandidates(user.id)).rows;
   const results: Array<{ id: string; title: string; curation: AiCuration; usage: { inputTokens: number; outputTokens: number } }> = [];
+  const startedAt = Date.now();
   let inputTokens = 0;
   let outputTokens = 0;
+  let requestsAttempted = 0;
+  let stopReason = "completed";
 
   for (const [index, row] of candidates.entries()) {
+    if (requestsAttempted >= maxRequests) {
+      stopReason = "max_requests";
+      break;
+    }
+    if (Date.now() - startedAt >= maxRuntimeMs) {
+      stopReason = "max_runtime";
+      break;
+    }
+
     try {
-      let result: Awaited<ReturnType<typeof callGemini>>;
-      try {
-        result = await callGemini(row);
-      } catch {
-        await sleep(1200);
-        result = await callGemini(row);
-      }
+      requestsAttempted += 1;
+      const result = await callGeminiWithRetry(row);
       inputTokens += result.usage.inputTokens;
       outputTokens += result.usage.outputTokens;
       results.push({ id: row.entityId, title: row.title, curation: result.curation, usage: result.usage });
@@ -430,6 +465,20 @@ async function main() {
         }),
       );
     } catch (error) {
+      if (isQuotaError(error)) {
+        stopReason = "quota_or_rate_limit";
+        console.log(
+          JSON.stringify({
+            index: offset + index + 1,
+            id: row.entityId,
+            title: row.title,
+            classification: "quota_or_rate_limit",
+            action: "stop_queue",
+            error: error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240),
+          }),
+        );
+        break;
+      }
       await upsertFailedReviewItem(user.id, row, error);
       console.log(
         JSON.stringify({
@@ -450,6 +499,9 @@ async function main() {
     mode: apply ? "apply-review-items" : "dry-run",
     model: process.env.GEMINI_MODEL?.trim() || "gemini-3.1-flash-lite-preview",
     scanned: candidates.length,
+    requestsAttempted,
+    stopReason,
+    runtimeSeconds: Math.round((Date.now() - startedAt) / 1000),
     inputTokens,
     outputTokens,
     byClassification: results.reduce<Record<string, number>>((acc, item) => {

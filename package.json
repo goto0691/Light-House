@@ -18,7 +18,8 @@
     "db:reclassify": "tsx ./scripts/reclassify-data.ts",
     "db:refine-migration": "tsx ./scripts/refine-migrated-data.ts",
     "db:ai-curate": "tsx ./scripts/ai-curate-migrated-data.ts",
-    "db:apply-ai-curation": "tsx ./scripts/apply-ai-curation.ts"
+    "db:apply-ai-curation": "tsx ./scripts/apply-ai-curation.ts",
+    "db:ai-curate-queue": "tsx ./scripts/run-ai-curation-queue.ts"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.4",
