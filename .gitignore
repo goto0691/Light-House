@@ -1,4 +1,5 @@
 node_modules
+.npm-cache
 .next
 dist
 coverage
@@ -6,5 +7,10 @@ coverage
 .env.*
 !.env.example
 *.log
+reclassify-*.json
+data-health-snapshot.json
+dev-server*.log
+.codex-git-index
+.codex-git-objects/
 *.tsbuildinfo
 apps/web/package-lock.json

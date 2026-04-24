@@ -11,6 +11,7 @@ import { JournalingTabs } from "@/components/life-ops/journaling-tabs";
 import { GlassCard } from "@/components/shared/glass-card";
 import { Heatmap } from "@/components/shared/heatmap";
 import { PageBody, PageLayout } from "@/components/shared/page-layout";
+import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { getHeatmapMock } from "@/lib/mock/life-ops";
 import { useLifeOpsStore } from "@/stores/use-life-ops-store";
@@ -112,6 +113,7 @@ export function DailyLogClient({ date }: { date: string }) {
               sleepHours={log.sleepHours}
             />
             <DailyAutoJoinFeed items={log.timeline} />
+            <SourceDocumentPanel sourceDocument={log.sourceDocument} />
           </div>
         }
         asideWidth="lg"

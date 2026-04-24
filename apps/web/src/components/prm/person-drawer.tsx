@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { usePRMStore } from "@/stores/use-prm-store";
 
@@ -92,6 +93,8 @@ export function PersonDrawer({ id }: { id: string }) {
         <MetricCard label="Interactions" value={String(person.interactionsCount)} />
         <MetricCard label="Tasks" value={String(person.tasksCount)} />
       </section>
+
+      <SourceDocumentPanel sourceDocument={person.sourceDocument} />
 
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-3xl border border-white/10 bg-white/5 p-4">

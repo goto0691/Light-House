@@ -2,7 +2,7 @@ import "server-only";
 
 import { ulid } from "ulidx";
 
-import type { AssetMock, MediaMock, PlaceMock, ZettelMock } from "@/lib/mock/vault";
+import type { AssetMock, MediaMock, PlaceMock, SourceDocumentInfo, ZettelMock } from "@/lib/mock/vault";
 import { getSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
 import { syncZettelRelationsFromContent } from "@/lib/server/relations";
@@ -30,6 +30,17 @@ type OutgoingRow = { id: string; sourceId: string; targetId: string; targetTitle
 type MediaRow = { id: string; mediaType: MediaMock["mediaType"]; title: string; creator: string | null; status: MediaMock["status"]; review: string | null };
 type AssetRow = { id: string; category: AssetMock["category"]; name: string; brand: string | null; currentCondition: string | null };
 type PlaceRow = { id: string; category: PlaceMock["category"]; name: string; address: string | null; notes: string | null };
+type SourceDocumentRow = {
+  id: string;
+  canonicalEntityType: string;
+  canonicalEntityId: string;
+  sourceDatabase: string | null;
+  sourceId: string;
+  documentRole: string | null;
+  status: string;
+  preview: string | null;
+};
+type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null };
 
 async function resolveUser() {
   const session = await getSession();
@@ -108,7 +119,7 @@ export async function seedVaultSupportData() {
 
 export async function getVaultSnapshot(): Promise<VaultSnapshot> {
   const { id: userId } = await resolveUser();
-  const [zettelResult, backlinkResult, outgoingResult, mediaResult, assetResult, placeResult] = await Promise.all([
+  const [zettelResult, backlinkResult, outgoingResult, mediaResult, assetResult, placeResult, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
     queryD1<ZettelRow>(
       `select id, title, type, category, summary, content
        from zettels
@@ -135,6 +146,35 @@ export async function getVaultSnapshot(): Promise<VaultSnapshot> {
     queryD1<MediaRow>(`select id, media_type as mediaType, title, creator, status, review from media_logs where user_id = ? and deleted_at is null order by updated_at desc`, [userId]),
     queryD1<AssetRow>(`select id, category, name, brand, current_condition as currentCondition from assets where user_id = ? and deleted_at is null order by created_at asc`, [userId]),
     queryD1<PlaceRow>(`select id, category, name, address, notes from places where user_id = ? and deleted_at is null order by updated_at desc`, [userId]),
+    queryD1<SourceDocumentRow>(
+      `select
+         id,
+         canonical_entity_type as canonicalEntityType,
+         canonical_entity_id as canonicalEntityId,
+         source_database as sourceDatabase,
+         source_id as sourceId,
+         document_role as documentRole,
+         status,
+         raw_content_preview as preview
+       from source_documents
+       where user_id = ?
+         and deleted_at is null
+         and canonical_entity_type in ('zettel', 'media')`,
+      [userId],
+    ),
+    queryD1<SourceDocumentPropertyRow>(
+      `select
+         sdp.source_document_id as sourceDocumentId,
+         sdp.property_name as name,
+         sdp.value_text as value
+       from source_document_properties sdp
+       inner join source_documents sd on sd.id = sdp.source_document_id
+       where sd.user_id = ?
+         and sd.deleted_at is null
+         and sd.canonical_entity_type in ('zettel', 'media')
+       order by sdp.source_document_id, sdp.property_key`,
+      [userId],
+    ),
   ]);
 
   const backlinks = new Map<string, string[]>();
@@ -151,6 +191,27 @@ export async function getVaultSnapshot(): Promise<VaultSnapshot> {
     outgoing.set(row.sourceId, list);
   }
 
+  const sourceProperties = new Map<string, Array<{ name: string; value: string }>>();
+  for (const row of sourcePropertyResult.rows) {
+    if (!row.value) continue;
+    const properties = sourceProperties.get(row.sourceDocumentId) ?? [];
+    properties.push({ name: row.name, value: row.value });
+    sourceProperties.set(row.sourceDocumentId, properties);
+  }
+
+  const sourceDocuments = new Map<string, SourceDocumentInfo>();
+  for (const row of sourceDocumentResult.rows) {
+    sourceDocuments.set(`${row.canonicalEntityType}:${row.canonicalEntityId}`, {
+      id: row.id,
+      sourceDatabase: row.sourceDatabase,
+      sourceId: row.sourceId,
+      documentRole: row.documentRole,
+      status: row.status,
+      preview: row.preview,
+      properties: sourceProperties.get(row.id) ?? [],
+    });
+  }
+
   const zettels: ZettelMock[] = zettelResult.rows.map((row) => {
     const links = outgoing.get(row.id) ?? [];
     return {
@@ -163,6 +224,7 @@ export async function getVaultSnapshot(): Promise<VaultSnapshot> {
       outgoingLinks: links,
       backlinks: backlinks.get(row.id) ?? [],
       related: links.map((link) => link.title),
+      sourceDocument: sourceDocuments.get(`zettel:${row.id}`) ?? null,
     };
   });
   const media: MediaMock[] = mediaResult.rows.map((row) => ({
@@ -171,6 +233,7 @@ export async function getVaultSnapshot(): Promise<VaultSnapshot> {
     title: row.title,
     creator: row.creator ?? "Unknown",
     status: row.status,
+    sourceDocument: sourceDocuments.get(`media:${row.id}`) ?? null,
     review: row.review ?? "감상이 아직 없습니다.",
   }));
   const assets: AssetMock[] = assetResult.rows.map((row) => ({

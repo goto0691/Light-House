@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { CareerLog, DailyLogMock, HabitDefinition, HealthMetric, WorkoutLog } from "@/lib/mock/life-ops";
+import type { SourceDocumentInfo } from "@/lib/mock/vault";
 import { getTodayString } from "@/lib/mock/life-ops";
 import { getSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
@@ -17,6 +18,7 @@ export type LifeOpsSnapshot = {
 
 type UserRow = { id: string };
 type DailyLogRow = {
+  id: string;
   date: string;
   mood: number | null;
   energyLevel: number | null;
@@ -55,6 +57,14 @@ type HealthMetricRow = {
   stepsCount: number | null;
 };
 type TimelineRow = {
+  date: string;
+  time: string;
+  label: string;
+  type: string;
+};
+type SourceDocumentRow = { id: string; sourceDatabase: string | null; sourceId: string; documentRole: string | null; status: string; preview: string | null };
+type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null };
+type DailyPersonRow = {
   date: string;
   time: string;
   label: string;
@@ -187,6 +197,34 @@ async function getHabitStateRows(userId: string, date: string) {
   );
 }
 
+async function getSourceDocumentForEntity(userId: string, entityType: string, entityId: string): Promise<SourceDocumentInfo | null> {
+  const sourceDocument = await queryD1<SourceDocumentRow>(
+    `select id, source_database as sourceDatabase, source_id as sourceId, document_role as documentRole, status, raw_content_preview as preview
+     from source_documents
+     where user_id = ? and canonical_entity_type = ? and canonical_entity_id = ? and deleted_at is null
+     limit 1`,
+    [userId, entityType, entityId],
+  );
+  const row = sourceDocument.rows[0];
+  if (!row) return null;
+  const properties = await queryD1<SourceDocumentPropertyRow>(
+    `select source_document_id as sourceDocumentId, property_name as name, value_text as value
+     from source_document_properties
+     where source_document_id = ?
+     order by property_key`,
+    [row.id],
+  );
+  return {
+    id: row.id,
+    sourceDatabase: row.sourceDatabase,
+    sourceId: row.sourceId,
+    documentRole: row.documentRole,
+    status: row.status,
+    preview: row.preview,
+    properties: properties.rows.filter((property) => property.value).map((property) => ({ name: property.name, value: property.value! })),
+  };
+}
+
 export async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnapshot> {
   const { id: userId } = await resolveUser();
   const targetDates = dates?.length ? dates : [getTodayString(), "2026-04-22", "2026-04-21"];
@@ -216,9 +254,9 @@ export async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnaps
   ]);
 
   for (const date of targetDates) {
-    const [dailyResult, habitsStateResult, metricsResult, taskTimeline, interactionTimeline, zettelTimeline] = await Promise.all([
+    const [dailyResult, habitsStateResult, metricsResult, taskTimeline, interactionTimeline, zettelTimeline, dailyPeopleTimeline] = await Promise.all([
       queryD1<DailyLogRow>(
-        `select date, mood, energy_level as energyLevel, emotions, gratitude, journal, meditation, meditation_verse as meditationVerse
+        `select id, date, mood, energy_level as energyLevel, emotions, gratitude, journal, meditation, meditation_verse as meditationVerse
          from daily_logs where user_id = ? and date = ? limit 1`,
         [userId, date],
       ),
@@ -243,9 +281,23 @@ export async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnaps
          from zettels where user_id = ? and date(coalesce(updated_at, created_at)) = ? and deleted_at is null order by updated_at desc limit 4`,
         [userId, date],
       ),
+      queryD1<DailyPersonRow>(
+        `select dl.date as date, '12:00' as time, p.name as label, 'person' as type
+         from daily_logs dl
+         inner join daily_log_people_relations dlpr on dlpr.daily_log_id = dl.id
+         inner join people p on p.id = dlpr.person_id
+         where dl.user_id = ?
+           and dl.date = ?
+           and dl.deleted_at is null
+           and p.deleted_at is null
+         order by p.name asc
+         limit 6`,
+        [userId, date],
+      ),
     ]);
 
     const row = dailyResult.rows[0];
+    const sourceDocument = row ? await getSourceDocumentForEntity(userId, "daily_log", row.id) : null;
     const metrics = metricsResult.rows;
     logs[date] = {
       date,
@@ -265,10 +317,11 @@ export async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnaps
       })),
       sleepHours: metrics.map((item) => Number(item.sleepHours ?? 0)).reverse(),
       deepWorkMinutes: Number(metrics[0]?.deepWorkMinutes ?? 0),
-      timeline: [...taskTimeline.rows, ...interactionTimeline.rows, ...zettelTimeline.rows]
+      timeline: [...taskTimeline.rows, ...interactionTimeline.rows, ...zettelTimeline.rows, ...dailyPeopleTimeline.rows]
         .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
         .slice(0, 6)
         .map((item) => ({ time: item.time.slice(0, 5), label: item.label, type: item.type })),
+      sourceDocument,
     };
   }
 

@@ -2,6 +2,7 @@ import { Network } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { GlassCard } from "@/components/shared/glass-card";
+import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
 import type { SearchItem } from "@/lib/mock/search";
 import type { ZettelMock } from "@/lib/mock/vault";
 
@@ -17,6 +18,10 @@ export function BacklinkPanel({ zettel, semanticResults, onSelectSemantic, onRem
   return (
     <GlassCard className="min-h-[640px] p-5">
       <p className="text-xs uppercase tracking-[0.24em] text-primary">Backlinks & Context</p>
+
+      <div className="mt-5">
+        <SourceDocumentPanel sourceDocument={zettel.sourceDocument} />
+      </div>
 
       <div className="mt-5">
         <p className="text-sm font-medium text-foreground">이 메모가 연결하는 항목</p>

@@ -1,3 +1,5 @@
+import type { SourceDocumentInfo } from "@/lib/mock/vault";
+
 export type PersonMock = {
   id: string;
   name: string;
@@ -15,6 +17,7 @@ export type PersonMock = {
   interactionsCount: number;
   tasksCount: number;
   timeline: Array<{ id: string; date: string; title: string; kind: "interaction" | "gift" | "task" | "zettel" }>;
+  sourceDocument?: SourceDocumentInfo | null;
 };
 
 export type GiftMock = {

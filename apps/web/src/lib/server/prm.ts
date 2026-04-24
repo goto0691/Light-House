@@ -3,6 +3,7 @@ import "server-only";
 import { ulid } from "ulidx";
 
 import type { GiftMock, NetworkEdgeMock, PersonMock } from "@/lib/mock/prm";
+import type { SourceDocumentInfo } from "@/lib/mock/vault";
 import { getSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
 
@@ -54,6 +55,8 @@ type NetworkEdgeRow = {
   strength: number | null;
   notes: string | null;
 };
+type SourceDocumentRow = { id: string; canonicalEntityId: string; sourceDatabase: string | null; sourceId: string; documentRole: string | null; status: string; preview: string | null };
+type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null };
 
 async function resolveUser() {
   const session = await getSession();
@@ -143,7 +146,7 @@ export async function seedPRMSupportData() {
 
 export async function getPRMSnapshot(): Promise<PRMSnapshot> {
   const { id: userId } = await resolveUser();
-  const [peopleResult, interactionTimeline, giftTimeline, taskTimeline, zettelTimeline, giftsResult, networkEdgeResult] = await Promise.all([
+  const [peopleResult, interactionTimeline, giftTimeline, taskTimeline, zettelTimeline, giftsResult, networkEdgeResult, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
     queryD1<PersonRow>(
       `select
          p.id, p.name, p.nickname, p.groups, p.dunbar_layer as dunbarLayer, p.status, p.is_favorite as isFavorite,
@@ -197,7 +200,42 @@ export async function getPRMSnapshot(): Promise<PRMSnapshot> {
        order by updated_at desc, created_at desc`,
       [userId],
     ),
+    queryD1<SourceDocumentRow>(
+      `select id, canonical_entity_id as canonicalEntityId, source_database as sourceDatabase, source_id as sourceId, document_role as documentRole, status, raw_content_preview as preview
+       from source_documents
+       where user_id = ? and deleted_at is null and canonical_entity_type = 'person'`,
+      [userId],
+    ),
+    queryD1<SourceDocumentPropertyRow>(
+      `select sdp.source_document_id as sourceDocumentId, sdp.property_name as name, sdp.value_text as value
+       from source_document_properties sdp
+       inner join source_documents sd on sd.id = sdp.source_document_id
+       where sd.user_id = ? and sd.deleted_at is null and sd.canonical_entity_type = 'person'
+       order by sdp.source_document_id, sdp.property_key`,
+      [userId],
+    ),
   ]);
+
+  const sourceProperties = new Map<string, Array<{ name: string; value: string }>>();
+  for (const row of sourcePropertyResult.rows) {
+    if (!row.value) continue;
+    const properties = sourceProperties.get(row.sourceDocumentId) ?? [];
+    properties.push({ name: row.name, value: row.value });
+    sourceProperties.set(row.sourceDocumentId, properties);
+  }
+
+  const sourceDocuments = new Map<string, SourceDocumentInfo>();
+  for (const row of sourceDocumentResult.rows) {
+    sourceDocuments.set(row.canonicalEntityId, {
+      id: row.id,
+      sourceDatabase: row.sourceDatabase,
+      sourceId: row.sourceId,
+      documentRole: row.documentRole,
+      status: row.status,
+      preview: row.preview,
+      properties: sourceProperties.get(row.id) ?? [],
+    });
+  }
 
   const timelineMap = new Map<string, PersonMock["timeline"]>();
   for (const row of [...interactionTimeline.rows, ...giftTimeline.rows, ...taskTimeline.rows, ...zettelTimeline.rows]) {
@@ -227,6 +265,7 @@ export async function getPRMSnapshot(): Promise<PRMSnapshot> {
     interactionsCount: Number(row.interactionsCount ?? 0),
     tasksCount: Number(row.tasksCount ?? 0),
     timeline: timelineMap.get(row.id) ?? [],
+    sourceDocument: sourceDocuments.get(row.id) ?? null,
   }));
 
   const gifts: GiftMock[] = giftsResult.rows.map((row) => ({

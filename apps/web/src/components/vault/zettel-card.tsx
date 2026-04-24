@@ -27,6 +27,8 @@ export function ZettelCard({ zettel, selected, onSelect, actions }: ZettelCardPr
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <Tag value={zettel.category} variant="custom" />
+          {zettel.sourceDocument?.sourceDatabase ? <Tag value={zettel.sourceDocument.sourceDatabase} variant="neutral" /> : null}
+          {zettel.sourceDocument?.documentRole ? <Tag value={zettel.sourceDocument.documentRole} variant="neutral" /> : null}
           <span className="tabular-nums rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             {zettel.backlinks.length} backlinks
           </span>

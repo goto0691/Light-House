@@ -155,6 +155,57 @@ export const auditLogs = sqliteTable('audit_logs', {
 
 ---
 
+### 5.4. Source Document Layer
+
+This layer preserves Notion document behavior after migration. It keeps source database identity, document role, raw properties, preview text, and canonical entity mapping so migrated pages can act like their original Notion documents inside Light House.
+
+```typescript
+export const sourceDocuments = sqliteTable('source_documents', {
+  id: id(),
+  userId: userId(),
+  sourceType: text('source_type').notNull().default('notion'),
+  sourceId: text('source_id').notNull(),
+  importBatchId: text('import_batch_id'),
+  sourceDatabase: text('source_database'),
+  title: text('title').notNull(),
+  documentRole: text('document_role'),
+  canonicalEntityType: text('canonical_entity_type'),
+  canonicalEntityId: text('canonical_entity_id'),
+  status: text('status').notNull().default('active'),
+  url: text('url'),
+  rawProperties: text('raw_properties'),
+  rawContentPreview: text('raw_content_preview'),
+  resolvedAt: text('resolved_at'),
+  ...timestamps,
+});
+
+export const sourceDocumentProperties = sqliteTable('source_document_properties', {
+  id: id(),
+  sourceDocumentId: text('source_document_id').notNull(),
+  propertyKey: text('property_key').notNull(),
+  propertyName: text('property_name').notNull(),
+  propertyType: text('property_type'),
+  valueText: text('value_text'),
+  valueJson: text('value_json'),
+  normalizedValue: text('normalized_value'),
+  createdAt: text('created_at').notNull(),
+});
+
+export const sourceDocumentRelations = sqliteTable('source_document_relations', {
+  id: id(),
+  sourceDocumentId: text('source_document_id').notNull(),
+  relationName: text('relation_name').notNull(),
+  targetSourceId: text('target_source_id'),
+  targetTitle: text('target_title'),
+  resolvedEntityType: text('resolved_entity_type'),
+  resolvedEntityId: text('resolved_entity_id'),
+  confidence: real('confidence'),
+  createdAt: text('created_at').notNull(),
+});
+```
+
+---
+
 ## 6. 🚀 Action Hub 스키마 (`schema/action-hub.ts`)
 
 ```typescript
@@ -602,6 +653,17 @@ export const workouts = sqliteTable('workouts', {
   ...timestamps,
 }, (t) => ({
   userDateIndex: index('idx_wo_user_date').on(t.userId, t.date),
+}));
+
+// -- Daily Log People Relations (Notion diary related people restore) --
+export const dailyLogPeopleRelations = sqliteTable('daily_log_people_relations', {
+  dailyLogId: text('daily_log_id').notNull().references(() => dailyLogs.id, { onDelete: 'cascade' }),
+  personId: text('person_id').notNull().references(() => people.id, { onDelete: 'cascade' }),
+  context: text('context'), // 'notion_related_people'
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+}, (t) => ({
+  pk: index('pk_daily_log_people').on(t.dailyLogId, t.personId),
+  personIndex: index('idx_daily_log_people_person').on(t.personId),
 }));
 
 // -- Health Metrics (수면, 체중 등 연동 대비) --

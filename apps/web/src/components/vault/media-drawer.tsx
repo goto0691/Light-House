@@ -1,5 +1,6 @@
 "use client";
 
+import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 export function MediaDrawer({ id }: { id: string }) {
@@ -20,6 +21,7 @@ export function MediaDrawer({ id }: { id: string }) {
         <p className="text-xs uppercase tracking-[0.2em] text-primary">Review</p>
         <p className="mt-3 text-sm text-foreground">{media.review}</p>
       </section>
+      <SourceDocumentPanel sourceDocument={media.sourceDocument} />
     </div>
   );
 }

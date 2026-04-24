@@ -2,7 +2,7 @@ import "server-only";
 
 import { queryD1 } from "@/lib/server/cloudflare-d1";
 import { resolveCurrentUser } from "@/lib/server/session-user";
-import { DEFAULT_DASHBOARD_LAYOUTS, DEFAULT_SHORTCUT_BINDINGS, listShortcutBindings, listWidgetLayouts } from "@/lib/server/ui-state";
+import { DEFAULT_DASHBOARD_LAYOUTS, DEFAULT_SHORTCUT_BINDINGS, listSavedViews, listShortcutBindings, listWidgetLayouts } from "@/lib/server/ui-state";
 
 type UsageRow = {
   count: number | null;
@@ -188,11 +188,13 @@ export async function getIntegrationSettingsOverview() {
 
 export async function getDataSettingsOverview() {
   const user = await resolveCurrentUser();
-  const [projects, tasks, people, zettels, dailyLogs, backups, imports, relationStats] = await Promise.all([
+  const [projects, tasks, people, zettels, media, workouts, dailyLogs, backups, imports, relationStats, reviewStats, duplicateMedia, savedViews] = await Promise.all([
     queryD1<CountRow>(`select count(*) as total from projects where user_id = ? and deleted_at is null`, [user.id]),
     queryD1<CountRow>(`select count(*) as total from tasks where user_id = ? and deleted_at is null`, [user.id]),
     queryD1<CountRow>(`select count(*) as total from people where user_id = ?`, [user.id]),
-    queryD1<CountRow>(`select count(*) as total from zettels where user_id = ?`, [user.id]),
+    queryD1<CountRow>(`select count(*) as total from zettels where user_id = ? and deleted_at is null`, [user.id]),
+    queryD1<CountRow>(`select count(*) as total from media_logs where user_id = ? and deleted_at is null`, [user.id]),
+    queryD1<CountRow>(`select count(*) as total from workouts where user_id = ? and deleted_at is null`, [user.id]),
     queryD1<CountRow>(`select count(*) as total from daily_logs where user_id = ?`, [user.id]),
     queryD1<BackupSnapshotRow>(
       `select
@@ -230,10 +232,15 @@ export async function getDataSettingsOverview() {
       taskZettels: number | null;
       zettelPeople: number | null;
       mediaPeople: number | null;
+      dailyPeople: number | null;
+      zettelMedia: number | null;
       importedProjects: number | null;
       importedTasks: number | null;
       importedZettels: number | null;
       importedMedia: number | null;
+      importedPeople: number | null;
+      importedDailyLogs: number | null;
+      importedWorkouts: number | null;
     }>(
       `select
          (select count(*) from tasks where user_id = ? and project_id is not null and deleted_at is null) as taskProjects,
@@ -241,12 +248,52 @@ export async function getDataSettingsOverview() {
          (select count(*) from task_zettel_relations tzr inner join tasks t on t.id = tzr.task_id where t.user_id = ?) as taskZettels,
          (select count(*) from zettel_people_relations zpr inner join zettels z on z.id = zpr.zettel_id where z.user_id = ?) as zettelPeople,
          (select count(*) from media_people_relations mpr inner join media_logs m on m.id = mpr.media_id where m.user_id = ?) as mediaPeople,
+         (select count(*) from daily_log_people_relations dlpr inner join daily_logs dl on dl.id = dlpr.daily_log_id where dl.user_id = ?) as dailyPeople,
+         (select count(*) from zettel_media_relations zmr inner join zettels z on z.id = zmr.zettel_id where z.user_id = ?) as zettelMedia,
          (select count(*) from projects where user_id = ? and import_batch_id is not null and deleted_at is null) as importedProjects,
          (select count(*) from tasks where user_id = ? and import_batch_id is not null and deleted_at is null) as importedTasks,
          (select count(*) from zettels where user_id = ? and import_batch_id is not null and deleted_at is null) as importedZettels,
-         (select count(*) from media_logs where user_id = ? and import_batch_id is not null and deleted_at is null) as importedMedia`,
-      [user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id],
+         (select count(*) from media_logs where user_id = ? and import_batch_id is not null and deleted_at is null) as importedMedia,
+         (select count(*) from people where user_id = ? and notion_source_id is not null and deleted_at is null) as importedPeople,
+         (select count(*) from daily_logs where user_id = ? and import_batch_id is not null and deleted_at is null) as importedDailyLogs,
+         (select count(*) from workouts where user_id = ? and import_batch_id is not null and deleted_at is null) as importedWorkouts`,
+      [user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id],
     ),
+    queryD1<{
+      needsReviewZettels: number | null;
+      hiddenAutoLogs: number | null;
+      activeImportedUntaggedZettels: number | null;
+    }>(
+      `select
+         (select count(*)
+          from taggings tg
+          inner join tags t on t.id = tg.tag_id
+          inner join zettels z on z.id = tg.taggable_id
+          where tg.taggable_type = 'zettel' and t.slug = 'needs-review' and z.user_id = ? and z.deleted_at is null) as needsReviewZettels,
+         (select count(*)
+          from taggings tg
+          inner join tags t on t.id = tg.tag_id
+          inner join zettels z on z.id = tg.taggable_id
+          where tg.taggable_type = 'zettel' and t.slug = 'auto-log' and z.user_id = ? and z.deleted_at is not null) as hiddenAutoLogs,
+         (select count(*)
+          from zettels z
+          where z.user_id = ? and z.deleted_at is null and z.import_batch_id is not null
+            and not exists (
+              select 1 from taggings tg where tg.taggable_type = 'zettel' and tg.taggable_id = z.id
+            )) as activeImportedUntaggedZettels`,
+      [user.id, user.id, user.id],
+    ),
+    queryD1<{ title: string; mediaType: string; count: number | null }>(
+      `select trim(title) as title, media_type as mediaType, count(*) as count
+       from media_logs
+       where user_id = ? and deleted_at is null
+       group by lower(trim(title)), media_type
+       having count(*) > 1
+       order by count(*) desc, title asc
+       limit 8`,
+      [user.id],
+    ),
+    listSavedViews(),
   ]);
 
   const relation = relationStats.rows[0];
@@ -324,6 +371,8 @@ export async function getDataSettingsOverview() {
       tasks: Number(tasks.rows[0]?.total ?? 0),
       people: Number(people.rows[0]?.total ?? 0),
       zettels: Number(zettels.rows[0]?.total ?? 0),
+      media: Number(media.rows[0]?.total ?? 0),
+      workouts: Number(workouts.rows[0]?.total ?? 0),
       dailyLogs: Number(dailyLogs.rows[0]?.total ?? 0),
     },
     relationHealth: {
@@ -332,11 +381,33 @@ export async function getDataSettingsOverview() {
       taskZettels: Number(relation?.taskZettels ?? 0),
       zettelPeople: Number(relation?.zettelPeople ?? 0),
       mediaPeople: Number(relation?.mediaPeople ?? 0),
+      dailyPeople: Number(relation?.dailyPeople ?? 0),
+      zettelMedia: Number(relation?.zettelMedia ?? 0),
       importedProjects: Number(relation?.importedProjects ?? 0),
       importedTasks: Number(relation?.importedTasks ?? 0),
       importedZettels: Number(relation?.importedZettels ?? 0),
       importedMedia: Number(relation?.importedMedia ?? 0),
+      importedPeople: Number(relation?.importedPeople ?? 0),
+      importedDailyLogs: Number(relation?.importedDailyLogs ?? 0),
+      importedWorkouts: Number(relation?.importedWorkouts ?? 0),
     },
+    reviewHealth: {
+      needsReviewZettels: Number(reviewStats.rows[0]?.needsReviewZettels ?? 0),
+      hiddenAutoLogs: Number(reviewStats.rows[0]?.hiddenAutoLogs ?? 0),
+      activeImportedUntaggedZettels: Number(reviewStats.rows[0]?.activeImportedUntaggedZettels ?? 0),
+    },
+    duplicateMedia: duplicateMedia.rows.map((row) => ({
+      title: row.title,
+      mediaType: row.mediaType,
+      count: Number(row.count ?? 0),
+    })),
+    savedViews: savedViews.map((view) => ({
+      id: view.id,
+      domain: view.domain,
+      scope: view.scope,
+      name: view.name,
+      query: view.searchQuery,
+    })),
     backups: backupItems,
     recentImports: importItems,
   };

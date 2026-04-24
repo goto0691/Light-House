@@ -1,6 +1,7 @@
 import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import { id, timestamps, userId } from "./_helpers";
+import { people } from "./prm";
 
 export const dailyLogs = sqliteTable(
   "daily_logs",
@@ -23,6 +24,26 @@ export const dailyLogs = sqliteTable(
   (table) => ({
     userDateUnique: index("idx_dl_user_date").on(table.userId, table.date),
     notionSourceIndex: index("idx_dl_notion_source").on(table.userId, table.notionSourceId),
+  }),
+);
+
+export const dailyLogPeopleRelations = sqliteTable(
+  "daily_log_people_relations",
+  {
+    dailyLogId: text("daily_log_id")
+      .notNull()
+      .references(() => dailyLogs.id, { onDelete: "cascade" }),
+    personId: text("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
+    context: text("context"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    pk: index("pk_daily_log_people").on(table.dailyLogId, table.personId),
+    personIndex: index("idx_daily_log_people_person").on(table.personId),
   }),
 );
 

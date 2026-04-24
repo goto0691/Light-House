@@ -1,3 +1,13 @@
+export type SourceDocumentInfo = {
+  id: string;
+  sourceDatabase: string | null;
+  sourceId: string;
+  documentRole: string | null;
+  status: string;
+  preview: string | null;
+  properties: Array<{ name: string; value: string }>;
+};
+
 export type ZettelMock = {
   id: string;
   title: string;
@@ -8,6 +18,7 @@ export type ZettelMock = {
   outgoingLinks: Array<{ id: string; targetId: string; title: string }>;
   backlinks: string[];
   related: string[];
+  sourceDocument?: SourceDocumentInfo | null;
 };
 
 export type MediaMock = {
@@ -17,6 +28,7 @@ export type MediaMock = {
   creator: string;
   status: "backlog" | "consuming" | "completed";
   review: string;
+  sourceDocument?: SourceDocumentInfo | null;
 };
 
 export type AssetMock = {

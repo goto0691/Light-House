@@ -1,3 +1,5 @@
+import type { SourceDocumentInfo } from "@/lib/mock/vault";
+
 export type Habit = {
   id: string;
   title: string;
@@ -55,6 +57,7 @@ export type DailyLogMock = {
   sleepHours: number[];
   deepWorkMinutes: number;
   timeline: Array<{ time: string; label: string; type: string }>;
+  sourceDocument?: SourceDocumentInfo | null;
 };
 
 export function getTodayString() {

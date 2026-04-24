@@ -65,6 +65,8 @@ export const gifts = sqliteTable(
   {
     id: id(),
     userId: userId(),
+    notionSourceId: text("notion_source_id"),
+    importBatchId: text("import_batch_id"),
     personId: text("person_id")
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
