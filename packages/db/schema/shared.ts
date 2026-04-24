@@ -282,3 +282,31 @@ export const sourceDocumentRelations = sqliteTable(
     resolvedEntityIndex: index("idx_source_relation_resolved").on(table.resolvedEntityType, table.resolvedEntityId),
   }),
 );
+<<<<<<< Updated upstream
+=======
+
+export const migrationReviewItems = sqliteTable(
+  "migration_review_items",
+  {
+    id: id(),
+    userId: userId(),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    issueType: text("issue_type").notNull(),
+    suggestedAction: text("suggested_action").notNull(),
+    confidence: real("confidence"),
+    status: text("status").notNull().default("open"),
+    reason: text("reason"),
+    payload: text("payload"),
+    resolvedAt: text("resolved_at"),
+    ...timestamps,
+  },
+  (table) => ({
+    userStatusIndex: index("idx_migration_review_user_status").on(table.userId, table.status),
+    userIssueIndex: index("idx_migration_review_user_issue").on(table.userId, table.issueType),
+    entityIndex: index("idx_migration_review_entity").on(table.entityType, table.entityId),
+    sourceDocumentIndex: index("idx_migration_review_source_document").on(table.sourceDocumentId),
+  }),
+);
+>>>>>>> Stashed changes

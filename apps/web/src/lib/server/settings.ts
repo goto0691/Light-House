@@ -60,6 +60,24 @@ type CountRow = {
   total: number | null;
 };
 
+type MigrationReviewIssueRow = {
+  issueType: string;
+  status: string;
+  count: number | null;
+};
+
+type MigrationReviewItemRow = {
+  id: string;
+  issueType: string;
+  suggestedAction: string;
+  entityType: string;
+  entityId: string | null;
+  status: string;
+  confidence: number | null;
+  reason: string | null;
+  createdAt: string;
+};
+
 export async function getSettingsHomeOverview() {
   const user = await resolveCurrentUser();
 
@@ -188,7 +206,27 @@ export async function getIntegrationSettingsOverview() {
 
 export async function getDataSettingsOverview() {
   const user = await resolveCurrentUser();
+<<<<<<< Updated upstream
   const [projects, tasks, people, zettels, media, workouts, dailyLogs, backups, imports, relationStats, reviewStats, duplicateMedia, savedViews] = await Promise.all([
+=======
+  const [
+    projects,
+    tasks,
+    people,
+    zettels,
+    media,
+    workouts,
+    dailyLogs,
+    backups,
+    imports,
+    relationStats,
+    reviewStats,
+    duplicateMedia,
+    savedViews,
+    migrationReviewIssues,
+    migrationReviewItems,
+  ] = await Promise.all([
+>>>>>>> Stashed changes
     queryD1<CountRow>(`select count(*) as total from projects where user_id = ? and deleted_at is null`, [user.id]),
     queryD1<CountRow>(`select count(*) as total from tasks where user_id = ? and deleted_at is null`, [user.id]),
     queryD1<CountRow>(`select count(*) as total from people where user_id = ?`, [user.id]),
@@ -294,6 +332,34 @@ export async function getDataSettingsOverview() {
       [user.id],
     ),
     listSavedViews(),
+<<<<<<< Updated upstream
+=======
+    queryD1<MigrationReviewIssueRow>(
+      `select issue_type as issueType, status, count(*) as count
+       from migration_review_items
+       where user_id = ? and deleted_at is null
+       group by issue_type, status
+       order by issue_type asc, status asc`,
+      [user.id],
+    ).catch(() => ({ rows: [] as MigrationReviewIssueRow[], meta: {} })),
+    queryD1<MigrationReviewItemRow>(
+      `select
+         id,
+         issue_type as issueType,
+         suggested_action as suggestedAction,
+         entity_type as entityType,
+         entity_id as entityId,
+         status,
+         confidence,
+         reason,
+         created_at as createdAt
+       from migration_review_items
+       where user_id = ? and deleted_at is null
+       order by case when status = 'open' then 0 else 1 end, created_at desc
+       limit 12`,
+      [user.id],
+    ).catch(() => ({ rows: [] as MigrationReviewItemRow[], meta: {} })),
+>>>>>>> Stashed changes
   ]);
 
   const relation = relationStats.rows[0];
@@ -390,6 +456,44 @@ export async function getDataSettingsOverview() {
       importedPeople: Number(relation?.importedPeople ?? 0),
       importedDailyLogs: Number(relation?.importedDailyLogs ?? 0),
       importedWorkouts: Number(relation?.importedWorkouts ?? 0),
+<<<<<<< Updated upstream
+=======
+    },
+    reviewHealth: {
+      needsReviewZettels: Number(reviewStats.rows[0]?.needsReviewZettels ?? 0),
+      hiddenAutoLogs: Number(reviewStats.rows[0]?.hiddenAutoLogs ?? 0),
+      activeImportedUntaggedZettels: Number(reviewStats.rows[0]?.activeImportedUntaggedZettels ?? 0),
+    },
+    duplicateMedia: duplicateMedia.rows.map((row) => ({
+      title: row.title,
+      mediaType: row.mediaType,
+      count: Number(row.count ?? 0),
+    })),
+    savedViews: savedViews.map((view) => ({
+      id: view.id,
+      domain: view.domain,
+      scope: view.scope,
+      name: view.name,
+      query: view.searchQuery,
+    })),
+    migrationReview: {
+      issues: migrationReviewIssues.rows.map((row) => ({
+        issueType: row.issueType,
+        status: row.status,
+        count: Number(row.count ?? 0),
+      })),
+      items: migrationReviewItems.rows.map((row) => ({
+        id: row.id,
+        issueType: row.issueType,
+        suggestedAction: row.suggestedAction,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        status: row.status,
+        confidence: row.confidence,
+        reason: row.reason,
+        createdAt: row.createdAt,
+      })),
+>>>>>>> Stashed changes
     },
     reviewHealth: {
       needsReviewZettels: Number(reviewStats.rows[0]?.needsReviewZettels ?? 0),

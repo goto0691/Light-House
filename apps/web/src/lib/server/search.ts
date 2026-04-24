@@ -44,7 +44,8 @@ export async function seedSearchIndexes() {
         `insert into zettels_fts(zettel_id, title, content_text, summary, category)
          select z.id, z.title, coalesce(z.content_text, ''), coalesce(z.summary, ''), coalesce(z.category, '')
          from zettels z
-         where not exists (select 1 from zettels_fts f where f.zettel_id = z.id)`,
+         where z.deleted_at is null
+           and not exists (select 1 from zettels_fts f where f.zettel_id = z.id)`,
       ),
       executeD1(
         `insert into tasks_fts(task_id, title, content)
@@ -56,13 +57,15 @@ export async function seedSearchIndexes() {
         `insert into people_fts(person_id, name, nickname, bio, core_value)
          select p.id, p.name, coalesce(p.nickname, ''), coalesce(p.bio, ''), coalesce(p.core_value, '')
          from people p
-         where not exists (select 1 from people_fts f where f.person_id = p.id)`,
+         where p.deleted_at is null
+           and not exists (select 1 from people_fts f where f.person_id = p.id)`,
       ),
       executeD1(
         `insert into media_fts(media_id, title, original_title, creator, review)
          select m.id, m.title, coalesce(m.original_title, ''), coalesce(m.creator, ''), coalesce(m.review, '')
          from media_logs m
-         where not exists (select 1 from media_fts f where f.media_id = m.id)`,
+         where m.deleted_at is null
+           and not exists (select 1 from media_fts f where f.media_id = m.id)`,
       ),
       executeD1(
         `insert or ignore into tags (id, user_id, name, slug, color, parent_id, usage_count, created_at, updated_at)
@@ -138,6 +141,7 @@ export async function searchWithFTS(query: string, types?: string[]): Promise<Se
            inner join people p on p.id = people_fts.person_id
            where people_fts match ?
              and p.user_id = ?
+             and p.deleted_at is null
            order by boost desc, p.updated_at desc
            limit 8`,
           [`%${query}%`, ftsQuery, user.id],
@@ -167,6 +171,7 @@ export async function searchWithFTS(query: string, types?: string[]): Promise<Se
            inner join zettels z on z.id = zettels_fts.zettel_id
            where zettels_fts match ?
              and z.user_id = ?
+             and z.deleted_at is null
            order by boost desc, z.updated_at desc
            limit 8`,
           [`%${query}%`, ftsQuery, user.id],
@@ -196,6 +201,7 @@ export async function searchWithFTS(query: string, types?: string[]): Promise<Se
            inner join media_logs m on m.id = media_fts.media_id
            where media_fts match ?
              and m.user_id = ?
+             and m.deleted_at is null
            order by boost desc, m.updated_at desc
            limit 8`,
           [`%${query}%`, ftsQuery, user.id],

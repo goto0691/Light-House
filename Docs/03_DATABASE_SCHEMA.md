@@ -204,6 +204,29 @@ export const sourceDocumentRelations = sqliteTable('source_document_relations', 
 });
 ```
 
+<<<<<<< Updated upstream
+=======
+### 5.5. Migration Review Queue
+
+```typescript
+export const migrationReviewItems = sqliteTable('migration_review_items', {
+  id: id(),
+  userId: userId(),
+  sourceDocumentId: text('source_document_id'),
+  entityType: text('entity_type').notNull(),
+  entityId: text('entity_id'),
+  issueType: text('issue_type').notNull(),        // duplicate-media | duplicate-workout | possible-person-artifact | ...
+  suggestedAction: text('suggested_action').notNull(),
+  confidence: real('confidence'),
+  status: text('status').notNull().default('open'), // open | applied | dismissed
+  reason: text('reason'),
+  payload: text('payload'),                       // JSON evidence/action payload
+  resolvedAt: text('resolved_at'),
+  ...timestamps,
+});
+```
+
+>>>>>>> Stashed changes
 ---
 
 ## 6. 🚀 Action Hub 스키마 (`schema/action-hub.ts`)
