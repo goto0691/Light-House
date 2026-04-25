@@ -1,5 +1,7 @@
 "use client";
 
+import { Fragment, type ReactNode } from "react";
+
 import { ActiveTasksWidget } from "@/components/dashboard/widgets/active-tasks-widget";
 import { BrainEnergyGauge } from "@/components/dashboard/widgets/brain-energy-gauge";
 import { DashboardGrid } from "@/components/dashboard/dashboard-grid";
@@ -11,11 +13,28 @@ import { StreakHeatmapWidget } from "@/components/dashboard/widgets/streak-heatm
 import { TodaysAnchorWidget } from "@/components/dashboard/widgets/todays-anchor-widget";
 import { UpcomingBirthdaysWidget } from "@/components/dashboard/widgets/upcoming-birthdays-widget";
 import { PageHeader, PageLayout } from "@/components/shared/page-layout";
-import { getHeatmapMock, getTodayString } from "@/lib/mock/life-ops";
+import { getTodayString } from "@/lib/mock/life-ops";
 import type { TaskMock } from "@/lib/mock/action-hub";
 import type { DailyLogMock } from "@/lib/mock/life-ops";
 import type { PersonMock } from "@/lib/mock/prm";
 import type { MediaMock, ZettelMock } from "@/lib/mock/vault";
+
+type DashboardLayout = {
+  widgetKey: string;
+  isHidden: boolean;
+  displayOrder: number;
+};
+
+const DEFAULT_WIDGET_ORDER = [
+  "todays-anchor",
+  "active-tasks",
+  "hit-them-up",
+  "streak-heatmap",
+  "brain-energy",
+  "recent-zettels",
+  "birthdays",
+  "quote-of-day",
+] as const;
 
 export function DashboardClient({
   log,
@@ -23,12 +42,16 @@ export function DashboardClient({
   people,
   zettels,
   media,
+  heatmap,
+  dashboardLayouts,
 }: {
   log: DailyLogMock | null;
   tasks: TaskMock[];
   people: PersonMock[];
   zettels: ZettelMock[];
   media: MediaMock[];
+  heatmap: Array<{ date: string; value: number }>;
+  dashboardLayouts: DashboardLayout[];
 }) {
   const today = getTodayString();
   const activeTasks = tasks
@@ -52,6 +75,24 @@ export function DashboardClient({
   const energySeries = log ? [2, 3, log.energy, 4, 3, 5, log.energy] : [2, 3, 4, 3, 4, 5, 3];
   const quote = zettels[0]?.summary ?? "기록은 흩어진 생각을 다시 집으로 데려오는 일이다.";
   const hasAnyData = Boolean(tasks.length || people.length || zettels.length || media.length || log);
+  const widgets: Record<(typeof DEFAULT_WIDGET_ORDER)[number], ReactNode> = {
+    "todays-anchor": <TodaysAnchorWidget dailyLog={log} date={today} />,
+    "active-tasks": <ActiveTasksWidget tasks={activeTasks} />,
+    "hit-them-up": <HitThemUpWidget people={needsContact} />,
+    "streak-heatmap": <StreakHeatmapWidget bestStreak={17} heatmapData={heatmap} />,
+    "brain-energy": <BrainEnergyGauge energyScore={log?.energy ?? 3} last7Days={energySeries} />,
+    "recent-zettels": <RecentZettelsWidget zettels={recentZettels} />,
+    birthdays: <UpcomingBirthdaysWidget people={birthdays} />,
+    "quote-of-day": <QuoteOfDayWidget quote={quote} />,
+  };
+  const layoutByKey = new Map(dashboardLayouts.map((layout) => [layout.widgetKey, layout]));
+  const orderedWidgetKeys = DEFAULT_WIDGET_ORDER
+    .filter((key) => !layoutByKey.get(key)?.isHidden)
+    .sort((left, right) => {
+      const leftOrder = layoutByKey.get(left)?.displayOrder ?? DEFAULT_WIDGET_ORDER.indexOf(left);
+      const rightOrder = layoutByKey.get(right)?.displayOrder ?? DEFAULT_WIDGET_ORDER.indexOf(right);
+      return leftOrder - rightOrder;
+    });
 
   return (
     <PageLayout>
@@ -69,14 +110,9 @@ export function DashboardClient({
       />
       {hasAnyData ? (
         <DashboardGrid>
-          <TodaysAnchorWidget dailyLog={log} date={today} />
-          <ActiveTasksWidget tasks={activeTasks} />
-          <HitThemUpWidget people={needsContact} />
-          <StreakHeatmapWidget bestStreak={17} heatmapData={getHeatmapMock()} />
-          <BrainEnergyGauge energyScore={log?.energy ?? 3} last7Days={energySeries} />
-          <RecentZettelsWidget zettels={recentZettels} />
-          <UpcomingBirthdaysWidget people={birthdays} />
-          <QuoteOfDayWidget quote={quote} />
+          {orderedWidgetKeys.map((key) => (
+            <Fragment key={key}>{widgets[key]}</Fragment>
+          ))}
         </DashboardGrid>
       ) : (
         <OnboardingChecklist />

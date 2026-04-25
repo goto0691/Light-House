@@ -8,9 +8,8 @@ export default async function VaultLayout({ children }: { children: ReactNode })
   const snapshot = await getVaultSnapshot();
 
   return (
-    <>
-      <VaultHydrator initialSnapshot={snapshot} />
+    <VaultHydrator initialSnapshot={snapshot}>
       {children}
-    </>
+    </VaultHydrator>
   );
 }

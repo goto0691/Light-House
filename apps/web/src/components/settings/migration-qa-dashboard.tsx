@@ -25,6 +25,24 @@ export function MigrationQaDashboard({ overview }: { overview: MigrationQaOvervi
 
   return (
     <section className="space-y-4">
+      {overview.queryErrors.length ? (
+        <GlassCard className="border border-[hsl(var(--color-feedback-warning))]/30 bg-[hsl(var(--color-feedback-warning))]/10 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[hsl(var(--color-feedback-warning))]" />
+            <div>
+              <p className="text-sm font-medium text-foreground">Migration QA 일부 쿼리가 실패했습니다.</p>
+              <div className="mt-2 space-y-1">
+                {overview.queryErrors.map((item) => (
+                  <p className="text-xs text-muted-foreground" key={item.name}>
+                    {item.name}: {item.error}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      ) : null}
+
       <GlassCard className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -209,9 +227,9 @@ function canonicalHref(type: string, id: string) {
     case "zettel":
       return `/vault/zettels/${id}`;
     case "media":
-      return `/vault?detail=media:${id}`;
+      return `/vault/media?detail=media:${id}`;
     case "place":
-      return `/vault?detail=place:${id}`;
+      return `/vault/places?detail=place:${id}`;
     case "daily_log":
       return `/life-ops/${id}`;
     default:

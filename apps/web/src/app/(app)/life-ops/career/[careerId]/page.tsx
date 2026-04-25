@@ -4,7 +4,7 @@ import { EntityContextShell } from "@/components/shared/context/entity-context-s
 import { GlassCard } from "@/components/shared/glass-card";
 import { Tag } from "@/components/shared/tag";
 import { getContextBundle } from "@/lib/server/context";
-import { getLifeOpsCareerEntry, seedLifeOpsSupportData } from "@/lib/server/life-ops";
+import { getLifeOpsCareerEntry } from "@/lib/server/life-ops";
 
 export default async function CareerDetailPage({
   params,
@@ -12,7 +12,6 @@ export default async function CareerDetailPage({
   params: Promise<{ careerId: string }>;
 }) {
   const { careerId } = await params;
-  await seedLifeOpsSupportData();
   const career = await getLifeOpsCareerEntry(careerId);
   if (!career) notFound();
   const bundle = await getContextBundle("career", careerId);

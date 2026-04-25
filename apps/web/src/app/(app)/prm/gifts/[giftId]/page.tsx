@@ -5,7 +5,7 @@ import { EntityContextShell } from "@/components/shared/context/entity-context-s
 import { GlassCard } from "@/components/shared/glass-card";
 import { Tag } from "@/components/shared/tag";
 import { getContextBundle } from "@/lib/server/context";
-import { getPRMGift, seedPRMSupportData } from "@/lib/server/prm";
+import { getPRMGift } from "@/lib/server/prm";
 
 export default async function GiftDetailPage({
   params,
@@ -13,7 +13,6 @@ export default async function GiftDetailPage({
   params: Promise<{ giftId: string }>;
 }) {
   const { giftId } = await params;
-  await seedPRMSupportData();
   const detail = await getPRMGift(giftId);
   if (!detail) notFound();
   const bundle = await getContextBundle("gift", giftId);

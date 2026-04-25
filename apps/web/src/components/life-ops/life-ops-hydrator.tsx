@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 
 import type { LifeOpsSnapshot } from "@/lib/server/life-ops";
 import { useLifeOpsStore } from "@/stores/use-life-ops-store";
 
-export function LifeOpsHydrator({ initialSnapshot }: { initialSnapshot?: LifeOpsSnapshot }) {
+export function LifeOpsHydrator({ children, initialSnapshot }: { children?: ReactNode; initialSnapshot?: LifeOpsSnapshot }) {
+  const [ready, setReady] = useState(false);
   const replaceSnapshot = useLifeOpsStore((state) => state.replaceSnapshot);
 
   useEffect(() => {
     if (initialSnapshot) {
       replaceSnapshot(initialSnapshot);
+      setReady(true);
       return;
     }
 
@@ -19,7 +22,10 @@ export function LifeOpsHydrator({ initialSnapshot }: { initialSnapshot?: LifeOps
       const response = await fetch("/api/life-ops/bootstrap", { cache: "no-store" });
       if (!response.ok) return;
       const snapshot = (await response.json()) as Parameters<typeof replaceSnapshot>[0];
-      if (!cancelled) replaceSnapshot(snapshot);
+      if (!cancelled) {
+        replaceSnapshot(snapshot);
+        setReady(true);
+      }
     }
     void hydrate();
     return () => {
@@ -27,5 +33,9 @@ export function LifeOpsHydrator({ initialSnapshot }: { initialSnapshot?: LifeOps
     };
   }, [initialSnapshot, replaceSnapshot]);
 
-  return null;
+  if (!ready) {
+    return <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-muted-foreground">Life Ops 데이터를 불러오는 중입니다.</div>;
+  }
+
+  return <>{children}</>;
 }

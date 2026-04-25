@@ -3,10 +3,9 @@ import Link from "next/link";
 import { EmptyState } from "@/components/shared/empty-state";
 import { GlassCard } from "@/components/shared/glass-card";
 import { Tag } from "@/components/shared/tag";
-import { getVaultSnapshot, seedVaultSupportData } from "@/lib/server/vault";
+import { getVaultSnapshot } from "@/lib/server/vault";
 
 export default async function ScreensPage() {
-  await seedVaultSupportData();
   const snapshot = await getVaultSnapshot();
   const screens = snapshot.media.filter((item) => item.mediaType === "screen");
 

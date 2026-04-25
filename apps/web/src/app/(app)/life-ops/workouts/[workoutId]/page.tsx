@@ -4,7 +4,7 @@ import { EntityContextShell } from "@/components/shared/context/entity-context-s
 import { GlassCard } from "@/components/shared/glass-card";
 import { Tag } from "@/components/shared/tag";
 import { getContextBundle } from "@/lib/server/context";
-import { getLifeOpsSnapshot, seedLifeOpsSupportData } from "@/lib/server/life-ops";
+import { getLifeOpsSnapshot } from "@/lib/server/life-ops";
 
 export default async function WorkoutDetailPage({
   params,
@@ -12,7 +12,6 @@ export default async function WorkoutDetailPage({
   params: Promise<{ workoutId: string }>;
 }) {
   const { workoutId } = await params;
-  await seedLifeOpsSupportData();
   const snapshot = await getLifeOpsSnapshot();
   const workout = snapshot.workouts.find((item) => item.id === workoutId);
   if (!workout) notFound();

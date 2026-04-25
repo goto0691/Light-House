@@ -393,6 +393,47 @@ export async function getLifeOpsTrendSeries(limit = 7) {
   );
 }
 
+export async function getLifeOpsWeeklyRhythm(dates: string[]) {
+  if (!dates.length) return [];
+  const { id: userId } = await resolveUser();
+  const placeholders = dates.map(() => "?").join(", ");
+  const rows = await queryD1<{ date: string; mood: number | null; energy: number | null }>(
+    `select date, mood, energy_level as energy
+     from daily_logs
+     where user_id = ? and date in (${placeholders})`,
+    [userId, ...dates],
+  );
+  const byDate = new Map(rows.rows.map((row) => [row.date, row]));
+  return dates.map((date) => ({
+    date,
+    mood: byDate.get(date)?.mood ?? null,
+    energy: byDate.get(date)?.energy ?? null,
+  }));
+}
+
+export async function getLifeOpsHabitHeatmap(days = 371) {
+  const { id: userId } = await resolveUser();
+  const today = new Date(`${getTodayString()}T00:00:00.000Z`);
+  const start = new Date(today);
+  start.setUTCDate(today.getUTCDate() - (days - 1));
+  const startDate = start.toISOString().slice(0, 10);
+  const rows = await queryD1<{ date: string; value: number | null }>(
+    `select date, sum(case when value > 0 then 1 else 0 end) as value
+     from habit_logs
+     where user_id = ? and date >= ?
+     group by date`,
+    [userId, startDate],
+  );
+  const valueByDate = new Map(rows.rows.map((row) => [row.date, Math.min(Number(row.value ?? 0), 4)]));
+
+  return Array.from({ length: days }).map((_, index) => {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + index);
+    const key = date.toISOString().slice(0, 10);
+    return { date: key, value: valueByDate.get(key) ?? 0 };
+  });
+}
+
 export async function getLifeOpsWorkouts() {
   const snapshot = await getLifeOpsSnapshot();
   return snapshot.workouts;
@@ -408,14 +449,29 @@ export async function getLifeOpsCareerEntry(careerId: string) {
   return snapshot.career.find((item) => item.id === careerId) ?? null;
 }
 
+async function ensureDailyLog(userId: string, date: string) {
+  const existing = await queryD1<{ id: string }>(`select id from daily_logs where user_id = ? and date = ? limit 1`, [userId, date]);
+  if (existing.rows[0]) return existing.rows[0].id;
+  const id = ulid();
+  await executeD1(
+    `insert into daily_logs
+      (id, user_id, date, mood, energy_level, emotions, gratitude, journal, meditation, meditation_verse, ai_summary, created_at, updated_at)
+     values (?, ?, ?, 3, 3, '[]', '', '', '', '', null, datetime('now'), datetime('now'))`,
+    [id, userId, date],
+  );
+  return id;
+}
+
 export async function updateLifeOpsMood(date: string, mood: number) {
   const { id: userId } = await resolveUser();
+  await ensureDailyLog(userId, date);
   await executeD1(`update daily_logs set mood = ?, updated_at = datetime('now') where user_id = ? and date = ?`, [mood, userId, date]);
   return getLifeOpsSnapshot([date]);
 }
 
 export async function updateLifeOpsEnergy(date: string, energy: number) {
   const { id: userId } = await resolveUser();
+  await ensureDailyLog(userId, date);
   await executeD1(`update daily_logs set energy_level = ?, updated_at = datetime('now') where user_id = ? and date = ?`, [energy, userId, date]);
   return getLifeOpsSnapshot([date]);
 }
@@ -437,6 +493,7 @@ export async function toggleLifeOpsHabit(date: string, habitId: string) {
 
 export async function updateLifeOpsJournalField(date: string, field: "journal" | "meditation" | "gratitude", value: string) {
   const { id: userId } = await resolveUser();
+  await ensureDailyLog(userId, date);
   const columns = { journal: "journal", meditation: "meditation", gratitude: "gratitude" } as const;
   await executeD1(`update daily_logs set ${columns[field]} = ?, updated_at = datetime('now') where user_id = ? and date = ?`, [value, userId, date]);
   const dailyLog = await queryD1<{ id: string; journal: string | null; meditation: string | null; gratitude: string | null }>(

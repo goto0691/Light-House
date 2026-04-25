@@ -182,6 +182,55 @@ button {
   box-shadow: inset 0 1px 0 0 hsl(var(--glass-highlight)), var(--shadow-lg);
 }
 
+.app-toast,
+[data-sonner-toast].app-toast {
+  border: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--color-surface-overlay) / 0.98) !important;
+  color: hsl(var(--foreground)) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.app-toast-title,
+[data-sonner-toast].app-toast [data-title] {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 600 !important;
+}
+
+.app-toast-description,
+[data-sonner-toast].app-toast [data-description] {
+  color: hsl(var(--color-text-secondary)) !important;
+}
+
+.app-toast-success,
+[data-sonner-toast][data-type="success"].app-toast {
+  border-color: hsl(var(--success) / 0.55) !important;
+}
+
+.app-toast-error,
+[data-sonner-toast][data-type="error"].app-toast {
+  border-color: hsl(var(--danger) / 0.65) !important;
+}
+
+.app-toast-warning,
+[data-sonner-toast][data-type="warning"].app-toast {
+  border-color: hsl(var(--warning) / 0.7) !important;
+}
+
+.app-toast-info,
+[data-sonner-toast][data-type="info"].app-toast {
+  border-color: hsl(var(--info) / 0.65) !important;
+}
+
+.app-toast-action {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+.app-toast-cancel,
+.app-toast-close {
+  color: hsl(var(--foreground)) !important;
+}
+
 [data-app-shell] {
   --ui-section-gap: 1rem;
   --ui-panel-padding: 1.25rem;

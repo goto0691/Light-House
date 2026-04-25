@@ -1,9 +1,8 @@
 import { AssetCard } from "@/components/vault/asset-card";
 import { GlassCard } from "@/components/shared/glass-card";
-import { getVaultSnapshot, seedVaultSupportData } from "@/lib/server/vault";
+import { getVaultSnapshot } from "@/lib/server/vault";
 
 export default async function AssetsPage() {
-  await seedVaultSupportData();
   const snapshot = await getVaultSnapshot();
   return (
     <GlassCard>

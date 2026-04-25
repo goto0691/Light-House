@@ -166,7 +166,7 @@ export async function searchWithFTS(query: string, types?: string[]): Promise<Se
              z.title as title,
              snippet(zettels_fts, 2, '<mark>', '</mark>', '…', 14) as snippet,
              case when lower(z.title) like lower(?) then 3 else 1.3 end as boost,
-             '/vault?detail=zettel:' || z.id as href
+             '/vault/zettels?detail=zettel:' || z.id as href
            from zettels_fts
            inner join zettels z on z.id = zettels_fts.zettel_id
            where zettels_fts match ?
@@ -196,7 +196,7 @@ export async function searchWithFTS(query: string, types?: string[]): Promise<Se
              m.title as title,
              snippet(media_fts, 4, '<mark>', '</mark>', '…', 12) as snippet,
              case when lower(m.title) like lower(?) then 2.4 else 1.1 end as boost,
-             '/vault?detail=media:' || m.id as href
+             '/vault/media?detail=media:' || m.id as href
            from media_fts
            inner join media_logs m on m.id = media_fts.media_id
            where media_fts match ?

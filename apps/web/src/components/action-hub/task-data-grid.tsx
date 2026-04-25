@@ -12,8 +12,8 @@ type TaskDataGridProps = {
 export function TaskDataGrid({ projectId, tasks }: TaskDataGridProps) {
   return (
     <GlassCard>
-      <div className="overflow-hidden rounded-3xl border border-white/10">
-        <table className="w-full border-collapse text-left text-sm">
+      <div className="overflow-x-auto rounded-3xl border border-white/10">
+        <table className="min-w-[760px] w-full border-collapse text-left text-sm">
           <thead className="bg-white/5 text-muted-foreground">
             <tr>
               <th className="px-4 py-3">Title</th>

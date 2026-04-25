@@ -383,6 +383,19 @@ export async function createNetworkEdge(input: { sourcePersonId: string; targetP
   const { id: userId } = await resolveUser();
   if (!input.sourcePersonId || !input.targetPersonId) throw new Error("연결할 두 사람을 모두 선택해 주세요.");
   if (input.sourcePersonId === input.targetPersonId) throw new Error("같은 사람끼리는 연결할 수 없습니다.");
+  const existing = await queryD1<{ id: string }>(
+    `select id
+     from network_edges
+     where user_id = ?
+       and deleted_at is null
+       and (
+         (source_person_id = ? and target_person_id = ?)
+         or (source_person_id = ? and target_person_id = ?)
+       )
+     limit 1`,
+    [userId, input.sourcePersonId, input.targetPersonId, input.targetPersonId, input.sourcePersonId],
+  );
+  if (existing.rows[0]) throw new Error("이미 같은 두 사람 사이의 관계선이 있습니다.");
 
   await executeD1(
     `insert into network_edges (id, user_id, source_person_id, target_person_id, relation_type, strength, notes, created_at, updated_at)

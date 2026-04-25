@@ -77,7 +77,7 @@ export async function GET(request: Request) {
       id: zettel.id,
       title: zettel.title,
       snippet: zettel.summary,
-      href: `/vault?detail=zettel:${zettel.id}`,
+      href: `/vault/zettels?detail=zettel:${zettel.id}`,
       score: 0.9,
     })),
     ...vault.media.map((item) => ({
@@ -85,7 +85,7 @@ export async function GET(request: Request) {
       id: item.id,
       title: item.title,
       snippet: `${item.creator} · ${item.review}`,
-      href: `/vault?detail=media:${item.id}`,
+      href: `/vault/media?detail=media:${item.id}`,
       score: 0.82,
     })),
     ...vault.places.map((place) => ({
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
       id: place.id,
       title: place.name,
       snippet: `${place.address} · ${place.review}`,
-      href: `/vault?detail=place:${place.id}`,
+      href: `/vault/places?detail=place:${place.id}`,
       score: 0.78,
     })),
     {

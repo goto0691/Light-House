@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { PRMGraphCanvas } from "@/components/prm/prm-graph-canvas";
@@ -20,12 +20,27 @@ export function PRMGraphClient() {
   const [relationType, setRelationType] = useState("");
   const [strength, setStrength] = useState(3);
   const [query, setQuery] = useState("");
+  const hasDuplicateEdge = networkEdges.some(
+    (edge) =>
+      (edge.sourcePersonId === sourcePersonId && edge.targetPersonId === targetPersonId) ||
+      (edge.sourcePersonId === targetPersonId && edge.targetPersonId === sourcePersonId),
+  );
+  const isInvalidEdge = !sourcePersonId || !targetPersonId || sourcePersonId === targetPersonId || hasDuplicateEdge;
   const visiblePeople = people.filter((person) => {
     if (query && !`${person.name} ${person.groups.join(" ")}`.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
 
+  useEffect(() => {
+    if (targetPersonId && targetPersonId !== sourcePersonId) return;
+    setTargetPersonId(people.find((person) => person.id !== sourcePersonId)?.id ?? "");
+  }, [people, sourcePersonId, targetPersonId]);
+
   function submit() {
+    if (isInvalidEdge) {
+      toast.error(sourcePersonId === targetPersonId ? "같은 사람끼리는 연결할 수 없습니다." : "이미 존재하는 관계선입니다.");
+      return;
+    }
     startTransition(async () => {
       try {
         await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
@@ -89,16 +104,17 @@ export function PRMGraphClient() {
             ))}
           </select>
           <select className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setTargetPersonId(event.target.value)} value={targetPersonId}>
-            {people.map((person) => (
+            {people.filter((person) => person.id !== sourcePersonId).map((person) => (
               <option key={person.id} value={person.id}>
                 도착: {person.name}
               </option>
             ))}
           </select>
+          {hasDuplicateEdge ? <p className="text-xs text-destructive">이미 같은 두 사람 사이의 관계선이 있습니다.</p> : null}
           <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setRelationType(event.target.value)} placeholder="예: church, business, creative" value={relationType} />
           <input className="w-full" max={5} min={1} onChange={(event) => setStrength(Number(event.target.value))} type="range" value={strength} />
           <p className="text-xs text-muted-foreground">강도 {strength}/5</p>
-          <button className="rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={isPending} onClick={submit} type="button">
+          <button className="rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={isPending || isInvalidEdge} onClick={submit} type="button">
             {isPending ? "저장 중..." : "관계선 추가"}
           </button>
         </div>

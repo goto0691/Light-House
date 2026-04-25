@@ -14,6 +14,7 @@ const DOMAIN_LABELS: Record<DomainKey, string> = {
   vault: "The Vault",
   prm: "PRM",
   "life-ops": "Life Ops",
+  settings: "Settings",
 };
 
 export function LocalNav({ domain }: { domain: DomainKey }) {

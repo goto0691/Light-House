@@ -268,7 +268,7 @@ export async function getMigrationQaOverview() {
             having count(*) > 1
           )) as duplicateSourceIds`,
       [user.id, user.id, user.id, user.id, user.id, user.id],
-    ).catch(() => ({ rows: [] as MigrationQaSummaryRow[], meta: {} })),
+    ).catch((error) => ({ rows: [] as MigrationQaSummaryRow[], meta: { error: error instanceof Error ? error.message : "summary query failed" } })),
     queryD1<MigrationQaDatabaseRow>(
       `select
          coalesce(sd.source_database, 'Unknown') as sourceDatabase,
@@ -295,7 +295,7 @@ export async function getMigrationQaOverview() {
        group by coalesce(sd.source_database, 'Unknown')
        order by unmapped desc, unresolvedRelations desc, total desc`,
       [user.id, user.id, user.id],
-    ).catch(() => ({ rows: [] as MigrationQaDatabaseRow[], meta: {} })),
+    ).catch((error) => ({ rows: [] as MigrationQaDatabaseRow[], meta: { error: error instanceof Error ? error.message : "database query failed" } })),
     queryD1<MigrationQaSourceDocumentRow>(
       `select
          sd.id,
@@ -334,7 +334,7 @@ export async function getMigrationQaOverview() {
        order by openReviews desc, unresolvedRelations desc, sd.updated_at desc
        limit 80`,
       [user.id, user.id, user.id],
-    ).catch(() => ({ rows: [] as MigrationQaSourceDocumentRow[], meta: {} })),
+    ).catch((error) => ({ rows: [] as MigrationQaSourceDocumentRow[], meta: { error: error instanceof Error ? error.message : "source document query failed" } })),
     queryD1<MigrationQaDuplicateRow>(
       `select
          source_database as sourceDatabase,
@@ -348,7 +348,7 @@ export async function getMigrationQaOverview() {
        order by count(*) desc, max(updated_at) desc
        limit 20`,
       [user.id],
-    ).catch(() => ({ rows: [] as MigrationQaDuplicateRow[], meta: {} })),
+    ).catch((error) => ({ rows: [] as MigrationQaDuplicateRow[], meta: { error: error instanceof Error ? error.message : "duplicate source query failed" } })),
     queryD1<MigrationReviewItemRow>(
       `select
          mri.id,
@@ -369,11 +369,25 @@ export async function getMigrationQaOverview() {
        order by case when mri.status = 'open' then 0 else 1 end, mri.created_at desc
        limit 40`,
       [user.id],
-    ).catch(() => ({ rows: [] as MigrationReviewItemRow[], meta: {} })),
+    ).catch((error) => ({ rows: [] as MigrationReviewItemRow[], meta: { error: error instanceof Error ? error.message : "review item query failed" } })),
   ]);
 
   const totals = summary.rows[0];
+  const queryErrors = [
+    ["summary", summary],
+    ["databases", databases],
+    ["sourceDocuments", sourceDocuments],
+    ["duplicateSources", duplicateSources],
+    ["reviewItems", reviewItems],
+  ]
+    .map(([name, result]) => {
+      const error = (result as { meta?: { error?: string } }).meta?.error;
+      return error ? { name: String(name), error } : null;
+    })
+    .filter((item): item is { name: string; error: string } => Boolean(item));
+
   return {
+    queryErrors,
     summary: {
       sourceDocuments: Number(totals?.sourceDocuments ?? 0),
       mappedDocuments: Number(totals?.mappedDocuments ?? 0),

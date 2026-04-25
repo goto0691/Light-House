@@ -1,0 +1,62 @@
+# Page Review: Vault Media Screens
+
+## Summary
+- Route: `/vault/media/screens`
+- Domain: Vault
+- Primary user job: 영상/스크린 타입 미디어만 모아 본다.
+- Overall score: 19/33
+- Review method: 2026-04-25 static code review; `npm run typecheck` pass; `npm run build` pass. Runtime browser/D1 session QA was not performed.
+- Reviewed code: `apps/web/src/app/(app)/vault/media/screens/page.tsx`, `apps/web/src/lib/server/vault.ts`
+
+## Hard Gate
+- [x] typecheck/build pass - `npm run typecheck`, `npm run build` passed on 2026-04-25.
+- [~] D1 data renders - D1-backed query path found, runtime D1 session not manually exercised.
+- [~] Contextual navigation works - route links exist; context rail coverage varies by page.
+- [ ] Mobile 375px usable - not manually browser-tested; assessed from responsive classes and layout code.
+- [~] Source/migration trace safe - no mutation risk found; SourceTrace coverage depends on context components.
+
+## Scores
+| Category | Score | Notes |
+| --- | ---: | --- |
+| Product Value | 2 |  |
+| Real User Usability | 2 |  |
+| IA / Routing | 2 |  |
+| Contextual Connectivity | 1 |  |
+| Data / D1 Accuracy | 2 |  |
+| Performance | 2 |  |
+| UX/UI Polish | 2 |  |
+| Editing / Input | 0 |  |
+| Responsive / A11y | 2 |  |
+| Code Architecture | 2 |  |
+| Verifiability | 2 |  |
+
+## Analysis
+- Route / components: server page filters snapshot by `mediaType === screen` and renders cards/empty state.
+- Server data / D1: D1-backed media rows; subtype-specific relation to people is only visible after detail.
+- Contextual Connectivity: no source relation resolution on the list.
+- Mobile UX: simple grid, not manually verified.
+
+## Findings
+### P0
+- None.
+
+### P1
+- None.
+
+### P2
+- Screen/video pages do not expose “with whom/recommended by” relationships that AS-IS media data likely contains.
+- Filtering is duplicated across subtype pages.
+
+### P3
+- 375px 실기기/브라우저 검증은 수행하지 않았다. 코드상 responsive grid와 하단 GNB는 있으나 dense table/drawer/toolbar는 별도 QA가 필요하다.
+
+## Required Actions
+### P0/P1 Actions
+- [ ] No P0/P1 action required.
+
+### P2/P3 Actions
+- [ ] Show people/source badges on screen cards.
+- [ ] Consolidate media subtype rendering and filter state.
+
+## Follow-up Opportunities
+- None.

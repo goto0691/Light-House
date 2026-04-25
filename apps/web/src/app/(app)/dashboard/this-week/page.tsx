@@ -3,7 +3,7 @@ import Link from "next/link";
 import { GlassCard } from "@/components/shared/glass-card";
 import { getTodayString } from "@/lib/mock/life-ops";
 import { getActionHubSnapshot, seedActionHubSupportData } from "@/lib/server/action-hub";
-import { getLifeOpsSnapshot, seedLifeOpsSupportData } from "@/lib/server/life-ops";
+import { getLifeOpsWeeklyRhythm, seedLifeOpsSupportData } from "@/lib/server/life-ops";
 import { getPRMSnapshot, seedPRMSupportData } from "@/lib/server/prm";
 
 function weekDates() {
@@ -18,7 +18,7 @@ function weekDates() {
 export default async function ThisWeekPage() {
   await Promise.all([seedActionHubSupportData(), seedLifeOpsSupportData(), seedPRMSupportData()]);
   const dates = weekDates();
-  const [lifeOps, actionHub, prm] = await Promise.all([getLifeOpsSnapshot(dates), getActionHubSnapshot(), getPRMSnapshot()]);
+  const [weeklyRhythm, actionHub, prm] = await Promise.all([getLifeOpsWeeklyRhythm(dates), getActionHubSnapshot(), getPRMSnapshot()]);
   const activeTasks = actionHub.tasks.filter((task) => task.status !== "done").slice(0, 8);
   const needsContact = prm.people.filter((person) => person.daysSinceContact > person.cadenceDays).slice(0, 6);
 
@@ -33,8 +33,8 @@ export default async function ThisWeekPage() {
         <GlassCard className="p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-primary">7 day rhythm</p>
           <div className="mt-5 grid gap-3 md:grid-cols-7">
-            {dates.map((date) => {
-              const log = lifeOps.logs[date];
+            {weeklyRhythm.map((log) => {
+              const date = log.date;
               return (
                 <Link className="rounded-lg border border-white/10 bg-white/5 p-3 transition hover:bg-white/8" href={`/life-ops/${date}`} key={date}>
                   <p className="text-xs text-muted-foreground">{date.slice(5)}</p>
@@ -49,22 +49,22 @@ export default async function ThisWeekPage() {
           <GlassCard className="p-5">
             <p className="text-xs uppercase tracking-[0.2em] text-primary">Focus queue</p>
             <div className="mt-4 space-y-2">
-              {activeTasks.map((task) => (
+              {activeTasks.length ? activeTasks.map((task) => (
                 <Link className="block rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-foreground transition hover:bg-white/8" href={task.projectId ? `/action-hub/${task.projectId}/tasks/${task.id}` : "/action-hub/inbox"} key={task.id}>
                   {task.title}
                 </Link>
-              ))}
+              )) : <p className="rounded-lg border border-dashed border-white/10 bg-white/5 p-3 text-sm text-muted-foreground">이번 주에 표시할 활성 태스크가 없습니다.</p>}
             </div>
           </GlassCard>
           <GlassCard className="p-5">
             <p className="text-xs uppercase tracking-[0.2em] text-primary">Hit them up</p>
             <div className="mt-4 space-y-2">
-              {needsContact.map((person) => (
+              {needsContact.length ? needsContact.map((person) => (
                 <Link className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 p-3 text-sm transition hover:bg-white/8" href={`/prm/${person.id}`} key={person.id}>
                   <span className="text-foreground">{person.name}</span>
                   <span className="text-muted-foreground">{person.daysSinceContact}d</span>
                 </Link>
-              ))}
+              )) : <p className="rounded-lg border border-dashed border-white/10 bg-white/5 p-3 text-sm text-muted-foreground">연락 주기를 넘긴 사람이 없습니다.</p>}
             </div>
           </GlassCard>
         </div>

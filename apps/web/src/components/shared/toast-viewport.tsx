@@ -6,9 +6,19 @@ export function ToastViewport() {
   return (
     <Toaster
       position="bottom-right"
-      richColors
       toastOptions={{
-        className: "glass border border-white/10 !text-foreground",
+        className: "app-toast",
+        classNames: {
+          actionButton: "app-toast-action",
+          cancelButton: "app-toast-cancel",
+          closeButton: "app-toast-close",
+          description: "app-toast-description",
+          error: "app-toast-error",
+          info: "app-toast-info",
+          success: "app-toast-success",
+          title: "app-toast-title",
+          warning: "app-toast-warning",
+        },
       }}
     />
   );

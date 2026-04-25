@@ -1,8 +1,7 @@
 import { GlassCard } from "@/components/shared/glass-card";
-import { getLifeOpsSnapshot, seedLifeOpsSupportData } from "@/lib/server/life-ops";
+import { getLifeOpsSnapshot } from "@/lib/server/life-ops";
 
 export default async function DiariesPage() {
-  await seedLifeOpsSupportData();
   const snapshot = await getLifeOpsSnapshot();
   const items = Object.values(snapshot.logs)
     .filter((log) => log.journal.trim())

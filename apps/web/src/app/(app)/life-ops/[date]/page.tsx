@@ -1,4 +1,5 @@
 import { DailyLogClient } from "@/components/life-ops/daily-log-client";
+import { getLifeOpsHabitHeatmap, getLifeOpsLog } from "@/lib/server/life-ops";
 
 export default async function DailyLogPage({
   params,
@@ -6,5 +7,6 @@ export default async function DailyLogPage({
   params: Promise<{ date: string }>;
 }) {
   const { date } = await params;
-  return <DailyLogClient date={date} />;
+  const [initialLog, heatmap] = await Promise.all([getLifeOpsLog(date), getLifeOpsHabitHeatmap()]);
+  return <DailyLogClient date={date} heatmap={heatmap} initialLog={initialLog} />;
 }

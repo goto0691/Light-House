@@ -4,7 +4,7 @@ import { ContextBundlePanel } from "@/components/shared/context/context-bundle-p
 import { GlassCard } from "@/components/shared/glass-card";
 import { MarkdownView } from "@/components/shared/markdown-view";
 import { Tag } from "@/components/shared/tag";
-import { getVaultZettel, seedVaultSupportData } from "@/lib/server/vault";
+import { getVaultZettel } from "@/lib/server/vault";
 
 export default async function ZettelDetailPage({
   params,
@@ -12,7 +12,6 @@ export default async function ZettelDetailPage({
   params: Promise<{ zettelId: string }>;
 }) {
   const { zettelId } = await params;
-  await seedVaultSupportData();
   const zettel = await getVaultZettel(zettelId);
   if (!zettel) notFound();
 

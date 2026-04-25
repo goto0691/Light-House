@@ -21,7 +21,7 @@ export function RecentZettelsWidget({ zettels }: RecentZettelsWidgetProps) {
             zettels.map((zettel) => (
               <Link
                 className="flex items-center gap-3 rounded-3xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-primary/20 hover:bg-white/8"
-                href={`/vault?detail=zettel:${zettel.id}`}
+                href={`/vault/zettels?detail=zettel:${zettel.id}`}
                 key={zettel.id}
               >
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-2 text-primary">
@@ -49,4 +49,3 @@ export function RecentZettelsWidget({ zettels }: RecentZettelsWidgetProps) {
     </BentoCard>
   );
 }
-

@@ -51,7 +51,7 @@ export function ProjectCalendarClient({ project, tasks }: ProjectCalendarClientP
         searchPlaceholder="캘린더 태스크 검색"
       />
       {visibleTasks.length ? (
-        <TaskCalendar tasks={visibleTasks} />
+        <TaskCalendar projectId={project.id} tasks={visibleTasks} />
       ) : (
         <EmptyState description="우선순위 필터를 풀거나 마감일이 있는 태스크를 추가해보세요." illustration="task" title="캘린더에 놓일 일정이 아직 없습니다" />
       )}

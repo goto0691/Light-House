@@ -8,9 +8,8 @@ export default async function LifeOpsLayout({ children }: { children: ReactNode 
   const snapshot = await getLifeOpsSnapshot();
 
   return (
-    <>
-      <LifeOpsHydrator initialSnapshot={snapshot} />
+    <LifeOpsHydrator initialSnapshot={snapshot}>
       {children}
-    </>
+    </LifeOpsHydrator>
   );
 }

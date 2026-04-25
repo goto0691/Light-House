@@ -8,9 +8,8 @@ export default async function PRMLayout({ children }: { children: ReactNode }) {
   const snapshot = await getPRMSnapshot();
 
   return (
-    <>
-      <PRMHydrator initialSnapshot={snapshot} />
+    <PRMHydrator initialSnapshot={snapshot}>
       {children}
-    </>
+    </PRMHydrator>
   );
 }

@@ -66,7 +66,7 @@ type TaskPersonRow = { taskId: string; personName: string };
 type TaskZettelRow = { taskId: string; zettelTitle: string };
 type ChecklistRow = { id: string; taskId: string; content: string; isCompleted: number | null };
 type ReferenceRow = { id: string; title: string };
-type CaptureRow = { id: string; rawText: string; suggestedDomain: string | null; confidence: number | null };
+type CaptureRow = { id: string; rawText: string; suggestedDomain: string | null; suggestedFields?: string | null; confidence: number | null };
 
 const STATUS_ORDER: TaskMock["status"][] = ["todo", "in_progress", "review", "done", "blocked"];
 
@@ -209,7 +209,7 @@ export const getActionHubSnapshot = cache(async function getActionHubSnapshot():
       [userId],
     ),
     queryD1<CaptureRow>(
-      `select id, raw_text as rawText, suggested_domain as suggestedDomain, confidence
+      `select id, raw_text as rawText, suggested_domain as suggestedDomain, suggested_fields as suggestedFields, confidence
        from quick_captures
        where user_id = ? and status = 'pending'
        order by created_at desc`,
@@ -404,8 +404,104 @@ export async function dismissPendingCapture(captureId: string) {
   return getActionHubSnapshot();
 }
 
+function parseSuggestedFields(value: string | null | undefined) {
+  if (!value) return {} as Record<string, string | number | null>;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, string | number | null>;
+    }
+  } catch {}
+  return {};
+}
+
+function stringField(fields: Record<string, string | number | null>, key: string) {
+  const value = fields[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export async function acceptPendingCapture(captureId: string) {
+  const { id: userId } = await resolveUser();
+  const found = await queryD1<CaptureRow>(
+    `select id, raw_text as rawText, suggested_domain as suggestedDomain, suggested_fields as suggestedFields, confidence
+     from quick_captures
+     where id = ? and user_id = ? and status = 'pending' and deleted_at is null
+     limit 1`,
+    [captureId, userId],
+  );
+  const capture = found.rows[0];
+  if (!capture) throw new Error("검토할 캡처를 찾지 못했습니다.");
+
+  const fields = parseSuggestedFields(capture.suggestedFields);
+  const domain = capture.suggestedDomain ?? "task";
+  const title = stringField(fields, "title") ?? summarizeTitle(capture.rawText);
+  let routedEntityType = "task";
+  let routedEntityId = ulid();
+
+  if (domain === "zettel") {
+    routedEntityType = "zettel";
+    await executeD1(
+      `insert into zettels
+        (id, user_id, title, slug, content, content_text, summary, type, category, pinned, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, 'fleeting', 'Quick Capture', 0, datetime('now'), datetime('now'))`,
+      [routedEntityId, userId, title, `${slugify(title)}-${routedEntityId.slice(-6).toLowerCase()}`, capture.rawText, capture.rawText, summarizeTitle(capture.rawText)],
+    );
+  } else {
+    const priority = stringField(fields, "priority");
+    const brainEnergy = stringField(fields, "brainEnergy");
+    const dueAt = stringField(fields, "dueAt");
+    await executeD1(
+      `insert into tasks
+        (id, user_id, project_id, title, kind, content, status, priority, brain_energy, due_at, display_order, created_at, updated_at)
+       values (?, ?, null, ?, 'research', ?, 'todo', ?, ?, ?, 0, datetime('now'), datetime('now'))`,
+      [
+        routedEntityId,
+        userId,
+        title,
+        stringField(fields, "summary") ?? capture.rawText,
+        priority === "P1" || priority === "P2" || priority === "P3" ? priority : "P2",
+        brainEnergy === "hyper_focus" || brainEnergy === "routine" || brainEnergy === "normal" ? brainEnergy : "normal",
+        dueAt,
+      ],
+    );
+    await executeD1(
+      `insert into checklists (id, task_id, content, is_completed, display_order, completed_at, created_at)
+       values (?, ?, '프로젝트 라우팅', 0, 0, null, datetime('now'))`,
+      [ulid(), routedEntityId],
+    );
+    await attachTaskRelationsFromContent({ userId, taskId: routedEntityId, content: capture.rawText });
+  }
+
+  await executeD1(
+    `update quick_captures
+     set status = 'accepted', routed_entity_type = ?, routed_entity_id = ?, updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [routedEntityType, routedEntityId, captureId, userId],
+  );
+
+  return getActionHubSnapshot();
+}
+
 export async function routeInboxTaskToProject(taskId: string, projectId: string) {
   const { id: userId } = await resolveUser();
+  const [projectResult, taskResult] = await Promise.all([
+    queryD1<{ id: string }>(
+      `select id from projects where id = ? and user_id = ? and deleted_at is null limit 1`,
+      [projectId, userId],
+    ),
+    queryD1<{ id: string }>(
+      `select id from tasks where id = ? and user_id = ? and project_id is null and deleted_at is null limit 1`,
+      [taskId, userId],
+    ),
+  ]);
+
+  if (!projectResult.rows[0]) {
+    throw new Error("라우팅할 프로젝트를 찾지 못했습니다.");
+  }
+  if (!taskResult.rows[0]) {
+    throw new Error("Inbox 태스크를 찾지 못했습니다.");
+  }
+
   await executeD1(
     `update tasks
      set project_id = ?, updated_at = datetime('now')

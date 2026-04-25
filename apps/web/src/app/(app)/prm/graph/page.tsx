@@ -2,10 +2,9 @@ import { PRMGraphClient } from "@/components/prm/prm-graph-client";
 import { ContextMapMini } from "@/components/shared/context/context-map-mini";
 import { GlassCard } from "@/components/shared/glass-card";
 import { getContextBundle } from "@/lib/server/context";
-import { getPRMSnapshot, seedPRMSupportData } from "@/lib/server/prm";
+import { getPRMSnapshot } from "@/lib/server/prm";
 
 export default async function PRMGraphPage() {
-  await seedPRMSupportData();
   const snapshot = await getPRMSnapshot();
   const bundles = await Promise.all(
     snapshot.people.slice(0, 8).map((person) => getContextBundle("person", person.id, { depth: 2, include: ["explicit", "source", "inferred"], limit: 10 })),

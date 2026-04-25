@@ -8,9 +8,8 @@ export default async function ActionHubLayout({ children }: { children: ReactNod
   const snapshot = await getActionHubSnapshot();
 
   return (
-    <>
-      <ActionHubHydrator initialSnapshot={snapshot} />
+    <ActionHubHydrator initialSnapshot={snapshot}>
       {children}
-    </>
+    </ActionHubHydrator>
   );
 }

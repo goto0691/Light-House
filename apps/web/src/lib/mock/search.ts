@@ -29,7 +29,7 @@ export const MOCK_SEARCH_ITEMS: SearchItem[] = [
     id: "zettel-anxiety",
     title: "존재의 불안과 실존주의",
     snippet: "실존적 불안의 구조와 선택의 무게에 대한 메모.",
-    href: "/vault?detail=zettel:zettel-anxiety",
+    href: "/vault/zettels?detail=zettel:zettel-anxiety",
     score: 0.88,
   },
   {
@@ -37,7 +37,7 @@ export const MOCK_SEARCH_ITEMS: SearchItem[] = [
     id: "media-dune",
     title: "듄: 파트 2",
     snippet: "영상 로그. 사운드 디자인과 신화성에 대한 감상.",
-    href: "/vault?detail=media:media-dune",
+    href: "/vault/media?detail=media:media-dune",
     score: 0.72,
   },
   {
@@ -45,7 +45,7 @@ export const MOCK_SEARCH_ITEMS: SearchItem[] = [
     id: "place-hotteok",
     title: "호떡집 본점",
     snippet: "겨울 메뉴 테스트와 미팅이 자주 열리는 장소.",
-    href: "/vault?detail=place:place-hotteok",
+    href: "/vault/places?detail=place:place-hotteok",
     score: 0.69,
   },
   {

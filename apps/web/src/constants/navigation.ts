@@ -16,7 +16,8 @@ export type DomainKey =
   | "action-hub"
   | "vault"
   | "prm"
-  | "life-ops";
+  | "life-ops"
+  | "settings";
 
 export interface NavigationItem {
   key: string;
@@ -71,5 +72,13 @@ export const LOCAL_NAV: Record<DomainKey, Array<{ label: string; href: string }>
     { label: "Workouts", href: "/life-ops/workouts" },
     { label: "Trends", href: "/life-ops/trends" },
     { label: "Career", href: "/life-ops/career" },
+  ],
+  settings: [
+    { label: "Profile", href: "/settings/profile" },
+    { label: "Appearance", href: "/settings/appearance" },
+    { label: "Data", href: "/settings/data" },
+    { label: "Integrations", href: "/settings/integrations" },
+    { label: "AI", href: "/settings/ai" },
+    { label: "Shortcuts", href: "/settings/shortcuts" },
   ],
 };

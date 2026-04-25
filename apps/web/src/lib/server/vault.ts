@@ -278,6 +278,29 @@ export async function getVaultZettel(zettelId: string) {
   return snapshot.zettels.find((item) => item.id === zettelId) ?? null;
 }
 
+export async function getVaultZettelsTouchedOn(date: string, limit = 4) {
+  const { id: userId } = await resolveUser();
+  const result = await queryD1<{ id: string; title: string }>(
+    `select distinct z.id, z.title
+     from zettels z
+     left join source_documents sd
+       on sd.canonical_entity_type = 'zettel'
+      and sd.canonical_entity_id = z.id
+      and sd.deleted_at is null
+     where z.user_id = ?
+       and z.deleted_at is null
+       and (
+         date(coalesce(z.updated_at, z.created_at)) = ?
+         or date(z.created_at) = ?
+         or date(coalesce(sd.updated_at, sd.created_at)) = ?
+       )
+     order by z.title asc
+     limit ?`,
+    [userId, date, date, date, limit],
+  );
+  return result.rows;
+}
+
 export async function cycleVaultMediaStatus(mediaId: string) {
   const { id: userId } = await resolveUser();
   const current = await queryD1<{ status: MediaMock["status"] }>("select status from media_logs where id = ? and user_id = ? limit 1", [mediaId, userId]);

@@ -22,6 +22,7 @@ function resolveDomain(pathname: string): DomainKey {
   if (pathname.startsWith("/vault")) return "vault";
   if (pathname.startsWith("/prm")) return "prm";
   if (pathname.startsWith("/life-ops")) return "life-ops";
+  if (pathname.startsWith("/settings")) return "settings";
   return "dashboard";
 }
 

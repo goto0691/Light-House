@@ -264,7 +264,7 @@ export function ZettelsClient() {
               <ZettelCard
                 actions={
                   <>
-                    <Link className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground" href={`/vault?detail=zettel:${zettel.id}`}>
+                    <Link className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground" href={`/vault/zettels?detail=zettel:${zettel.id}`}>
                   Drawer
                     </Link>
                     <button

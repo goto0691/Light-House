@@ -15,15 +15,24 @@ import { Heatmap } from "@/components/shared/heatmap";
 import { PageBody, PageLayout } from "@/components/shared/page-layout";
 import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { getHeatmapMock } from "@/lib/mock/life-ops";
+import type { DailyLogMock } from "@/lib/mock/life-ops";
 import { useLifeOpsStore } from "@/stores/use-life-ops-store";
 
 const MOODS = ["😶", "🙂", "😊", "😁", "🤩"];
 const ENERGIES = ["Low", "Soft", "Steady", "Focused", "Hyper"];
 
-export function DailyLogClient({ date }: { date: string }) {
+export function DailyLogClient({
+  date,
+  heatmap,
+  initialLog,
+}: {
+  date: string;
+  heatmap: Array<{ date: string; value: number }>;
+  initialLog: DailyLogMock | null;
+}) {
   const [isPending, startTransition] = useTransition();
-  const log = useLifeOpsStore((state) => state.logs[date]);
+  const storeLog = useLifeOpsStore((state) => state.logs[date]);
+  const log = storeLog ?? initialLog;
   const replaceSnapshot = useLifeOpsStore((state) => state.replaceSnapshot);
   const [journalDraft, setJournalDraft] = useState("");
   const [meditationDraft, setMeditationDraft] = useState("");
@@ -40,7 +49,17 @@ export function DailyLogClient({ date }: { date: string }) {
     setDeepWorkDraft(log.deepWorkMinutes);
   }, [log]);
 
-  if (!log) return null;
+  if (!log) {
+    return (
+      <PageLayout>
+        <GlassCard>
+          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Daily Log</p>
+          <h1 className="mt-3 font-display text-2xl text-foreground">{date}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">이 날짜의 기록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
+        </GlassCard>
+      </PageLayout>
+    );
+  }
 
   return (
     <PageLayout>
@@ -191,7 +210,12 @@ export function DailyLogClient({ date }: { date: string }) {
                         { field: "meditation", value: meditationDraft },
                         replaceSnapshot,
                       );
-                    } catch {}
+                      toast.success("meditation 저장을 완료했습니다.");
+                    } catch (error) {
+                      toast.error("meditation 저장에 실패했습니다.", {
+                        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+                      });
+                    }
                   });
                 }}
                 value={meditationDraft}
@@ -210,7 +234,12 @@ export function DailyLogClient({ date }: { date: string }) {
                         { field: "gratitude", value: gratitudeDraft },
                         replaceSnapshot,
                       );
-                    } catch {}
+                      toast.success("gratitude 저장을 완료했습니다.");
+                    } catch (error) {
+                      toast.error("gratitude 저장에 실패했습니다.", {
+                        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+                      });
+                    }
                   });
                 }}
                 value={gratitudeDraft}
@@ -244,7 +273,7 @@ export function DailyLogClient({ date }: { date: string }) {
       <GlassCard priority="secondary">
         <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Year Heatmap</p>
         <div className="mt-4">
-          <Heatmap data={getHeatmapMock()} />
+          <Heatmap data={heatmap} />
         </div>
       </GlassCard>
     </PageLayout>

@@ -141,7 +141,8 @@ export function TaskWorkspaceClient({ projectId, taskId }: { projectId: string; 
               {task.checklistItems.map((item) => (
                 <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/10 px-3 py-3" key={item.id}>
                   <button
-                    className={`h-4 w-4 rounded-full border ${item.completed ? "border-primary bg-primary" : "border-white/20"}`}
+                    aria-label={`${item.content} 체크리스트 ${item.completed ? "미완료로 변경" : "완료로 변경"}`}
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${item.completed ? "border-primary bg-primary" : "border-white/20"}`}
                     disabled={isPending}
                     onClick={() => {
                       startTransition(async () => {
@@ -162,7 +163,8 @@ export function TaskWorkspaceClient({ projectId, taskId }: { projectId: string; 
                   />
                   <p className={`flex-1 text-sm ${item.completed ? "text-muted-foreground line-through" : "text-foreground"}`}>{item.content}</p>
                   <button
-                    className="rounded-xl border border-white/10 px-2 py-1 text-[11px] text-muted-foreground"
+                    aria-label={`${item.content} 체크리스트 삭제`}
+                    className="min-h-11 rounded-xl border border-white/10 px-3 py-2 text-[11px] text-muted-foreground"
                     disabled={isPending}
                     onClick={() => {
                       startTransition(async () => {

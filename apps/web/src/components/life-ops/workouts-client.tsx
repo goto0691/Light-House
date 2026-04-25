@@ -18,6 +18,7 @@ export function WorkoutsClient() {
   const [categories, setCategories] = useState("");
   const [duration, setDuration] = useState(60);
   const [intensity, setIntensity] = useState(3);
+  const [notes, setNotes] = useState("");
   const [query, setQuery] = useState("");
   const visibleWorkouts = workouts.filter((workout) => {
     if (query && !`${workout.date} ${workout.categories} ${workout.notes}`.toLowerCase().includes(query.toLowerCase())) return false;
@@ -50,6 +51,7 @@ export function WorkoutsClient() {
             <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setDuration(Number(event.target.value))} type="number" value={duration} />
             <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" max={5} min={1} onChange={(event) => setIntensity(Number(event.target.value))} type="number" value={intensity} />
           </div>
+          <textarea className="min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setNotes(event.target.value)} placeholder="운동 메모" value={notes} />
           <button
             className="rounded-2xl bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
             disabled={isPending}
@@ -58,10 +60,11 @@ export function WorkoutsClient() {
                 try {
                   await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
                     "/api/life-ops/workouts",
-                    { date, categories, duration, intensity },
+                    { date, categories, duration, intensity, notes },
                     replaceSnapshot,
                   );
                   setCategories("");
+                  setNotes("");
                   toast.success("운동 로그를 추가했습니다.");
                 } catch (error) {
                   toast.error("운동 추가에 실패했습니다.", {

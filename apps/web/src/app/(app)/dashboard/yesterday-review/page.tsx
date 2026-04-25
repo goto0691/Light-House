@@ -6,7 +6,7 @@ import { getTodayString } from "@/lib/mock/life-ops";
 import { getActionHubSnapshot, seedActionHubSupportData } from "@/lib/server/action-hub";
 import { getLifeOpsLog, seedLifeOpsSupportData } from "@/lib/server/life-ops";
 import { getPRMSnapshot, seedPRMSupportData } from "@/lib/server/prm";
-import { getVaultSnapshot, seedVaultSupportData } from "@/lib/server/vault";
+import { getVaultZettelsTouchedOn, seedVaultSupportData } from "@/lib/server/vault";
 
 function offsetDate(days: number) {
   const date = new Date(`${getTodayString()}T00:00:00+09:00`);
@@ -17,10 +17,14 @@ function offsetDate(days: number) {
 export default async function YesterdayReviewPage() {
   await Promise.all([seedActionHubSupportData(), seedLifeOpsSupportData(), seedPRMSupportData(), seedVaultSupportData()]);
   const date = offsetDate(-1);
-  const [log, actionHub, prm, vault] = await Promise.all([getLifeOpsLog(date), getActionHubSnapshot(), getPRMSnapshot(), getVaultSnapshot()]);
+  const [log, actionHub, prm, touchedZettels] = await Promise.all([
+    getLifeOpsLog(date),
+    getActionHubSnapshot(),
+    getPRMSnapshot(),
+    getVaultZettelsTouchedOn(date),
+  ]);
   const completed = actionHub.tasks.filter((task) => task.status === "done" || task.dueAt === date).slice(0, 6);
   const touchedPeople = prm.people.filter((person) => person.timeline.some((item) => item.date === date)).slice(0, 6);
-  const touchedZettels = vault.zettels.filter((zettel) => zettel.content || zettel.summary).slice(0, 4);
 
   return (
     <section className="space-y-4">

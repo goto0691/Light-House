@@ -4,7 +4,7 @@ import { EntityContextShell } from "@/components/shared/context/entity-context-s
 import { GlassCard } from "@/components/shared/glass-card";
 import { Tag } from "@/components/shared/tag";
 import { getContextBundle } from "@/lib/server/context";
-import { getVaultSnapshot, seedVaultSupportData } from "@/lib/server/vault";
+import { getVaultSnapshot } from "@/lib/server/vault";
 
 export default async function PlaceDetailPage({
   params,
@@ -12,7 +12,6 @@ export default async function PlaceDetailPage({
   params: Promise<{ placeId: string }>;
 }) {
   const { placeId } = await params;
-  await seedVaultSupportData();
   const snapshot = await getVaultSnapshot();
   const place = snapshot.places.find((item) => item.id === placeId);
   if (!place) notFound();

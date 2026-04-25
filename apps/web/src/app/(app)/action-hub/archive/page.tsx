@@ -3,10 +3,9 @@ import Link from "next/link";
 import { EmptyState } from "@/components/shared/empty-state";
 import { GlassCard } from "@/components/shared/glass-card";
 import { Tag } from "@/components/shared/tag";
-import { getActionHubArchive, seedActionHubSupportData } from "@/lib/server/action-hub";
+import { getActionHubArchive } from "@/lib/server/action-hub";
 
 export default async function ActionHubArchivePage() {
-  await seedActionHubSupportData();
   const archive = await getActionHubArchive();
 
   return (

@@ -170,6 +170,9 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
               toast.error("가져올 파일을 먼저 선택해 주세요.");
               return;
             }
+            if (!window.confirm("선택한 파일의 데이터를 실제로 가져오고 관계 복원까지 실행합니다. 계속할까요?")) {
+              return;
+            }
 
             startTransition(async () => {
               try {
@@ -272,6 +275,9 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
           onRestoreDryRun={() => {
             if (!restoreFile) {
               toast.error("복원 검증 파일을 먼저 선택해 주세요.");
+              return;
+            }
+            if (!window.confirm("복원 파일 검증은 데이터를 변경하지 않지만 시간이 걸릴 수 있습니다. 계속할까요?")) {
               return;
             }
 
@@ -387,6 +393,9 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
                     className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:opacity-50"
                     disabled={isPending}
                     onClick={() => {
+                      if (!window.confirm("이 import batch의 관계 복원을 다시 실행합니다. 계속할까요?")) {
+                        return;
+                      }
                       startTransition(async () => {
                         try {
                           const response = await fetch("/api/settings/data/notion/repair", {

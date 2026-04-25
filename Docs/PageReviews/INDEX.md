@@ -1,0 +1,54 @@
+# Page Reviews Index
+
+Generated from static code review on 2026-04-25. Typecheck and build passed. Runtime mobile/browser/D1 session verification was not performed in this pass.
+
+- [Action Hub Archive](./action-hub-archive.md) - `/action-hub/archive` - 19/33
+- [Action Hub Inbox](./action-hub-inbox.md) - `/action-hub/inbox` - 19/33
+- [Project Calendar](./action-hub-project-calendar.md) - `/action-hub/[projectId]/calendar` - 18/33
+- [Project List](./action-hub-project-list.md) - `/action-hub/[projectId]/list` - 16/33
+- [Project Kanban](./action-hub-project.md) - `/action-hub/[projectId]` - 23/33
+- [Task Workspace](./action-hub-task-workspace.md) - `/action-hub/[projectId]/tasks/[taskId]` - 24/33
+- [Action Hub Projects](./action-hub.md) - `/action-hub` - 23/33
+- [This Week](./dashboard-this-week.md) - `/dashboard/this-week` - 23/33
+- [Yesterday Review](./dashboard-yesterday-review.md) - `/dashboard/yesterday-review` - 22/33
+- [Dashboard](./dashboard.md) - `/dashboard` - 22/33
+- [Career Detail](./life-ops-career-detail.md) - `/life-ops/career/[careerId]` - 23/33
+- [Life Ops Career](./life-ops-career.md) - `/life-ops/career` - 21/33
+- [Daily Log](./life-ops-date.md) - `/life-ops/[date]` - 22/33
+- [Life Ops Diaries](./life-ops-diaries.md) - `/life-ops/diaries` - 17/33
+- [Life Ops Habits](./life-ops-habits.md) - `/life-ops/habits` - 21/33
+- [Life Ops Meditations](./life-ops-meditations.md) - `/life-ops/meditations` - 17/33
+- [Life Ops Trends](./life-ops-trends.md) - `/life-ops/trends` - 17/33
+- [Workout Detail](./life-ops-workout-detail.md) - `/life-ops/workouts/[workoutId]` - 23/33
+- [Life Ops Workouts](./life-ops-workouts.md) - `/life-ops/workouts` - 21/33
+- [Life Ops Redirect](./life-ops.md) - `/life-ops` - 19/33
+- [Login](./login.md) - `/login` - 21/33
+- [People Alias Detail](./people-person.md) - `/people/[personId]` - 24/33
+- [Gift Detail](./prm-gift-detail.md) - `/prm/gifts/[giftId]` - 23/33
+- [PRM Gifts](./prm-gifts.md) - `/prm/gifts` - 24/33
+- [PRM Graph](./prm-graph.md) - `/prm/graph` - 19/33
+- [Hit Them Up](./prm-hit-them-up.md) - `/prm/hit-them-up` - 22/33
+- [Person 360](./prm-person.md) - `/prm/[personId]` - 27/33
+- [PRM People](./prm.md) - `/prm` - 24/33
+- [Root Redirect](./root.md) - `/` - 18/33
+- [Settings AI](./settings-ai.md) - `/settings/ai` - 21/33
+- [Settings Appearance](./settings-appearance.md) - `/settings/appearance` - 19/33
+- [Migration QA](./settings-data-qa.md) - `/settings/data/qa` - 26/33
+- [Settings Data](./settings-data.md) - `/settings/data` - 27/33
+- [Settings Integrations](./settings-integrations.md) - `/settings/integrations` - 19/33
+- [Settings Profile](./settings-profile.md) - `/settings/profile` - 20/33
+- [Settings Shortcuts](./settings-shortcuts.md) - `/settings/shortcuts` - 19/33
+- [Settings Home](./settings.md) - `/settings` - 21/33
+- [Asset Detail](./vault-asset-detail.md) - `/vault/assets/[assetId]` - 20/33
+- [Vault Assets](./vault-assets.md) - `/vault/assets` - 17/33
+- [Vault Media Books](./vault-media-books.md) - `/vault/media/books` - 19/33
+- [Media Detail](./vault-media-detail.md) - `/vault/media/[mediaId]` - 24/33
+- [Vault Media Games](./vault-media-games.md) - `/vault/media/games` - 19/33
+- [Vault Media Screens](./vault-media-screens.md) - `/vault/media/screens` - 19/33
+- [Vault Media](./vault-media.md) - `/vault/media` - 20/33
+- [Place Detail](./vault-place-detail.md) - `/vault/places/[placeId]` - 23/33
+- [Vault Places](./vault-places.md) - `/vault/places` - 20/33
+- [Zettel Detail](./vault-zettel-detail.md) - `/vault/zettels/[zettelId]` - 24/33
+- [Zettel Graph](./vault-zettels-graph.md) - `/vault/zettels/graph` - 18/33
+- [Vault Zettels](./vault-zettels.md) - `/vault/zettels` - 25/33
+- [Vault Redirect](./vault.md) - `/vault` - 17/33

@@ -1,10 +1,9 @@
 import { GlassCard } from "@/components/shared/glass-card";
 import { ContextMapMini } from "@/components/shared/context/context-map-mini";
 import { getContextBundle } from "@/lib/server/context";
-import { getVaultSnapshot, seedVaultSupportData } from "@/lib/server/vault";
+import { getVaultSnapshot } from "@/lib/server/vault";
 
 export default async function ZettelGraphPage() {
-  await seedVaultSupportData();
   const snapshot = await getVaultSnapshot();
   const bundles = await Promise.all(
     snapshot.zettels.slice(0, 9).map((zettel) => getContextBundle("zettel", zettel.id, { depth: 2, include: ["explicit", "source", "mention", "semantic"], limit: 10 })),

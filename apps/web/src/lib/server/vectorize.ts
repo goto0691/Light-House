@@ -272,7 +272,7 @@ export async function semanticSearchZettels(query: string, limit = 8): Promise<S
         id: row.id,
         title: row.title,
         snippet: row.summary ?? "의미 검색 결과",
-        href: `/vault?detail=zettel:${row.id}`,
+        href: `/vault/zettels?detail=zettel:${row.id}`,
         score: Number(match.score ?? 0.5),
       };
     })
