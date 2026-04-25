@@ -90,7 +90,7 @@ export function ZenEditor({
   return (
     <div className="glass rounded-[24px] p-5">
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Zen Editor Stub</p>
+        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Markdown Editor</p>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>{currentValue.length} chars</span>
           {suggestionContext.mode ? <span>{suggestionContext.mode} lookup</span> : null}
@@ -151,7 +151,7 @@ export function ZenEditor({
 
 function cnEditor(serif: boolean) {
   return [
-    "min-h-[220px] w-full resize-none border-0 bg-transparent text-sm text-foreground outline-none",
-    serif ? "font-serif leading-8" : "font-sans leading-7",
+    "min-h-[520px] w-full resize-y border-0 bg-transparent text-base text-foreground outline-none md:text-[17px]",
+    serif ? "font-serif leading-9" : "font-sans leading-8",
   ].join(" ");
 }

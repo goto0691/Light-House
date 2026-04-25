@@ -44,13 +44,13 @@ export const UTILITY: NavigationItem[] = [
 export const LOCAL_NAV: Record<DomainKey, Array<{ label: string; href: string }>> = {
   dashboard: [
     { label: "Today's Anchor", href: "/dashboard" },
-    { label: "Yesterday Review", href: "/dashboard?range=yesterday" },
-    { label: "This Week", href: "/dashboard?range=week" },
+    { label: "Yesterday Review", href: "/dashboard/yesterday-review" },
+    { label: "This Week", href: "/dashboard/this-week" },
   ],
   "action-hub": [
     { label: "Inbox", href: "/action-hub/inbox" },
     { label: "Active Projects", href: "/action-hub" },
-    { label: "Archive", href: "/action-hub?view=archive" },
+    { label: "Archive", href: "/action-hub/archive" },
   ],
   vault: [
     { label: "Zettels", href: "/vault/zettels" },
@@ -60,7 +60,7 @@ export const LOCAL_NAV: Record<DomainKey, Array<{ label: string; href: string }>
     { label: "Graph View", href: "/vault/zettels/graph" },
   ],
   prm: [
-    { label: "Hit Them Up", href: "/prm?filter=needs-contact" },
+    { label: "Hit Them Up", href: "/prm/hit-them-up" },
     { label: "People", href: "/prm" },
     { label: "Gifts", href: "/prm/gifts" },
     { label: "Graph", href: "/prm/graph" },

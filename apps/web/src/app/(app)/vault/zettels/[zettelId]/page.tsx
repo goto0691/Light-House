@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 
+import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { GlassCard } from "@/components/shared/glass-card";
-import { ZettelDrawer } from "@/components/vault/zettel-drawer";
+import { MarkdownView } from "@/components/shared/markdown-view";
+import { Tag } from "@/components/shared/tag";
 import { getVaultZettel, seedVaultSupportData } from "@/lib/server/vault";
 
 export default async function ZettelDetailPage({
@@ -15,13 +17,28 @@ export default async function ZettelDetailPage({
   if (!zettel) notFound();
 
   return (
-    <section className="space-y-4">
-      <GlassCard>
-        <p className="text-xs uppercase tracking-[0.24em] text-primary">Vault</p>
-        <h1 className="mt-3 text-3xl font-semibold">{zettel.title}</h1>
-        <p className="mt-3 text-sm text-muted-foreground">Split View에서 보던 메모를 전체 화면으로 보는 딥링크입니다.</p>
-      </GlassCard>
-      <ZettelDrawer id={zettelId} />
-    </section>
+    <ContextBundlePanel
+      density="page"
+      enableAttach
+      entityId={zettelId}
+      entityType="zettel"
+      mainSlot={() => (
+        <section className="space-y-4">
+          <GlassCard className="p-6 md:p-8">
+            <p className="text-xs uppercase tracking-[0.24em] text-primary">{zettel.type}</p>
+            <h1 className="mt-3 font-display text-5xl text-foreground">{zettel.title}</h1>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Tag value={zettel.category} variant="custom" />
+              <Tag value={`${zettel.outgoingLinks.length} links`} variant="neutral" />
+            </div>
+            <p className="mt-5 max-w-3xl text-base leading-7 text-muted-foreground">{zettel.summary}</p>
+          </GlassCard>
+          <GlassCard className="p-6 md:p-10">
+            <MarkdownView value={zettel.content} />
+          </GlassCard>
+        </section>
+      )}
+      railDefaultLens="zettels"
+    />
   );
 }

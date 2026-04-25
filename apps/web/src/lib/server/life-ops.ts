@@ -395,6 +395,11 @@ export async function getLifeOpsCareer() {
   return snapshot.career;
 }
 
+export async function getLifeOpsCareerEntry(careerId: string) {
+  const snapshot = await getLifeOpsSnapshot();
+  return snapshot.career.find((item) => item.id === careerId) ?? null;
+}
+
 export async function updateLifeOpsMood(date: string, mood: number) {
   const { id: userId } = await resolveUser();
   await executeD1(`update daily_logs set mood = ?, updated_at = datetime('now') where user_id = ? and date = ?`, [mood, userId, date]);

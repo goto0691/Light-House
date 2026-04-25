@@ -12,6 +12,7 @@ const TYPE_LABELS: Record<ContextNode["type"], string> = {
   person: "Person",
   daily_log: "Day",
   workout: "Workout",
+  career: "Career",
   gift: "Gift",
   interaction: "Interaction",
   place: "Place",

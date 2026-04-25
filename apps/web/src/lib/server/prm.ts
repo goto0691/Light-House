@@ -300,6 +300,20 @@ export async function getPRMGifts() {
   return { rows: snapshot.gifts };
 }
 
+export async function getPRMGift(giftId: string) {
+  const snapshot = await getPRMSnapshot();
+  const gift = snapshot.gifts.find((item) => item.id === giftId) ?? null;
+  const person = gift ? snapshot.people.find((item) => item.id === gift.personId) ?? null : null;
+  return gift ? { gift, person } : null;
+}
+
+export async function getPRMNeedsContact() {
+  const snapshot = await getPRMSnapshot();
+  return snapshot.people
+    .filter((person) => person.daysSinceContact > person.cadenceDays)
+    .sort((left, right) => right.daysSinceContact - left.daysSinceContact);
+}
+
 export async function markPersonContacted(personId: string) {
   const { id: userId } = await resolveUser();
   await executeD1(

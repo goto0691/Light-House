@@ -196,13 +196,19 @@ function hrefFor(type: EntityType, id: string) {
     case "task":
       return `/action-hub?detail=task:${id}`;
     case "person":
-      return `/prm?detail=person:${id}`;
+      return `/prm/${id}`;
     case "zettel":
-      return `/vault?detail=zettel:${id}`;
+      return `/vault/zettels/${id}`;
     case "media":
-      return `/vault?detail=media:${id}`;
+      return `/vault/media/${id}`;
     case "place":
-      return `/vault?detail=place:${id}`;
+      return `/vault/places/${id}`;
+    case "gift":
+      return `/prm/gifts/${id}`;
+    case "workout":
+      return `/life-ops/workouts/${id}`;
+    case "career":
+      return `/life-ops/career/${id}`;
     case "daily_log":
       return `/life-ops/${id}`;
     case "source_document":
@@ -907,6 +913,19 @@ async function getExplicitBridgeRows(userId: string, type: EntityType, id: strin
     );
   }
 
+  if (type === "gift") {
+    await collect(
+      `select 'gifts' as tableName, g.id as relationId,
+              'gift' as fromType, g.id as fromId, g.title as fromTitle, g.direction || ' · ' || g.occurred_at as fromSubtitle, coalesce(g.notes, g.satisfaction) as fromPreview,
+              'person' as toType, p.id as toId, p.name as toTitle, p.groups as toSubtitle, p.bio as toPreview,
+              'recipient' as label, g.created_at as createdAt
+       from gifts g
+       inner join people p on p.id = g.person_id
+       where g.user_id = ? and g.deleted_at is null and p.deleted_at is null and g.id = ?`,
+      [userId, id],
+    );
+  }
+
   if (type === "place") {
     await collect(
       `select 'interactions' as tableName, i.id as relationId,
@@ -1110,6 +1129,34 @@ export async function getContextBundle(type: EntityType, id: string, options: Co
         nodes.push(target);
         edges.push(edge({ from: target, to: focus, label: "daily anchor", evidence: [{ source: "table", table: "workouts.date" }] }));
       }
+    }
+  }
+
+  if (type === "gift") {
+    const gift = indexes.prm.gifts.find((item) => item.id === id);
+    if (gift) {
+      focus = node("gift", gift.id, gift.title, {
+        subtitle: `${gift.direction} · ${gift.occurredAt}`,
+        preview: gift.notes ?? gift.satisfaction ?? undefined,
+        tone: "success",
+      });
+      const person = indexes.prm.people.find((item) => item.id === gift.personId);
+      if (person) {
+        const target = node("person", person.id, person.name, { subtitle: person.groups.join(" · "), preview: person.bio, tone: "info", sourceDocumentId: person.sourceDocument?.id });
+        nodes.push(target);
+        edges.push(edge({ from: focus, to: target, label: "gift person", evidence: [{ source: "table", table: "gifts.person_id" }] }));
+      }
+    }
+  }
+
+  if (type === "career") {
+    const career = indexes.lifeOps?.career.find((item) => item.id === id);
+    if (career) {
+      focus = node("career", career.id, career.organization, {
+        subtitle: `${career.role} · ${career.period}`,
+        preview: career.description,
+        tone: "gold",
+      });
     }
   }
 

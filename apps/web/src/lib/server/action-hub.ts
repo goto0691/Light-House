@@ -291,6 +291,26 @@ export async function getActionHubProject(projectId: string) {
   return snapshot.projects.find((project) => project.id === projectId) ?? null;
 }
 
+export async function getActionHubProjectDetail(projectId: string) {
+  const snapshot = await getActionHubSnapshot();
+  const project = snapshot.projects.find((item) => item.id === projectId) ?? null;
+  if (!project) return null;
+  return {
+    project,
+    tasks: snapshot.tasks.filter((task) => task.projectId === projectId),
+    people: snapshot.referencePeople,
+    zettels: snapshot.referenceZettels,
+  };
+}
+
+export async function getActionHubArchive() {
+  const snapshot = await getActionHubSnapshot();
+  return {
+    projects: snapshot.projects.filter((project) => project.progress >= 100),
+    tasks: snapshot.tasks.filter((task) => task.status === "done"),
+  };
+}
+
 export async function getActionHubTask(projectId: string, taskId: string) {
   const snapshot = await getActionHubSnapshot();
   return snapshot.tasks.find((task) => task.id === taskId && task.projectId === projectId) ?? null;

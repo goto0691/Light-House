@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { KanbanBoard } from "@/components/action-hub/kanban-board";
+import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { ProjectHeader } from "@/components/action-hub/project-header";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { TaskCard } from "@/components/action-hub/task-card";
@@ -120,6 +121,20 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
         tasks={visibleTasks}
         renderTask={renderTask}
       />
+      <div className="mt-4">
+        <ContextBundlePanel
+          density="compact"
+          enableAttach
+          entityId={project.id}
+          entityType="project"
+          mainSlot={() => (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-muted-foreground">
+              이 프로젝트와 연결된 태스크, 사람, Zettel, 날짜 기록을 한 자리에서 탐색합니다.
+            </div>
+          )}
+          railDefaultLens="overview"
+        />
+      </div>
       {!visibleTasks.length ? (
         <EmptyState
           cta={{

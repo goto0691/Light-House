@@ -13,7 +13,7 @@ import { FilterBar } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
 import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shared/page-layout";
 import { Tag } from "@/components/shared/tag";
-import { ZenEditor } from "@/components/shared/zen-editor";
+import { MarkdownEditor } from "@/components/shared/markdown-editor";
 import type { SearchItem } from "@/lib/mock/search";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { useVaultStore } from "@/stores/use-vault-store";
@@ -214,7 +214,7 @@ export function ZettelsClient() {
         asidePosition="right"
         asideWidth="lg"
       >
-        <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="grid gap-4 2xl:grid-cols-[340px_minmax(0,1fr)]">
         <GlassCard className="min-h-[640px]" priority="secondary">
           <p className="text-xs uppercase tracking-[0.24em] text-primary">Zettelkasten</p>
 
@@ -352,7 +352,7 @@ export function ZettelsClient() {
             </div>
           </GlassCard>
 
-          <ZenEditor onChange={setContentDraft} serif value={contentDraft} />
+          <MarkdownEditor onChange={setContentDraft} value={contentDraft} />
         </div>
         </div>
       </PageBody>

@@ -13,7 +13,7 @@ export function PersonCard({ person }: { person: PersonMock }) {
     <GlassCard
       as={Link}
       className={overdue ? "shadow-[0_0_28px_rgba(239,68,68,0.15)]" : ""}
-      href={`/prm?detail=person:${person.id}`}
+      href={`/prm/${person.id}`}
       interactive
       priority="primary"
     >

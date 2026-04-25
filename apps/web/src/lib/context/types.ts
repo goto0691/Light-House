@@ -6,6 +6,7 @@ export type EntityType =
   | "person"
   | "daily_log"
   | "workout"
+  | "career"
   | "gift"
   | "interaction"
   | "place"
