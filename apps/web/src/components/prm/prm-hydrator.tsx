@@ -2,12 +2,18 @@
 
 import { useEffect } from "react";
 
+import type { PRMSnapshot } from "@/lib/server/prm";
 import { usePRMStore } from "@/stores/use-prm-store";
 
-export function PRMHydrator() {
+export function PRMHydrator({ initialSnapshot }: { initialSnapshot?: PRMSnapshot }) {
   const replaceSnapshot = usePRMStore((state) => state.replaceSnapshot);
 
   useEffect(() => {
+    if (initialSnapshot) {
+      replaceSnapshot(initialSnapshot);
+      return;
+    }
+
     let cancelled = false;
     async function hydrate() {
       const response = await fetch("/api/prm/bootstrap", { cache: "no-store" });
@@ -19,7 +25,7 @@ export function PRMHydrator() {
     return () => {
       cancelled = true;
     };
-  }, [replaceSnapshot]);
+  }, [initialSnapshot, replaceSnapshot]);
 
   return null;
 }

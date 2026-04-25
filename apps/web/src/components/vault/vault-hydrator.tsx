@@ -2,12 +2,18 @@
 
 import { useEffect } from "react";
 
+import type { VaultSnapshot } from "@/lib/server/vault";
 import { useVaultStore } from "@/stores/use-vault-store";
 
-export function VaultHydrator() {
+export function VaultHydrator({ initialSnapshot }: { initialSnapshot?: VaultSnapshot }) {
   const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
 
   useEffect(() => {
+    if (initialSnapshot) {
+      replaceSnapshot(initialSnapshot);
+      return;
+    }
+
     let cancelled = false;
     async function hydrate() {
       const response = await fetch("/api/vault/bootstrap", { cache: "no-store" });
@@ -19,7 +25,7 @@ export function VaultHydrator() {
     return () => {
       cancelled = true;
     };
-  }, [replaceSnapshot]);
+  }, [initialSnapshot, replaceSnapshot]);
 
   return null;
 }

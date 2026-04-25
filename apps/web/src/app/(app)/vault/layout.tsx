@@ -1,11 +1,15 @@
 import type { ReactNode } from "react";
 
 import { VaultHydrator } from "@/components/vault/vault-hydrator";
+import { getVaultSnapshot, seedVaultSupportData } from "@/lib/server/vault";
 
-export default function VaultLayout({ children }: { children: ReactNode }) {
+export default async function VaultLayout({ children }: { children: ReactNode }) {
+  await seedVaultSupportData();
+  const snapshot = await getVaultSnapshot();
+
   return (
     <>
-      <VaultHydrator />
+      <VaultHydrator initialSnapshot={snapshot} />
       {children}
     </>
   );

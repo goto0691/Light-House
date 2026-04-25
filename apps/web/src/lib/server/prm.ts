@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { ulid } from "ulidx";
 
 import type { GiftMock, NetworkEdgeMock, PersonMock } from "@/lib/mock/prm";
@@ -102,6 +103,9 @@ function birthdayLabel(value: string | null) {
 
 export async function seedPRMSupportData() {
   const { id: userId } = await resolveUser();
+  const existing = await queryD1<{ count: number | null }>(`select count(*) as count from people where user_id = ?`, [userId]);
+  if (Number(existing.rows[0]?.count ?? 0) > 0) return;
+
   await executeD1(
     `insert or ignore into people
       (id, user_id, name, nickname, birth_date, groups, dunbar_layer, core_value, bio, last_contacted_at, contact_cadence_days, status, is_favorite, created_at, updated_at)
@@ -144,7 +148,7 @@ export async function seedPRMSupportData() {
   );
 }
 
-export async function getPRMSnapshot(): Promise<PRMSnapshot> {
+export const getPRMSnapshot = cache(async function getPRMSnapshot(): Promise<PRMSnapshot> {
   const { id: userId } = await resolveUser();
   const [peopleResult, interactionTimeline, giftTimeline, taskTimeline, zettelTimeline, giftsResult, networkEdgeResult, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
     queryD1<PersonRow>(
@@ -288,7 +292,7 @@ export async function getPRMSnapshot(): Promise<PRMSnapshot> {
   }));
 
   return { people, gifts, networkEdges };
-}
+});
 
 export async function getPRMPerson(personId: string) {
   const snapshot = await getPRMSnapshot();

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { ulid } from "ulidx";
 
 import type { AssetMock, MediaMock, PlaceMock, SourceDocumentInfo, ZettelMock } from "@/lib/mock/vault";
@@ -74,6 +75,9 @@ function slugify(value: string) {
 
 export async function seedVaultSupportData() {
   const { id: userId } = await resolveUser();
+  const existing = await queryD1<{ count: number | null }>(`select count(*) as count from zettels where user_id = ?`, [userId]);
+  if (Number(existing.rows[0]?.count ?? 0) > 0) return;
+
   await executeD1(
     `insert or ignore into zettels
       (id, user_id, title, slug, content, content_text, summary, type, category, pinned, created_at, updated_at)
@@ -117,7 +121,7 @@ export async function seedVaultSupportData() {
   );
 }
 
-export async function getVaultSnapshot(): Promise<VaultSnapshot> {
+export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise<VaultSnapshot> {
   const { id: userId } = await resolveUser();
   const [zettelResult, backlinkResult, outgoingResult, mediaResult, assetResult, placeResult, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
     queryD1<ZettelRow>(
@@ -267,7 +271,7 @@ export async function getVaultSnapshot(): Promise<VaultSnapshot> {
     assets,
     places,
   };
-}
+});
 
 export async function getVaultZettel(zettelId: string) {
   const snapshot = await getVaultSnapshot();

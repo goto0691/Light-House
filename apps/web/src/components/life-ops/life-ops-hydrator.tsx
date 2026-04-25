@@ -2,12 +2,18 @@
 
 import { useEffect } from "react";
 
+import type { LifeOpsSnapshot } from "@/lib/server/life-ops";
 import { useLifeOpsStore } from "@/stores/use-life-ops-store";
 
-export function LifeOpsHydrator() {
+export function LifeOpsHydrator({ initialSnapshot }: { initialSnapshot?: LifeOpsSnapshot }) {
   const replaceSnapshot = useLifeOpsStore((state) => state.replaceSnapshot);
 
   useEffect(() => {
+    if (initialSnapshot) {
+      replaceSnapshot(initialSnapshot);
+      return;
+    }
+
     let cancelled = false;
     async function hydrate() {
       const response = await fetch("/api/life-ops/bootstrap", { cache: "no-store" });
@@ -19,7 +25,7 @@ export function LifeOpsHydrator() {
     return () => {
       cancelled = true;
     };
-  }, [replaceSnapshot]);
+  }, [initialSnapshot, replaceSnapshot]);
 
   return null;
 }

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { ulid } from "ulidx";
 
 import type { ActionHubReference, PendingCaptureMock, ProjectMock, TaskMock } from "@/lib/mock/action-hub";
@@ -152,7 +153,7 @@ async function refreshProjectProgress(userId: string, projectId: string) {
   );
 }
 
-export async function getActionHubSnapshot(): Promise<ActionHubSnapshot> {
+export const getActionHubSnapshot = cache(async function getActionHubSnapshot(): Promise<ActionHubSnapshot> {
   const { id: userId } = await resolveUser();
 
   const [projectResult, taskResult, taskPeopleResult, taskZettelResult, checklistResult, captureResult, referencePeopleResult, referenceZettelsResult] = await Promise.all([
@@ -284,7 +285,7 @@ export async function getActionHubSnapshot(): Promise<ActionHubSnapshot> {
     referencePeople: referencePeopleResult.rows,
     referenceZettels: referenceZettelsResult.rows,
   };
-}
+});
 
 export async function getActionHubProject(projectId: string) {
   const snapshot = await getActionHubSnapshot();
@@ -593,6 +594,10 @@ export async function detachTaskZettel(taskId: string, zettelTitle: string) {
 
 export async function seedActionHubSupportData() {
   const { id: userId, session } = await resolveUser();
+  const existing = await queryD1<{ count: number | null }>(`select count(*) as count from projects where user_id = ?`, [userId]);
+  if (Number(existing.rows[0]?.count ?? 0) > 0) {
+    return { userId, email: session.email };
+  }
 
   await executeD1(
     `insert or ignore into people

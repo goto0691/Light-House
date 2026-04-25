@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import type { CareerLog, DailyLogMock, HabitDefinition, HealthMetric, WorkoutLog } from "@/lib/mock/life-ops";
 import type { SourceDocumentInfo } from "@/lib/mock/vault";
 import { getTodayString } from "@/lib/mock/life-ops";
@@ -114,6 +115,9 @@ async function resolveUser() {
 
 export async function seedLifeOpsSupportData() {
   const { id: userId } = await resolveUser();
+  const existing = await queryD1<{ count: number | null }>(`select count(*) as count from daily_logs where user_id = ?`, [userId]);
+  if (Number(existing.rows[0]?.count ?? 0) > 0) return;
+
   await executeD1(
     `insert or ignore into habits
       (id, user_id, title, description, type, target_value, unit, icon, color, schedule, is_active, display_order, created_at, updated_at)
@@ -225,7 +229,7 @@ async function getSourceDocumentForEntity(userId: string, entityType: string, en
   };
 }
 
-export async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnapshot> {
+export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnapshot> {
   const { id: userId } = await resolveUser();
   const targetDates = dates?.length ? dates : [getTodayString(), "2026-04-22", "2026-04-21"];
   const logs: Record<string, DailyLogMock> = {};
@@ -253,53 +257,53 @@ export async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnaps
     ),
   ]);
 
-  for (const date of targetDates) {
+  const dailyEntries = await Promise.all(targetDates.map(async (date) => {
     const [dailyResult, habitsStateResult, metricsResult, taskTimeline, interactionTimeline, zettelTimeline, dailyPeopleTimeline] = await Promise.all([
-      queryD1<DailyLogRow>(
-        `select id, date, mood, energy_level as energyLevel, emotions, gratitude, journal, meditation, meditation_verse as meditationVerse
-         from daily_logs where user_id = ? and date = ? limit 1`,
-        [userId, date],
-      ),
-      getHabitStateRows(userId, date),
-      queryD1<HealthMetricRow>(
-        `select id, date, sleep_hours as sleepHours, deep_work_minutes as deepWorkMinutes, weight, steps_count as stepsCount
-         from health_metrics where user_id = ? and date <= ? order by date desc limit 14`,
-        [userId, date],
-      ),
-      queryD1<TimelineRow>(
-        `select date(coalesce(updated_at, created_at)) as date, time(coalesce(updated_at, created_at)) as time, title as label, 'task' as type
-         from tasks where user_id = ? and date(coalesce(updated_at, created_at)) = ? and deleted_at is null order by updated_at desc limit 4`,
-        [userId, date],
-      ),
-      queryD1<TimelineRow>(
-        `select occurred_at as date, '14:00' as time, summary as label, 'interaction' as type
-         from interactions where user_id = ? and occurred_at = ? and deleted_at is null order by created_at desc limit 4`,
-        [userId, date],
-      ),
-      queryD1<TimelineRow>(
-        `select date(coalesce(updated_at, created_at)) as date, time(coalesce(updated_at, created_at)) as time, title as label, 'zettel' as type
-         from zettels where user_id = ? and date(coalesce(updated_at, created_at)) = ? and deleted_at is null order by updated_at desc limit 4`,
-        [userId, date],
-      ),
-      queryD1<DailyPersonRow>(
-        `select dl.date as date, '12:00' as time, p.name as label, 'person' as type
-         from daily_logs dl
-         inner join daily_log_people_relations dlpr on dlpr.daily_log_id = dl.id
-         inner join people p on p.id = dlpr.person_id
-         where dl.user_id = ?
-           and dl.date = ?
-           and dl.deleted_at is null
-           and p.deleted_at is null
-         order by p.name asc
-         limit 6`,
-        [userId, date],
-      ),
-    ]);
+        queryD1<DailyLogRow>(
+          `select id, date, mood, energy_level as energyLevel, emotions, gratitude, journal, meditation, meditation_verse as meditationVerse
+           from daily_logs where user_id = ? and date = ? limit 1`,
+          [userId, date],
+        ),
+        getHabitStateRows(userId, date),
+        queryD1<HealthMetricRow>(
+          `select id, date, sleep_hours as sleepHours, deep_work_minutes as deepWorkMinutes, weight, steps_count as stepsCount
+           from health_metrics where user_id = ? and date <= ? order by date desc limit 14`,
+          [userId, date],
+        ),
+        queryD1<TimelineRow>(
+          `select date(coalesce(updated_at, created_at)) as date, time(coalesce(updated_at, created_at)) as time, title as label, 'task' as type
+           from tasks where user_id = ? and date(coalesce(updated_at, created_at)) = ? and deleted_at is null order by updated_at desc limit 4`,
+          [userId, date],
+        ),
+        queryD1<TimelineRow>(
+          `select occurred_at as date, '14:00' as time, summary as label, 'interaction' as type
+           from interactions where user_id = ? and occurred_at = ? and deleted_at is null order by created_at desc limit 4`,
+          [userId, date],
+        ),
+        queryD1<TimelineRow>(
+          `select date(coalesce(updated_at, created_at)) as date, time(coalesce(updated_at, created_at)) as time, title as label, 'zettel' as type
+           from zettels where user_id = ? and date(coalesce(updated_at, created_at)) = ? and deleted_at is null order by updated_at desc limit 4`,
+          [userId, date],
+        ),
+        queryD1<DailyPersonRow>(
+          `select dl.date as date, '12:00' as time, p.name as label, 'person' as type
+           from daily_logs dl
+           inner join daily_log_people_relations dlpr on dlpr.daily_log_id = dl.id
+           inner join people p on p.id = dlpr.person_id
+           where dl.user_id = ?
+             and dl.date = ?
+             and dl.deleted_at is null
+             and p.deleted_at is null
+           order by p.name asc
+           limit 6`,
+          [userId, date],
+        ),
+      ]);
 
-    const row = dailyResult.rows[0];
-    const sourceDocument = row ? await getSourceDocumentForEntity(userId, "daily_log", row.id) : null;
-    const metrics = metricsResult.rows;
-    logs[date] = {
+      const row = dailyResult.rows[0];
+      const sourceDocument = row ? await getSourceDocumentForEntity(userId, "daily_log", row.id) : null;
+      const metrics = metricsResult.rows;
+      return [date, {
       date,
       mood: row?.mood ?? 3,
       energy: row?.energyLevel ?? 3,
@@ -322,7 +326,11 @@ export async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnaps
         .slice(0, 6)
         .map((item) => ({ time: item.time.slice(0, 5), label: item.label, type: item.type })),
       sourceDocument,
-    };
+    } satisfies DailyLogMock] as const;
+  }));
+
+  for (const [date, log] of dailyEntries) {
+    logs[date] = log;
   }
 
   return {
@@ -360,7 +368,7 @@ export async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnaps
       stepsCount: Number(row.stepsCount ?? 0),
     })),
   };
-}
+});
 
 export async function getLifeOpsLog(date: string) {
   const snapshot = await getLifeOpsSnapshot([date]);
