@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Plus, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { BacklinkPanel } from "@/components/vault/backlink-panel";
-import { ZettelCard } from "@/components/vault/zettel-card";
 import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { ContextMapMini } from "@/components/shared/context/context-map-mini";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -14,57 +14,72 @@ import { FilterBar } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
 import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shared/page-layout";
 import { SavedViewTabs } from "@/components/shared/saved-view-tabs";
-import { Tag } from "@/components/shared/tag";
-import { MarkdownEditor } from "@/components/shared/markdown-editor";
-import type { ZettelMock } from "@/lib/mock/vault";
+import { ZettelCard } from "@/components/vault/zettel-card";
+import { ZettelLinkComposer } from "@/components/vault/zettel-link-composer";
+import { ZettelReaderPane } from "@/components/vault/zettel-reader-pane";
+import { DOCUMENT_KIND_OPTIONS, ZETTEL_STATUS_OPTIONS, ZETTEL_TYPE_OPTIONS } from "@/components/vault/zettel-form";
 import type { SearchItem } from "@/lib/mock/search";
+import type { ZettelMock } from "@/lib/mock/vault";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import type { SavedView } from "@/lib/server/ui-state";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 type ZettelsClientProps = {
   savedViews: SavedView[];
+  selectedZettelId?: string;
 };
 
-export function ZettelsClient({ savedViews }: ZettelsClientProps) {
-  const [isPending, startTransition] = useTransition();
+const LIST_PAGE_SIZE = 40;
+
+export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientProps) {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
   const zettels = useVaultStore((state) => state.zettels);
-  const selectedZettelId = useVaultStore((state) => state.selectedZettelId);
+  const storeSelectedZettelId = useVaultStore((state) => state.selectedZettelId);
   const selectZettel = useVaultStore((state) => state.selectZettel);
   const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
-  const [titleDraft, setTitleDraft] = useState("");
-  const [contentDraft, setContentDraft] = useState("");
-  const [newTitle, setNewTitle] = useState("");
-  const [newType, setNewType] = useState<"fleeting" | "literature" | "permanent" | "moc">("fleeting");
-  const [newCategory, setNewCategory] = useState("");
-  const [linkTargetId, setLinkTargetId] = useState("");
-  const [semanticResults, setSemanticResults] = useState<SearchItem[]>([]);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [documentKindFilter, setDocumentKindFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [categoryTags, setCategoryTags] = useState<string[]>([]);
-  const [contextRefreshKey, setContextRefreshKey] = useState(0);
+  const [semanticResults, setSemanticResults] = useState<SearchItem[]>([]);
   const activeViewKey = searchParams.get("view") ?? savedViews.find((view) => view.isDefault)?.viewKey ?? savedViews[0]?.viewKey ?? "all";
   const activeView = savedViews.find((view) => view.viewKey === activeViewKey) ?? savedViews.find((view) => view.isDefault) ?? savedViews[0];
+  const resolvedSelectedId = selectedZettelId ?? storeSelectedZettelId;
+  const filterKey = [activeViewKey, query, typeFilter, documentKindFilter, statusFilter, categoryTags.join("|")].join("\u0000");
+  const [visiblePage, setVisiblePage] = useState({ key: filterKey, limit: LIST_PAGE_SIZE });
+  const visibleLimit = visiblePage.key === filterKey ? visiblePage.limit : LIST_PAGE_SIZE;
 
-  const selected = zettels.find((item) => item.id === selectedZettelId) ?? zettels[0];
-  const linkCandidates = useMemo(() => zettels.filter((item) => item.id !== selected?.id), [selected?.id, zettels]);
+  const documentKindOptions = useMemo(() => {
+    const values = new Set(DOCUMENT_KIND_OPTIONS.map((option) => option.value));
+    zettels.forEach((zettel) => {
+      if (zettel.documentKind) values.add(zettel.documentKind);
+    });
+    return Array.from(values).map((value) => ({
+      value,
+      label: DOCUMENT_KIND_OPTIONS.find((option) => option.value === value)?.label ?? value,
+    }));
+  }, [zettels]);
+
   const viewZettels = activeView ? zettels.filter((item) => zettelMatchesSavedView(item, activeView)) : zettels;
   const visibleZettels = viewZettels.filter((item) => {
     if (typeFilter && item.type !== typeFilter) return false;
+    if (documentKindFilter && item.documentKind !== documentKindFilter) return false;
+    if (statusFilter && item.status !== statusFilter) return false;
     if (categoryTags.length && !categoryTags.some((tag) => item.category.toLowerCase().includes(tag.toLowerCase()))) return false;
     if (query && !`${item.title} ${item.summary} ${item.category} ${item.documentKind ?? ""} ${item.source ?? ""}`.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
+  const selected = zettels.find((item) => item.id === resolvedSelectedId) ?? visibleZettels[0] ?? zettels[0];
+  const listedZettels = visibleZettels.slice(0, visibleLimit);
+  const linkCandidates = zettels.filter((item) => item.id !== selected?.id);
 
   useEffect(() => {
-    if (!selected) return;
-    setTitleDraft(selected.title);
-    setContentDraft(selected.content);
-    if (linkCandidates[0]?.id) {
-      setLinkTargetId(linkCandidates[0].id);
-    }
-  }, [selected, linkCandidates]);
+    if (!selected?.id) return;
+    if (storeSelectedZettelId !== selected.id) selectZettel(selected.id);
+  }, [selectZettel, selected?.id, storeSelectedZettelId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,12 +97,10 @@ export function ZettelsClient({ savedViews }: ZettelsClientProps) {
         if (!response.ok) return;
         const payload = (await response.json()) as { results: SearchItem[] };
         if (!cancelled) {
-          setSemanticResults(payload.results.filter((item) => item.type === "zettel" && item.id !== selected.id).slice(0, 6));
+          setSemanticResults(payload.results.filter((item) => item.type === "zettel" && item.id !== selected.id).slice(0, 8));
         }
       } catch {
-        if (!cancelled) {
-          setSemanticResults([]);
-        }
+        if (!cancelled) setSemanticResults([]);
       }
     }
 
@@ -98,10 +111,69 @@ export function ZettelsClient({ savedViews }: ZettelsClientProps) {
     };
   }, [selected?.id, selected?.title]);
 
-  if (!selected) {
+  function openZettel(id: string) {
+    selectZettel(id);
+    router.push(`/vault/zettels/${id}`);
+  }
+
+  function addLink(targetId: string) {
+    if (!selected) return;
+    startTransition(async () => {
+      try {
+        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+          "/api/vault/zettel-links",
+          { sourceId: selected.id, targetId },
+          replaceSnapshot,
+        );
+        toast.success("메모 링크를 추가했습니다.");
+      } catch (error) {
+        toast.error("메모 링크 추가에 실패했습니다.", {
+          description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+        });
+      }
+    });
+  }
+
+  function removeLink(linkId: string) {
+    startTransition(async () => {
+      try {
+        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+          `/api/vault/zettel-links/${linkId}/delete`,
+          undefined,
+          replaceSnapshot,
+        );
+        toast.success("메모 링크를 제거했습니다.");
+      } catch (error) {
+        toast.error("메모 링크 제거에 실패했습니다.", {
+          description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+        });
+      }
+    });
+  }
+
+  function deleteSelected() {
+    if (!selected || !window.confirm(`"${selected.title}" 메모를 삭제할까요?`)) return;
+    startTransition(async () => {
+      try {
+        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+          `/api/vault/zettels/${selected.id}/delete`,
+          undefined,
+          replaceSnapshot,
+        );
+        toast.success("Zettel을 삭제했습니다.");
+        router.push("/vault/zettels");
+      } catch (error) {
+        toast.error("메모 삭제에 실패했습니다.", {
+          description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+        });
+      }
+    });
+  }
+
+  if (!zettels.length) {
     return (
       <EmptyState
-        cta={{ label: "첫 Zettel 쓰기", hotkey: "Cmd+N", onClick: () => {} }}
+        cta={{ label: "첫 Zettel 쓰기", hotkey: "Cmd+N", onClick: () => router.push("/vault/zettels/new") }}
         description="생각은 쓰는 순간 연결을 얻습니다. 첫 메모를 만들어 Vault에 불을 켜보세요."
         illustration="zettel"
         title="첫 번째 원석을 던져보세요"
@@ -112,36 +184,40 @@ export function ZettelsClient({ savedViews }: ZettelsClientProps) {
   return (
     <PageLayout>
       <PageHeader
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" href="/vault/zettels/new">
+              <Plus className="h-4 w-4" />
+              새 메모
+            </Link>
+            <Link className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8" href="/vault/zettels/graph">
+              <Workflow className="h-4 w-4" />
+              Graph
+            </Link>
+            <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              {visibleZettels.length} notes
+            </span>
+          </div>
+        }
+        description="읽기 모드에서는 탐색, 독서, 연결 확인만 다룹니다. 작성과 속성 편집은 별도 입력 모드에서 이어집니다."
         eyebrow="Vault"
         title="Zettelkasten"
-        description="메모 목록, 편집 캔버스, 링크 패널을 고정된 3영역으로 다룹니다."
-        actions={
-          <span className="rounded-md border border-white/10 bg-black/10 px-4 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            {visibleZettels.length} notes
-          </span>
-        }
       />
 
       <PageToolbar>
         <SavedViewTabs activeViewKey={activeView?.viewKey ?? activeViewKey} basePath="/vault/zettels" views={savedViews} />
         <FilterBar
           filters={[
-            {
-              kind: "select",
-              key: "type",
-              label: "Type",
-              options: [
-                { value: "fleeting", label: "Fleeting" },
-                { value: "literature", label: "Literature" },
-                { value: "permanent", label: "Permanent" },
-                { value: "moc", label: "MOC" },
-              ],
-            },
+            { kind: "select", key: "type", label: "Type", options: ZETTEL_TYPE_OPTIONS },
+            { kind: "select", key: "documentKind", label: "Kind", options: documentKindOptions },
+            { kind: "select", key: "status", label: "Status", options: ZETTEL_STATUS_OPTIONS },
             { kind: "tag", key: "category", label: "Category tag" },
           ]}
           onChange={(state) => {
             setQuery(state.q);
             setTypeFilter(typeof state.filters.type === "string" ? state.filters.type : "");
+            setDocumentKindFilter(typeof state.filters.documentKind === "string" ? state.filters.documentKind : "");
+            setStatusFilter(typeof state.filters.status === "string" ? state.filters.status : "");
             setCategoryTags(Array.isArray(state.filters.category) ? state.filters.category : []);
           }}
           searchPlaceholder="메모 제목, 요약, 카테고리 검색"
@@ -150,225 +226,73 @@ export function ZettelsClient({ savedViews }: ZettelsClientProps) {
 
       <PageBody
         aside={
-          <div className="space-y-4">
-            <GlassCard priority="secondary">
-              <p className="text-xs uppercase tracking-[0.24em] text-primary">Link Composer</p>
-              <div className="mt-4 border-t border-white/10 pt-4">
-                <p className="text-sm font-medium text-foreground">이 메모에서 연결</p>
-                <div className="mt-3 space-y-3">
-                  <select className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setLinkTargetId(event.target.value)} value={linkTargetId}>
-                    {linkCandidates.map((zettel) => (
-                      <option key={zettel.id} value={zettel.id}>
-                        {zettel.title}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="rounded-2xl bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
-                    disabled={isPending || !linkTargetId}
-                    onClick={() => {
-                      startTransition(async () => {
-                        try {
-                          await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                            "/api/vault/zettel-links",
-                            { sourceId: selected.id, targetId: linkTargetId },
-                            replaceSnapshot,
-                          );
-                          toast.success("메모 링크를 추가했습니다.");
-                        } catch (error) {
-                          toast.error("메모 링크 추가에 실패했습니다.", {
-                            description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-                          });
-                        }
-                      });
-                    }}
-                    type="button"
-                  >
-                    링크 추가
-                  </button>
-                </div>
-              </div>
-            </GlassCard>
-
-            <BacklinkPanel
-              isPending={isPending}
-              onRemoveLink={(linkId) => {
-                startTransition(async () => {
-                  try {
-                    await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                      `/api/vault/zettel-links/${linkId}/delete`,
-                      undefined,
-                      replaceSnapshot,
-                    );
-                    toast.success("메모 링크를 제거했습니다.");
-                  } catch (error) {
-                    toast.error("메모 링크 제거에 실패했습니다.", {
-                      description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-                    });
-                  }
-                });
-              }}
-              onSelectSemantic={(id) => selectZettel(id)}
-              semanticResults={semanticResults}
-              zettel={selected}
-            />
-
-            <ContextBundlePanel
-              density="drawer"
-              enableAttach
-              entityId={selected.id}
-              entityType="zettel"
-              mainSlot={(bundle) => <ContextMapMini bundle={bundle} />}
-              railDefaultLens="zettels"
-              refreshKey={`${selected.id}:${contextRefreshKey}`}
-            />
-          </div>
+          selected ? (
+            <div className="space-y-4">
+              <ZettelLinkComposer candidates={linkCandidates} currentZettelId={selected.id} disabled={isPending} onAddLink={addLink} semanticResults={semanticResults} />
+              <BacklinkPanel
+                isPending={isPending}
+                onRemoveLink={removeLink}
+                onSelectSemantic={openZettel}
+                semanticResults={semanticResults}
+                zettel={selected}
+              />
+              <ContextBundlePanel
+                density="drawer"
+                enableAttach
+                entityId={selected.id}
+                entityType="zettel"
+                mainSlot={(bundle) => <ContextMapMini bundle={bundle} />}
+                railDefaultLens="zettels"
+                refreshKey={selected.id}
+              />
+            </div>
+          ) : null
         }
         asidePosition="right"
         asideWidth="lg"
+        className="zettels-read-body"
       >
-        <div className="grid gap-4 2xl:grid-cols-[340px_minmax(0,1fr)]">
-        <GlassCard className="min-h-[640px]" priority="secondary">
-          <p className="text-xs uppercase tracking-[0.24em] text-primary">Zettelkasten</p>
-
-          <div className="mt-4 rounded-3xl border border-white/10 bg-black/10 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-primary">새 메모</p>
-          <div className="mt-3 space-y-3">
-            <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setNewTitle(event.target.value)} placeholder="메모 제목" value={newTitle} />
-            <div className="grid gap-3 md:grid-cols-2">
-              <select className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setNewType(event.target.value as "fleeting" | "literature" | "permanent" | "moc")} value={newType}>
-                <option value="fleeting">Fleeting</option>
-                <option value="literature">Literature</option>
-                <option value="permanent">Permanent</option>
-                <option value="moc">MOC</option>
-              </select>
-              <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setNewCategory(event.target.value)} placeholder="카테고리" value={newCategory} />
-            </div>
-            <button
-              className="rounded-2xl bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
-              disabled={isPending}
-              onClick={() => {
-                startTransition(async () => {
-                  try {
-                    await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                      "/api/vault/zettels",
-                      { title: newTitle, type: newType, category: newCategory },
-                      replaceSnapshot,
-                    );
-                    setNewTitle("");
-                    setNewCategory("");
-                    toast.success("새 Zettel을 만들었습니다.");
-                  } catch (error) {
-                    toast.error("메모 생성에 실패했습니다.", {
-                      description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-                    });
-                  }
-                });
-              }}
-              type="button"
-            >
-              메모 생성
-            </button>
-          </div>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {visibleZettels.length ? visibleZettels.map((zettel) => (
-              <ZettelCard
-                actions={
-                  <>
-                    <Link className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground" href={`/vault/zettels?detail=zettel:${zettel.id}`}>
-                  Drawer
-                    </Link>
-                    <button
-                      className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
-                      disabled={isPending}
-                      onClick={() => {
-                        startTransition(async () => {
-                          try {
-                            await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                              `/api/vault/zettels/${zettel.id}/delete`,
-                              undefined,
-                              replaceSnapshot,
-                            );
-                            toast.success("Zettel을 삭제했습니다.");
-                          } catch (error) {
-                            toast.error("메모 삭제에 실패했습니다.", {
-                              description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-                            });
-                          }
-                        });
-                      }}
-                      type="button"
-                    >
-                  삭제
-                    </button>
-                  </>
-                }
-                key={zettel.id}
-                onSelect={() => selectZettel(zettel.id)}
-                selected={selected.id === zettel.id}
-                zettel={zettel}
-              />
-            )) : (
-              <EmptyState description="검색어나 타입 필터를 바꾸면 다른 메모들이 다시 나타납니다." illustration="zettel" title="이 조건에 맞는 메모가 없습니다" />
-            )}
-          </div>
-        </GlassCard>
-
-        <div className="space-y-4">
-          <GlassCard priority="secondary">
-            <div className="flex items-start justify-between gap-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
+          <GlassCard className="max-h-none xl:max-h-[calc(100vh-220px)] xl:overflow-y-auto" priority="secondary">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-primary">{selected.type}</p>
-                <input
-                  className="mt-3 w-full rounded-2xl border border-transparent bg-transparent px-0 font-display text-4xl text-foreground outline-none focus:border-white/10"
-                  onChange={(event) => setTitleDraft(event.target.value)}
-                  value={titleDraft}
-                />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Tag value={selected.category} variant="custom" />
-                  <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                    {selected.related.length} related
-                  </span>
-                  {selected.documentKind ? <Tag value={selected.documentKind} variant="custom" /> : null}
-                  {selected.status ? <Tag value={selected.status} variant="status" /> : null}
-                </div>
+                <p className="text-xs uppercase tracking-[0.2em] text-primary">Notes</p>
+                <p className="mt-1 text-xs text-muted-foreground">목록은 읽기와 선택만 담당합니다.</p>
               </div>
+              <span className="rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {listedZettels.length}/{visibleZettels.length}
+              </span>
+            </div>
+            <div className="mt-4 space-y-2">
+              {listedZettels.length ? (
+                listedZettels.map((zettel) => (
+                  <ZettelCard key={zettel.id} onSelect={() => openZettel(zettel.id)} selected={selected?.id === zettel.id} zettel={zettel} />
+                ))
+              ) : (
+                <EmptyState description="검색어나 필터를 바꾸면 다른 메모들이 다시 나타납니다." illustration="zettel" title="이 조건에 맞는 메모가 없습니다" />
+              )}
+            </div>
+            {visibleLimit < visibleZettels.length ? (
               <button
-                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
-                disabled={isPending}
-                onClick={() => {
-                  startTransition(async () => {
-                    try {
-                      await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                        `/api/vault/zettels/${selected.id}/title`,
-                        { title: titleDraft },
-                        replaceSnapshot,
-                      );
-                      await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                        `/api/vault/zettels/${selected.id}/content`,
-                        { content: contentDraft },
-                        replaceSnapshot,
-                      );
-                      setContextRefreshKey((value) => value + 1);
-                      toast.success("Zettel 변경사항을 저장했습니다.");
-                    } catch (error) {
-                      toast.error("Zettel 저장에 실패했습니다.", {
-                        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-                      });
-                    }
-                  });
-                }}
+                className="focus-ring mt-4 w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground transition hover:bg-white/8"
+                onClick={() =>
+                  setVisiblePage((current) => ({
+                    key: filterKey,
+                    limit: (current.key === filterKey ? current.limit : LIST_PAGE_SIZE) + LIST_PAGE_SIZE,
+                  }))
+                }
                 type="button"
               >
-                저장
+                더 보기
               </button>
-            </div>
+            ) : null}
           </GlassCard>
 
-          <MarkdownEditor onChange={setContentDraft} value={contentDraft} />
-        </div>
+          {selected ? (
+            <ZettelReaderPane isPending={isPending} onDelete={deleteSelected} zettel={selected} />
+          ) : (
+            <EmptyState description="왼쪽 목록에서 메모를 선택해 읽기 화면을 엽니다." illustration="zettel" title="읽을 메모를 선택해 주세요" />
+          )}
         </div>
       </PageBody>
     </PageLayout>

@@ -74,6 +74,21 @@ type SourceDocumentRow = {
 };
 type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null; type: string | null };
 
+const ZETTEL_TYPES = ["fleeting", "literature", "permanent", "moc", "reference"] as const;
+
+type ZettelDetailsInput = {
+  title: string;
+  content?: string;
+  type?: string | null;
+  category?: string | null;
+  status?: string | null;
+  documentKind?: string | null;
+  originalCreatedAt?: string | null;
+  source?: string | null;
+  sourceUrl?: string | null;
+  summary?: string | null;
+};
+
 async function resolveUser() {
   const session = await requireSession();
   const found = await queryD1<UserRow>("select id from users where email = ? limit 1", [session.email]);
@@ -91,6 +106,15 @@ async function resolveUser() {
 function summarize(content: string) {
   const text = content.trim().replace(/\s+/g, " ");
   return text ? text.slice(0, 160) : "요약이 아직 없습니다.";
+}
+
+function optionalText(value: string | null | undefined) {
+  const next = value?.trim();
+  return next || null;
+}
+
+function normalizeZettelType(value: string | null | undefined): ZettelMock["type"] {
+  return ZETTEL_TYPES.includes(value as ZettelMock["type"]) ? (value as ZettelMock["type"]) : "fleeting";
 }
 
 function slugify(value: string) {
@@ -534,7 +558,7 @@ export async function updateVaultZettelContent(zettelId: string, content: string
   return getVaultSnapshot();
 }
 
-export async function createVaultZettel(input: { title: string; type?: ZettelMock["type"]; category?: string; content?: string }) {
+export async function createVaultZettel(input: ZettelDetailsInput) {
   const { id: userId } = await resolveUser();
   const title = input.title.trim();
   if (!title) throw new Error("메모 제목은 비워둘 수 없습니다.");
@@ -542,9 +566,24 @@ export async function createVaultZettel(input: { title: string; type?: ZettelMoc
   const id = ulid();
   await executeD1(
     `insert into zettels
-      (id, user_id, title, slug, content, content_text, summary, type, category, pinned, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'), datetime('now'))`,
-    [id, userId, title, `${slugify(title)}-${id.slice(-6).toLowerCase()}`, content, content, summarize(content), input.type ?? "fleeting", input.category?.trim() || "미분류"],
+      (id, user_id, title, slug, content, content_text, summary, type, category, status, document_kind, original_created_at, source, source_url, pinned, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'), datetime('now'))`,
+    [
+      id,
+      userId,
+      title,
+      `${slugify(title)}-${id.slice(-6).toLowerCase()}`,
+      content,
+      content,
+      optionalText(input.summary) ?? summarize(content),
+      normalizeZettelType(input.type),
+      optionalText(input.category) ?? "미분류",
+      optionalText(input.status) ?? "draft",
+      optionalText(input.documentKind),
+      optionalText(input.originalCreatedAt),
+      optionalText(input.source),
+      optionalText(input.sourceUrl),
+    ],
   );
   await syncTagsForEntity({
     userId,
@@ -564,6 +603,59 @@ export async function createVaultZettel(input: { title: string; type?: ZettelMoc
       selectedZettelId: id,
     },
   };
+}
+
+export async function updateVaultZettelDetails(zettelId: string, input: ZettelDetailsInput) {
+  const { id: userId } = await resolveUser();
+  const title = input.title.trim();
+  if (!title) throw new Error("메모 제목은 비워둘 수 없습니다.");
+
+  const content = input.content ?? "";
+  await executeD1(
+    `update zettels
+     set title = ?,
+         content = ?,
+         content_text = ?,
+         summary = ?,
+         type = ?,
+         category = ?,
+         status = ?,
+         document_kind = ?,
+         original_created_at = ?,
+         source = ?,
+         source_url = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [
+      title,
+      content,
+      content,
+      optionalText(input.summary) ?? summarize(content),
+      normalizeZettelType(input.type),
+      optionalText(input.category) ?? "미분류",
+      optionalText(input.status),
+      optionalText(input.documentKind),
+      optionalText(input.originalCreatedAt),
+      optionalText(input.source),
+      optionalText(input.sourceUrl),
+      zettelId,
+      userId,
+    ],
+  );
+
+  await syncTagsForEntity({
+    userId,
+    taggableType: "zettel",
+    taggableId: zettelId,
+    content,
+  });
+  await syncZettelRelationsFromContent({
+    userId,
+    zettelId,
+    content,
+  });
+
+  return getVaultSnapshot();
 }
 
 export async function deleteVaultZettel(zettelId: string) {

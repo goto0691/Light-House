@@ -416,6 +416,16 @@ button {
   top: 4rem;
 }
 
+@media (max-width: 1535px) {
+  .zettels-read-body.app-page-body-with-aside {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .zettels-read-body .app-page-aside {
+    position: static;
+  }
+}
+
 .app-grid {
   display: grid;
   gap: 1rem;
@@ -461,10 +471,6 @@ button {
 @media (max-width: 1023px) {
   [data-app-shell] {
     padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  [data-app-shell] aside {
-    position: sticky;
   }
 
   [data-app-shell] .text-5xl,

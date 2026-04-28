@@ -11,7 +11,7 @@ export type SourceDocumentInfo = {
 export type ZettelMock = {
   id: string;
   title: string;
-  type: "fleeting" | "literature" | "permanent" | "moc";
+  type: "fleeting" | "literature" | "permanent" | "moc" | "reference";
   category: string;
   summary: string;
   content: string;

@@ -9,9 +9,15 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as {
     title?: string;
-    type?: "fleeting" | "literature" | "permanent" | "moc";
+    type?: string;
     category?: string;
     content?: string;
+    status?: string;
+    documentKind?: string;
+    originalCreatedAt?: string;
+    source?: string;
+    sourceUrl?: string;
+    summary?: string;
   };
 
   const result = await createVaultZettel({
@@ -19,6 +25,12 @@ export async function POST(request: Request) {
     type: body.type,
     category: body.category,
     content: body.content,
+    status: body.status,
+    documentKind: body.documentKind,
+    originalCreatedAt: body.originalCreatedAt,
+    source: body.source,
+    sourceUrl: body.sourceUrl,
+    summary: body.summary,
   });
 
   return NextResponse.json(result);

@@ -16,7 +16,7 @@ type BacklinkPanelProps = {
 
 export function BacklinkPanel({ zettel, semanticResults, onSelectSemantic, onRemoveLink, isPending }: BacklinkPanelProps) {
   return (
-    <GlassCard className="min-h-[640px] p-5">
+    <GlassCard className="p-5">
       <p className="text-xs uppercase tracking-[0.24em] text-primary">Backlinks & Context</p>
 
       <div className="mt-5">

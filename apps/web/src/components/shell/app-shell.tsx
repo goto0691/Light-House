@@ -44,7 +44,7 @@ export function AppShell({
         <div className="fixed inset-0 -z-20 bg-[linear-gradient(180deg,_rgba(22,26,34,0.84),_rgba(14,17,22,1))]" />
         <div className="fixed inset-0 -z-10 bg-[linear-gradient(135deg,rgba(251,191,36,0.08),transparent_32%),linear-gradient(225deg,rgba(14,165,233,0.06),transparent_34%)]" />
         <div className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-40 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),transparent)]" />
-        <div className="flex min-h-screen">
+        <div className="min-h-screen lg:flex">
           <GlobalNav />
           <LocalNav domain={domain} />
           <main className="flex min-h-screen min-w-0 flex-1 flex-col overflow-x-hidden">

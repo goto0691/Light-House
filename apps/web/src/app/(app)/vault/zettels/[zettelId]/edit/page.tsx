@@ -1,0 +1,16 @@
+import { notFound } from "next/navigation";
+
+import { ZettelEditorClient } from "@/components/vault/zettel-editor-client";
+import { getVaultZettel } from "@/lib/server/vault";
+
+export default async function EditZettelPage({
+  params,
+}: {
+  params: Promise<{ zettelId: string }>;
+}) {
+  const { zettelId } = await params;
+  const zettel = await getVaultZettel(zettelId);
+  if (!zettel) notFound();
+
+  return <ZettelEditorClient mode="edit" zettelId={zettelId} />;
+}
