@@ -54,7 +54,6 @@ export default async function SettingsPage() {
             ["/settings/appearance", "Appearance"],
             ["/settings/profile", "Profile"],
             ["/settings/data", "Data"],
-            ["/settings/data/qa", "Migration QA"],
             ["/settings/integrations", "Integrations"],
             ["/settings/shortcuts", "Shortcuts"],
             ["/settings/ai", "AI"],

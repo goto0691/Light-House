@@ -34,13 +34,13 @@ export function SourceTracePanel({ bundle, onResolved }: { bundle: ContextBundle
     setError(null);
     fetch(`/api/context/source-trace?${params.toString()}`, { signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok) throw new Error("Source trace API failed");
+        if (!response.ok) throw new Error("Record trace API failed");
         return (await response.json()) as { documents: SourceTraceDocument[] };
       })
       .then((payload) => setDocuments(payload.documents))
       .catch((fetchError: unknown) => {
         if (fetchError instanceof DOMException && fetchError.name === "AbortError") return;
-        setError("원본 추적 데이터를 불러오지 못했습니다.");
+        setError("레코드 추적 데이터를 불러오지 못했습니다.");
       })
       .finally(() => setIsLoading(false));
 
@@ -54,8 +54,8 @@ export function SourceTracePanel({ bundle, onResolved }: { bundle: ContextBundle
   if (!documents.length && !sourceEdges.length && !isLoading) {
     return (
       <section className="rounded-lg border border-white/10 bg-white/5 p-4">
-        <p className="text-xs uppercase tracking-[0.18em] text-primary">Source Trace</p>
-        <p className="mt-3 text-sm text-muted-foreground">연결된 원본 문서가 아직 없습니다.</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-primary">Record Trace</p>
+        <p className="mt-3 text-sm text-muted-foreground">연결된 레코드 추적 정보가 아직 없습니다.</p>
       </section>
     );
   }
@@ -64,16 +64,16 @@ export function SourceTracePanel({ bundle, onResolved }: { bundle: ContextBundle
     <section className="rounded-lg border border-white/10 bg-white/5 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-primary">Source Trace</p>
-          <h3 className="mt-2 text-lg font-semibold text-foreground">원본 문서 변환 감사</h3>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Notion 원본 속성, canonical 변환, 관계 확정 상태를 한곳에서 확인합니다.</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-primary">Record Trace</p>
+          <h3 className="mt-2 text-lg font-semibold text-foreground">레코드 변환 감사</h3>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">속성, canonical 변환, 관계 확정 상태를 한곳에서 확인합니다.</p>
         </div>
         <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-muted-foreground">
           {documents.length} docs · {propertyCount} props · {relationCount} relations · {reviewCount} reviews
         </span>
       </div>
 
-      {isLoading ? <p className="mt-4 text-sm text-muted-foreground">원본 추적 데이터를 불러오는 중입니다.</p> : null}
+      {isLoading ? <p className="mt-4 text-sm text-muted-foreground">레코드 추적 데이터를 불러오는 중입니다.</p> : null}
       {error ? <p className="mt-4 rounded-md border border-[hsl(var(--color-feedback-warning)/0.24)] bg-[hsl(var(--color-feedback-warning)/0.08)] p-3 text-xs text-[hsl(var(--color-feedback-warning))]">{error}</p> : null}
 
       <div className="mt-4 grid gap-4">
@@ -143,7 +143,7 @@ function CanonicalMapping({ canonicalText, document }: { canonicalText?: string;
     <section className="rounded-md border border-white/10 bg-white/[0.03] p-3">
       <SectionTitle label="Canonical Mapping" count={document.canonicalEntityType ? "mapped" : "unmapped"} />
       <div className="mt-3 grid gap-2 text-xs sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-        <MappingBox label="Source" title={document.sourceDatabase ?? document.sourceType} detail={document.documentRole ?? document.sourceId} />
+        <MappingBox label="Record" title={document.sourceDatabase ?? document.sourceType} detail={document.documentRole ?? document.sourceId} />
         <span className="hidden text-muted-foreground sm:block">→</span>
         <MappingBox
           label="Canonical"
@@ -154,7 +154,7 @@ function CanonicalMapping({ canonicalText, document }: { canonicalText?: string;
       </div>
       {document.rawContentPreview ? (
         previewDuplicatesCanonical ? (
-          <p className="mt-3 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground">원본 preview는 canonical 본문과 동일하여 접었습니다.</p>
+          <p className="mt-3 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground">Preview는 canonical 본문과 동일하여 접었습니다.</p>
         ) : (
           <p className="mt-3 line-clamp-3 text-xs leading-5 text-muted-foreground">{document.rawContentPreview}</p>
         )
@@ -196,7 +196,7 @@ function RawProperties({ canonicalText, document }: { canonicalText?: string; do
           </table>
         </div>
       ) : (
-        <p className="mt-3 text-xs text-muted-foreground">저장된 원본 속성이 없습니다.</p>
+        <p className="mt-3 text-xs text-muted-foreground">저장된 속성이 없습니다.</p>
       )}
     </section>
   );
@@ -242,7 +242,7 @@ function SourceRelations({
 }) {
   return (
     <section className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <SectionTitle label="Source Relations" count={`${document.relations.length}`} />
+      <SectionTitle label="Record Relations" count={`${document.relations.length}`} />
       {document.relations.length ? (
         <div className="mt-3 grid gap-2">
           {document.relations.map((relation) => (
@@ -250,7 +250,7 @@ function SourceRelations({
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-xs font-medium text-foreground">{relation.relationName}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{relation.targetTitle ?? relation.targetSourceId ?? "대상 원본 없음"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{relation.targetTitle ?? relation.targetSourceId ?? "대상 레코드 없음"}</p>
                 </div>
                 <StatusBadge status={relation.resolvedEntityType && relation.resolvedEntityId ? "resolved" : "unresolved"} />
               </div>
@@ -267,7 +267,7 @@ function SourceRelations({
           ))}
         </div>
       ) : (
-        <p className="mt-3 text-xs text-muted-foreground">원본 문서에 기록된 relation 속성이 없습니다.</p>
+        <p className="mt-3 text-xs text-muted-foreground">레코드에 기록된 relation 속성이 없습니다.</p>
       )}
     </section>
   );
@@ -454,7 +454,7 @@ function SourceRelationResolver({
 
   return (
     <div className="rounded-md border border-[hsl(var(--color-feedback-warning)/0.24)] bg-[hsl(var(--color-feedback-warning)/0.08)] p-3">
-      <p className="text-xs font-medium text-[hsl(var(--color-feedback-warning))]">원본 관계 확정</p>
+      <p className="text-xs font-medium text-[hsl(var(--color-feedback-warning))]">관계 확정</p>
       <input
         className="mt-2 w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs text-foreground outline-none"
         onChange={(event) => setQuery(event.target.value)}

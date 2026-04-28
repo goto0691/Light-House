@@ -1,10 +1,10 @@
 import "server-only";
 
 import { cache } from "react";
-import type { CareerLog, DailyLogMock, HabitDefinition, HealthMetric, WorkoutLog } from "@/lib/mock/life-ops";
+import type { CareerLog, DailyEntry, DailyLogMock, HabitDefinition, HealthMetric, WorkoutLog } from "@/lib/mock/life-ops";
 import type { SourceDocumentInfo } from "@/lib/mock/vault";
 import { getTodayString } from "@/lib/mock/life-ops";
-import { getSession } from "@/lib/auth/session";
+import { requireSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
 import { syncTagsForEntity } from "@/lib/server/tagging";
 import { ulid } from "ulidx";
@@ -28,6 +28,19 @@ type DailyLogRow = {
   journal: string | null;
   meditation: string | null;
   meditationVerse: string | null;
+};
+type DailyEntryRow = {
+  id: string;
+  kind: DailyEntry["kind"];
+  title: string | null;
+  date: string;
+  body: string | null;
+  emotion: string | null;
+  eventSummary: string | null;
+  verse: string | null;
+  background: string | null;
+  tagsSnapshot: string | null;
+  sourceDocumentId: string | null;
 };
 type HabitStateRow = {
   id: string;
@@ -64,15 +77,29 @@ type TimelineRow = {
   type: string;
 };
 type SourceDocumentRow = { id: string; sourceDatabase: string | null; sourceId: string; documentRole: string | null; status: string; preview: string | null };
-type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null };
+type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null; type: string | null };
 type DailyPersonRow = {
   date: string;
   time: string;
   label: string;
   type: string;
 };
+type DailyEntryPersonRelationRow = {
+  dailyEntryId: string;
+  personId: string;
+  name: string;
+  context: string | null;
+};
+type DailyArchiveLogRow = {
+  id: string;
+  date: string;
+  journal: string | null;
+  meditation: string | null;
+  meditationVerse: string | null;
+};
 type WorkoutRow = {
   id: string;
+  title: string | null;
   date: string;
   categories: string;
   durationMinutes: number | null;
@@ -81,6 +108,7 @@ type WorkoutRow = {
 };
 type CareerRow = {
   id: string;
+  sourceDocumentId: string | null;
   organization: string;
   role: string;
   category: string;
@@ -98,9 +126,19 @@ function parseJsonArray(value: string | null) {
   }
 }
 
+function dailyEntryFallbackTitle(kind: DailyEntry["kind"]) {
+  const titles: Record<DailyEntry["kind"], string> = {
+    journal: "일기",
+    meditation: "묵상",
+    sermon_note: "설교 노트",
+    workout: "운동 기록",
+    note: "기록",
+  };
+  return titles[kind];
+}
+
 async function resolveUser() {
-  const session = await getSession();
-  if (!session) throw new Error("세션이 없습니다.");
+  const session = await requireSession();
   const found = await queryD1<UserRow>("select id from users where email = ? limit 1", [session.email]);
   const existing = found.rows[0];
   if (existing) return { id: existing.id, session };
@@ -212,7 +250,7 @@ async function getSourceDocumentForEntity(userId: string, entityType: string, en
   const row = sourceDocument.rows[0];
   if (!row) return null;
   const properties = await queryD1<SourceDocumentPropertyRow>(
-    `select source_document_id as sourceDocumentId, property_name as name, value_text as value
+    `select source_document_id as sourceDocumentId, property_name as name, value_text as value, property_type as type
      from source_document_properties
      where source_document_id = ?
      order by property_key`,
@@ -225,8 +263,35 @@ async function getSourceDocumentForEntity(userId: string, entityType: string, en
     documentRole: row.documentRole,
     status: row.status,
     preview: row.preview,
-    properties: properties.rows.filter((property) => property.value).map((property) => ({ name: property.name, value: property.value! })),
+    properties: properties.rows.filter((property) => property.value).map((property) => ({ name: property.name, value: property.value!, type: property.type })),
   };
+}
+
+async function getPeopleForDailyEntries(userId: string, dailyEntryIds: string[]) {
+  if (!dailyEntryIds.length) return new Map<string, DailyEntry["people"]>();
+  const placeholders = dailyEntryIds.map(() => "?").join(", ");
+  const result = await queryD1<DailyEntryPersonRelationRow>(
+    `select
+       depr.daily_entry_id as dailyEntryId,
+       p.id as personId,
+       p.name,
+       depr.context
+     from daily_entry_people_relations depr
+     inner join people p on p.id = depr.person_id
+     where depr.daily_entry_id in (${placeholders})
+       and p.user_id = ?
+       and p.deleted_at is null
+     order by p.name asc`,
+    [...dailyEntryIds, userId],
+  );
+
+  const byEntry = new Map<string, DailyEntry["people"]>();
+  for (const row of result.rows) {
+    const people = byEntry.get(row.dailyEntryId) ?? [];
+    people.push({ id: row.personId, name: row.name, context: row.context });
+    byEntry.set(row.dailyEntryId, people);
+  }
+  return byEntry;
 }
 
 export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnapshot> {
@@ -246,19 +311,19 @@ export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?
       [userId],
     ),
     queryD1<WorkoutRow>(
-      `select id, date, categories, duration_minutes as durationMinutes, intensity, notes
+      `select id, title, date, categories, duration_minutes as durationMinutes, intensity, notes
        from workouts where user_id = ? and deleted_at is null order by date desc`,
       [userId],
     ),
     queryD1<CareerRow>(
-      `select id, organization, role, category, start_date as startDate, end_date as endDate, description
+      `select id, source_document_id as sourceDocumentId, organization, role, category, start_date as startDate, end_date as endDate, description
        from career_history where user_id = ? and deleted_at is null order by start_date desc`,
       [userId],
     ),
   ]);
 
   const dailyEntries = await Promise.all(targetDates.map(async (date) => {
-    const [dailyResult, habitsStateResult, metricsResult, taskTimeline, interactionTimeline, zettelTimeline, dailyPeopleTimeline] = await Promise.all([
+    const [dailyResult, habitsStateResult, metricsResult, dailyEntryResult, taskTimeline, interactionTimeline, zettelTimeline, dailyPeopleTimeline] = await Promise.all([
         queryD1<DailyLogRow>(
           `select id, date, mood, energy_level as energyLevel, emotions, gratitude, journal, meditation, meditation_verse as meditationVerse
            from daily_logs where user_id = ? and date = ? limit 1`,
@@ -268,6 +333,14 @@ export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?
         queryD1<HealthMetricRow>(
           `select id, date, sleep_hours as sleepHours, deep_work_minutes as deepWorkMinutes, weight, steps_count as stepsCount
            from health_metrics where user_id = ? and date <= ? order by date desc limit 14`,
+          [userId, date],
+        ),
+        queryD1<DailyEntryRow>(
+          `select id, kind, title, date, body, emotion, event_summary as eventSummary, verse, background,
+                  tags_snapshot as tagsSnapshot, source_document_id as sourceDocumentId
+           from daily_log_entries
+           where user_id = ? and date = ? and deleted_at is null
+           order by case kind when 'journal' then 0 when 'meditation' then 1 when 'sermon_note' then 2 when 'workout' then 3 else 4 end, created_at asc`,
           [userId, date],
         ),
         queryD1<TimelineRow>(
@@ -303,6 +376,10 @@ export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?
       const row = dailyResult.rows[0];
       const sourceDocument = row ? await getSourceDocumentForEntity(userId, "daily_log", row.id) : null;
       const metrics = metricsResult.rows;
+      const entrySourceDocuments = await Promise.all(
+        dailyEntryResult.rows.map((entry) => getSourceDocumentForEntity(userId, "daily_entry", entry.id)),
+      );
+      const peopleByEntry = await getPeopleForDailyEntries(userId, dailyEntryResult.rows.map((entry) => entry.id));
       return [date, {
       date,
       mood: row?.mood ?? 3,
@@ -318,6 +395,20 @@ export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?
         icon: habit.icon ?? "•",
         streak: Number(habit.streak ?? 0),
         completedToday: Boolean(habit.completedToday),
+      })),
+      entries: dailyEntryResult.rows.map((entry, index) => ({
+        id: entry.id,
+        kind: entry.kind,
+        title: entry.title ?? dailyEntryFallbackTitle(entry.kind),
+        date: entry.date,
+        body: entry.body ?? "",
+        emotion: entry.emotion,
+        eventSummary: entry.eventSummary,
+        verse: entry.verse,
+        background: entry.background,
+        tagsSnapshot: entry.tagsSnapshot,
+        people: peopleByEntry.get(entry.id) ?? [],
+        sourceDocument: entrySourceDocuments[index],
       })),
       sleepHours: metrics.map((item) => Number(item.sleepHours ?? 0)).reverse(),
       deepWorkMinutes: Number(metrics[0]?.deepWorkMinutes ?? 0),
@@ -346,7 +437,7 @@ export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?
     workouts: workoutsResult.rows.map((row) => ({
       id: row.id,
       date: row.date,
-      categories: row.categories,
+      categories: row.title ?? row.categories,
       duration: Number(row.durationMinutes ?? 0),
       intensity: Number(row.intensity ?? 0),
       notes: row.notes ?? "",
@@ -373,6 +464,80 @@ export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?
 export async function getLifeOpsLog(date: string) {
   const snapshot = await getLifeOpsSnapshot([date]);
   return snapshot.logs[date] ?? null;
+}
+
+export async function getDailyEntryArchive(kind?: DailyEntry["kind"]): Promise<DailyEntry[]> {
+  const { id: userId } = await resolveUser();
+  const filters = kind ? "and kind = ?" : "";
+  const params = kind ? [userId, kind] : [userId];
+  const entryResult = await queryD1<DailyEntryRow>(
+    `select id, kind, title, date, body, emotion, event_summary as eventSummary, verse, background,
+            tags_snapshot as tagsSnapshot, source_document_id as sourceDocumentId
+     from daily_log_entries
+     where user_id = ? and deleted_at is null ${filters}
+     order by date desc, created_at desc`,
+    params,
+  );
+  const sourceDocuments = await Promise.all(
+    entryResult.rows.map((entry) => getSourceDocumentForEntity(userId, "daily_entry", entry.id)),
+  );
+  const peopleByEntry = await getPeopleForDailyEntries(userId, entryResult.rows.map((entry) => entry.id));
+
+  const entries: DailyEntry[] = entryResult.rows.map((entry, index) => ({
+    id: entry.id,
+    kind: entry.kind,
+    title: entry.title ?? dailyEntryFallbackTitle(entry.kind),
+    date: entry.date,
+    body: entry.body ?? "",
+    emotion: entry.emotion,
+    eventSummary: entry.eventSummary,
+    verse: entry.verse,
+    background: entry.background,
+    tagsSnapshot: entry.tagsSnapshot,
+    people: peopleByEntry.get(entry.id) ?? [],
+    sourceDocument: sourceDocuments[index],
+  }));
+
+  if (!kind || kind === "journal" || kind === "meditation") {
+    const logResult = await queryD1<DailyArchiveLogRow>(
+      `select id, date, journal, meditation, meditation_verse as meditationVerse
+       from daily_logs
+       where user_id = ? and deleted_at is null
+       order by date desc`,
+      [userId],
+    );
+    const logRows = logResult.rows.filter((row) => {
+      if (kind === "journal") return Boolean(row.journal?.trim());
+      if (kind === "meditation") return Boolean(row.meditation?.trim());
+      return Boolean(row.journal?.trim() || row.meditation?.trim());
+    });
+    const logSources = await Promise.all(logRows.map((row) => getSourceDocumentForEntity(userId, "daily_log", row.id)));
+    for (const [index, row] of logRows.entries()) {
+      if ((!kind || kind === "journal") && row.journal?.trim()) {
+        entries.push({
+          id: `${row.id}:journal`,
+          kind: "journal",
+          title: "Daily Journal",
+          date: row.date,
+          body: row.journal,
+          sourceDocument: logSources[index],
+        });
+      }
+      if ((!kind || kind === "meditation") && row.meditation?.trim()) {
+        entries.push({
+          id: `${row.id}:meditation`,
+          kind: "meditation",
+          title: "Daily Meditation",
+          date: row.date,
+          body: row.meditation,
+          verse: row.meditationVerse,
+          sourceDocument: logSources[index],
+        });
+      }
+    }
+  }
+
+  return entries.sort((left, right) => (left.date < right.date ? 1 : left.date > right.date ? -1 : left.title.localeCompare(right.title)));
 }
 
 export async function getLifeOpsTrendSeries(limit = 7) {
@@ -513,6 +678,65 @@ export async function updateLifeOpsJournalField(date: string, field: "journal" |
     });
   }
   return getLifeOpsSnapshot([date]);
+}
+
+export async function updateDailyEntry(entryId: string, input: {
+  kind?: DailyEntryRow["kind"];
+  title?: string | null;
+  body?: string | null;
+  emotion?: string | null;
+  eventSummary?: string | null;
+  verse?: string | null;
+  background?: string | null;
+  tagsSnapshot?: string | null;
+}) {
+  const { id: userId } = await resolveUser();
+  const existing = await queryD1<{ id: string; date: string }>(
+    `select id, date
+     from daily_log_entries
+     where id = ? and user_id = ? and deleted_at is null
+     limit 1`,
+    [entryId, userId],
+  );
+  const row = existing.rows[0];
+  if (!row) throw new Error("일일 엔트리를 찾지 못했습니다.");
+
+  const nullableText = (value: string | null | undefined) => value?.trim() || null;
+  const kind = ["journal", "meditation", "sermon_note", "workout", "note"].includes(input.kind ?? "") ? input.kind : "journal";
+
+  await executeD1(
+    `update daily_log_entries
+     set kind = ?,
+         title = ?,
+         body = ?,
+         emotion = ?,
+         event_summary = ?,
+         verse = ?,
+         background = ?,
+         tags_snapshot = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [
+      kind,
+      nullableText(input.title),
+      nullableText(input.body),
+      nullableText(input.emotion),
+      nullableText(input.eventSummary),
+      nullableText(input.verse),
+      nullableText(input.background),
+      nullableText(input.tagsSnapshot),
+      entryId,
+      userId,
+    ],
+  );
+
+  await syncTagsForEntity({
+    userId,
+    taggableType: "daily_entry",
+    taggableId: entryId,
+    content: [input.title ?? "", input.body ?? "", input.emotion ?? "", input.eventSummary ?? "", input.verse ?? "", input.background ?? "", input.tagsSnapshot ?? ""].join("\n"),
+  });
+  return getLifeOpsSnapshot([row.date]);
 }
 
 export async function createLifeOpsHabit(input: { title: string; description?: string; icon?: string; schedule?: string }) {

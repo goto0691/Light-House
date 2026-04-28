@@ -1,7 +1,8 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import { id, timestamps, userId } from "./_helpers";
 import { people } from "./prm";
+import { sourceDocuments } from "./shared";
 import { zettels } from "./vault";
 
 export const projects = sqliteTable(
@@ -11,6 +12,7 @@ export const projects = sqliteTable(
     userId: userId(),
     notionSourceId: text("notion_source_id"),
     importBatchId: text("import_batch_id"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
     title: text("title").notNull(),
     slug: text("slug").notNull(),
     description: text("description"),
@@ -19,6 +21,9 @@ export const projects = sqliteTable(
     kind: text("kind").notNull().default("project"),
     status: text("status").notNull().default("active"),
     category: text("category"),
+    importance: text("importance"),
+    brainEnergy: text("brain_energy"),
+    artifactUrl: text("artifact_url"),
     startDate: text("start_date"),
     targetDate: text("target_date"),
     progress: integer("progress").default(0),
@@ -30,6 +35,55 @@ export const projects = sqliteTable(
     userStatusIndex: index("idx_proj_user_status").on(table.userId, table.status),
     slugUnique: index("idx_proj_slug").on(table.userId, table.slug),
     notionSourceIndex: index("idx_proj_notion_source").on(table.userId, table.notionSourceId),
+    sourceDocumentIndex: index("idx_proj_source_document").on(table.sourceDocumentId),
+  }),
+);
+
+export const projectPeopleRelations = sqliteTable(
+  "project_people_relations",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    personId: text("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
+    roleContext: text("role_context"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    confidence: real("confidence"),
+    rawValue: text("raw_value"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    pk: index("pk_project_people").on(table.projectId, table.personId),
+    personIndex: index("idx_project_people_person").on(table.personId),
+    sourceDocumentIndex: index("idx_project_people_source_document").on(table.sourceDocumentId),
+  }),
+);
+
+export const projectZettelRelations = sqliteTable(
+  "project_zettel_relations",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    zettelId: text("zettel_id")
+      .notNull()
+      .references(() => zettels.id, { onDelete: "cascade" }),
+    context: text("context"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    confidence: real("confidence"),
+    rawValue: text("raw_value"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    pk: index("pk_project_zettel").on(table.projectId, table.zettelId),
+    zettelIndex: index("idx_project_zettel_zettel").on(table.zettelId),
+    sourceDocumentIndex: index("idx_project_zettel_source_document").on(table.sourceDocumentId),
   }),
 );
 
@@ -94,12 +148,16 @@ export const taskPeopleRelations = sqliteTable(
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
     roleContext: text("role_context"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    confidence: real("confidence"),
+    rawValue: text("raw_value"),
     createdAt: text("created_at")
       .notNull()
       .$defaultFn(() => new Date().toISOString()),
   },
   (table) => ({
     pk: index("pk_task_people").on(table.taskId, table.personId),
+    sourceDocumentIndex: index("idx_task_people_source_document").on(table.sourceDocumentId),
   }),
 );
 
@@ -112,11 +170,15 @@ export const taskZettelRelations = sqliteTable(
     zettelId: text("zettel_id")
       .notNull()
       .references(() => zettels.id, { onDelete: "cascade" }),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    confidence: real("confidence"),
+    rawValue: text("raw_value"),
     createdAt: text("created_at")
       .notNull()
       .$defaultFn(() => new Date().toISOString()),
   },
   (table) => ({
     pk: index("pk_task_zettel").on(table.taskId, table.zettelId),
+    sourceDocumentIndex: index("idx_task_zettel_source_document").on(table.sourceDocumentId),
   }),
 );

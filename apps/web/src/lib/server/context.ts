@@ -115,8 +115,6 @@ type PersonIdentityRow = {
   name: string;
   groups: string | null;
   birthDate: string | null;
-  notionSourceId: string | null;
-  sourceId: string | null;
 };
 
 type EdgeInput = {
@@ -211,6 +209,8 @@ function hrefFor(type: EntityType, id: string) {
       return `/life-ops/career/${id}`;
     case "daily_log":
       return `/life-ops/${id}`;
+    case "daily_entry":
+      return `/life-ops/entries`;
     case "source_document":
       return `/settings/data?source=${id}`;
     case "tag":
@@ -994,11 +994,8 @@ async function personIdentityLabels(userId: string, ids: string[]) {
   const uniqueIds = [...new Set(ids)].filter(Boolean);
   if (!uniqueIds.length) return new Map<string, string>();
   const rows = await queryD1<PersonIdentityRow>(
-    `select p.id, p.name, p.groups, p.birth_date as birthDate, p.notion_source_id as notionSourceId, sd.source_id as sourceId
+    `select p.id, p.name, p.groups, p.birth_date as birthDate
      from people p
-     left join source_documents sd on sd.canonical_entity_type = 'person'
-      and sd.canonical_entity_id = p.id
-      and sd.deleted_at is null
      where p.user_id = ?
        and p.deleted_at is null
        and p.id in (${uniqueIds.map(() => "?").join(",")})`,
@@ -1011,8 +1008,7 @@ async function personIdentityLabels(userId: string, ids: string[]) {
   return new Map(
     rows.rows.map((row) => {
       const groups = parseJsonList(row.groups).slice(0, 2).join(" · ");
-      const sourceId = row.sourceId ?? row.notionSourceId;
-      const parts = [row.birthDate ? `생일 ${row.birthDate}` : null, groups || null, sourceId ? `source ${sourceId}` : null].filter(Boolean);
+      const parts = [row.birthDate ? `생일 ${row.birthDate}` : null, groups || null].filter(Boolean);
       const label = nameCounts.get(row.name)! > 1 ? parts.join(" · ") || `ID ${row.id}` : parts.slice(0, 2).join(" · ");
       return [row.id, label || `ID ${row.id}`];
     }),
@@ -1033,7 +1029,7 @@ export async function getContextBundle(type: EntityType, id: string, options: Co
       for (const personName of task.linkedPeople) {
         const person = indexes.peopleByName.get(personName);
         const target = node("person", person?.id ?? `person-name:${personName}`, personName, {
-          subtitle: person ? person.groups.join(" · ") : "원본 관계 후보",
+          subtitle: person ? person.groups.join(" · ") : "관계 후보",
           tone: person ? "info" : "warning",
         });
         nodes.push(target);
@@ -1042,7 +1038,7 @@ export async function getContextBundle(type: EntityType, id: string, options: Co
       for (const title of task.linkedZettels) {
         const zettel = indexes.zettelsByTitle.get(title);
         const target = node("zettel", zettel?.id ?? `zettel-title:${title}`, title, {
-          subtitle: zettel?.category ?? "원본 관계 후보",
+          subtitle: zettel?.category ?? "관계 후보",
           preview: zettel?.summary,
           tone: zettel ? "gold" : "warning",
         });
@@ -1182,7 +1178,7 @@ export async function getContextBundle(type: EntityType, id: string, options: Co
   const source = await getSourceDocuments(user.id, type, id);
   for (const document of source.documents) {
     const target = node("source_document", document.id, document.title, {
-      subtitle: `${document.sourceDatabase ?? "Notion"} · ${document.status}`,
+      subtitle: `${document.sourceDatabase ?? "External Source"} · ${document.status}`,
       preview: document.preview ?? document.sourceId,
       tone: "muted",
     });
@@ -1190,7 +1186,7 @@ export async function getContextBundle(type: EntityType, id: string, options: Co
     edges.push(edge({
       from: focus,
       to: target,
-      label: "source document",
+      label: "record trace",
       kind: "source",
       confidence: 1,
       evidence: [{ source: "source_document", table: "source_documents", sourceDocumentId: document.id, snippet: document.preview ?? undefined }],
@@ -1201,7 +1197,7 @@ export async function getContextBundle(type: EntityType, id: string, options: Co
     const resolved = relation.resolvedEntityType && relation.resolvedEntityId;
     const target = resolved
       ? node(relation.resolvedEntityType!, relation.resolvedEntityId!, relation.targetTitle ?? relation.resolvedEntityId!, { subtitle: relation.relationName, tone: "info" })
-      : node("source_document", `unresolved:${relation.id}`, relation.targetTitle ?? relation.targetSourceId ?? "미해결 원본 관계", { subtitle: relation.relationName, tone: "warning" });
+      : node("source_document", `unresolved:${relation.id}`, relation.targetTitle ?? relation.targetSourceId ?? "미해결 관계", { subtitle: relation.relationName, tone: "warning" });
     nodes.push(target);
     edges.push(edge({
       from: focus,
@@ -1231,7 +1227,7 @@ export async function getContextBundle(type: EntityType, id: string, options: Co
     edges.push(edge({
       from: focus,
       to: target,
-      label: "migration review",
+      label: "record review",
       kind: "inferred",
       confidence: Number(review.confidence ?? 0.4),
       evidence: [{ source: "ai", table: "migration_review_items", snippet: review.suggestedAction }],
@@ -1542,18 +1538,18 @@ export async function createCanonicalEntityAndAttach(input: CreateCanonicalEntit
     await executeD1(
       `insert into people (id, user_id, name, groups, dunbar_layer, status, is_favorite, created_at, updated_at)
        values (?, ?, ?, ?, 50, 'active', 0, datetime('now'), datetime('now'))`,
-      [id, user.id, title, JSON.stringify(["migration"])],
+      [id, user.id, title, JSON.stringify(["context"])],
     );
   } else if (input.targetType === "zettel") {
     await executeD1(
       `insert into zettels (id, user_id, title, slug, content, content_text, summary, type, category, pinned, created_at, updated_at)
-       values (?, ?, ?, ?, '', '', '', 'fleeting', 'migration', 0, datetime('now'), datetime('now'))`,
+       values (?, ?, ?, ?, '', '', '', 'fleeting', 'linked', 0, datetime('now'), datetime('now'))`,
       [id, user.id, title, `${slugify(title)}-${id.slice(-6).toLowerCase()}`],
     );
   } else if (input.targetType === "project") {
     await executeD1(
       `insert into projects (id, user_id, title, slug, icon, color, kind, status, category, progress, pinned, display_order, created_at, updated_at)
-       values (?, ?, ?, ?, 'LH', 'gold', 'project', 'active', 'migration', 0, 0, 0, datetime('now'), datetime('now'))`,
+       values (?, ?, ?, ?, 'LH', 'gold', 'project', 'active', 'context', 0, 0, 0, datetime('now'), datetime('now'))`,
       [id, user.id, title, `${slugify(title)}-${id.slice(-6).toLowerCase()}`],
     );
   } else if (input.targetType === "media") {

@@ -2,6 +2,7 @@ import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core
 
 import { id, timestamps, userId } from "./_helpers";
 import { people } from "./prm";
+import { sourceDocuments } from "./shared";
 
 export const zettels = sqliteTable(
   "zettels",
@@ -10,6 +11,7 @@ export const zettels = sqliteTable(
     userId: userId(),
     notionSourceId: text("notion_source_id"),
     importBatchId: text("import_batch_id"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
     title: text("title").notNull(),
     slug: text("slug").notNull(),
     content: text("content"),
@@ -17,6 +19,9 @@ export const zettels = sqliteTable(
     summary: text("summary"),
     type: text("type").notNull().default("fleeting"),
     category: text("category"),
+    status: text("status"),
+    documentKind: text("document_kind"),
+    originalCreatedAt: text("original_created_at"),
     source: text("source"),
     sourceUrl: text("source_url"),
     vectorId: text("vector_id"),
@@ -28,6 +33,7 @@ export const zettels = sqliteTable(
     userTypeIndex: index("idx_zettel_user_type").on(table.userId, table.type),
     slugUnique: index("idx_zettel_slug").on(table.userId, table.slug),
     notionSourceIndex: index("idx_zettel_notion_source").on(table.userId, table.notionSourceId),
+    sourceDocumentIndex: index("idx_zettel_source_document").on(table.sourceDocumentId),
   }),
 );
 
@@ -59,9 +65,11 @@ export const mediaLogs = sqliteTable(
     userId: userId(),
     notionSourceId: text("notion_source_id"),
     importBatchId: text("import_batch_id"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
     mediaType: text("media_type").notNull(),
     title: text("title").notNull(),
     originalTitle: text("original_title"),
+    subtype: text("subtype"),
     platformOrPublisher: text("platform_or_publisher"),
     creator: text("creator"),
     studio: text("studio"),
@@ -72,12 +80,14 @@ export const mediaLogs = sqliteTable(
     evaluation: text("evaluation"),
     review: text("review"),
     content: text("content"),
+    relationNote: text("relation_note"),
     playTime: integer("play_time"),
     author: text("author"),
     pages: integer("pages"),
     screenKind: text("screen_kind"),
     rewatchValue: integer("rewatch_value", { mode: "boolean" }).default(false),
     coverImageUrl: text("cover_image_url"),
+    loggedAt: text("logged_at"),
     startedAt: text("started_at"),
     completedAt: text("completed_at"),
     ...timestamps,
@@ -85,6 +95,7 @@ export const mediaLogs = sqliteTable(
   (table) => ({
     userTypeStatusIndex: index("idx_media_user_type_status").on(table.userId, table.mediaType, table.status),
     notionSourceIndex: index("idx_media_notion_source").on(table.userId, table.notionSourceId),
+    sourceDocumentIndex: index("idx_media_source_document").on(table.sourceDocumentId),
   }),
 );
 
@@ -144,12 +155,16 @@ export const zettelMediaRelations = sqliteTable(
     mediaId: text("media_id")
       .notNull()
       .references(() => mediaLogs.id, { onDelete: "cascade" }),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    confidence: real("confidence"),
+    rawValue: text("raw_value"),
     createdAt: text("created_at")
       .notNull()
       .$defaultFn(() => new Date().toISOString()),
   },
   (table) => ({
     pk: index("pk_zettel_media").on(table.zettelId, table.mediaId),
+    sourceDocumentIndex: index("idx_zettel_media_source_document").on(table.sourceDocumentId),
   }),
 );
 
@@ -163,12 +178,16 @@ export const zettelPeopleRelations = sqliteTable(
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
     context: text("context"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    confidence: real("confidence"),
+    rawValue: text("raw_value"),
     createdAt: text("created_at")
       .notNull()
       .$defaultFn(() => new Date().toISOString()),
   },
   (table) => ({
     pk: index("pk_zettel_people").on(table.zettelId, table.personId),
+    sourceDocumentIndex: index("idx_zettel_people_source_document").on(table.sourceDocumentId),
   }),
 );
 
@@ -180,6 +199,9 @@ export const mediaPeopleRelations = sqliteTable("media_people_relations", {
     .notNull()
     .references(() => people.id, { onDelete: "cascade" }),
   context: text("context"),
+  sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+  confidence: real("confidence"),
+  rawValue: text("raw_value"),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),

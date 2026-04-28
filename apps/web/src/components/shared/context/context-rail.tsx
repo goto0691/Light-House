@@ -15,7 +15,7 @@ const LENSES: Array<{ key: ContextLensKey; label: string }> = [
   { key: "media", label: "미디어" },
   { key: "dates", label: "기록" },
   { key: "places", label: "장소" },
-  { key: "source", label: "원본" },
+  { key: "source", label: "속성" },
   { key: "unresolved", label: "검토" },
 ];
 

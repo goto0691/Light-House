@@ -3,6 +3,7 @@
 > **선행 문서**: [`02_DESIGN_SYSTEM.md`](./02_DESIGN_SYSTEM.md)
 > **대상**: Backend 에이전트
 > **원칙**: 단일 진실 공급원(SSOT). 모든 스키마는 `packages/db/schema/*.ts`에 정의하고 프론트에서 `@repo/db/schema`로 import한다.
+> **AS-IS 보강 기준**: 원본 속성 기반의 다음 스키마 보강은 [`13_ASIS_TO_BE_SCHEMA_ALIGNMENT.md`](./13_ASIS_TO_BE_SCHEMA_ALIGNMENT.md)를 먼저 반영한다.
 
 ---
 

@@ -11,13 +11,14 @@ const TYPE_LABELS: Record<ContextNode["type"], string> = {
   media: "Media",
   person: "Person",
   daily_log: "Day",
+  daily_entry: "Daily Entry",
   workout: "Workout",
   career: "Career",
   gift: "Gift",
   interaction: "Interaction",
   place: "Place",
   asset: "Asset",
-  source_document: "Source",
+  source_document: "Record",
   tag: "Tag",
 };
 
@@ -32,7 +33,7 @@ export function ContextNodeCard({
   onOpen?: (node: ContextNode) => void;
   compact?: boolean;
 }) {
-  const identityLabel = node.disambiguationLabel ?? (node.type === "person" && node.sourceDocumentId ? `source ${node.sourceDocumentId}` : node.subtitle);
+  const identityLabel = node.disambiguationLabel ?? (node.type === "person" && node.sourceDocumentId ? `record ${node.sourceDocumentId}` : node.subtitle);
   const content = (
     <>
       <div className="flex min-w-0 items-start justify-between gap-3">

@@ -1,12 +1,62 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
+import type { PersonMock } from "@/lib/mock/prm";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { usePRMStore } from "@/stores/use-prm-store";
+
+type PersonProfileForm = {
+  name: string;
+  nickname: string;
+  aliases: string;
+  birthDate: string;
+  birthdayMemo: string;
+  groups: string;
+  dunbarLayer: string;
+  intimacy: string;
+  coreValue: string;
+  bio: string;
+  profileBody: string;
+  contactCadenceDays: string;
+  phone: string;
+  email: string;
+  address: string;
+  socialLinks: string;
+  status: PersonMock["status"];
+};
+
+function buildProfileForm(person: PersonMock): PersonProfileForm {
+  return {
+    name: person.name,
+    nickname: person.nickname ?? "",
+    aliases: person.aliases ?? "",
+    birthDate: person.birthDate?.slice(0, 10) ?? "",
+    birthdayMemo: person.birthdayMemo ?? "",
+    groups: person.groups.join(", "),
+    dunbarLayer: String(person.layer),
+    intimacy: person.intimacy ? String(person.intimacy) : "",
+    coreValue: person.coreValue === "기록 중" ? "" : person.coreValue,
+    bio: person.bio === "설명이 아직 없습니다." ? "" : person.bio,
+    profileBody: person.profileBody ?? "",
+    contactCadenceDays: String(person.cadenceDays),
+    phone: person.phone ?? "",
+    email: person.email ?? "",
+    address: person.address ?? "",
+    socialLinks: person.socialLinks ?? "",
+    status: person.status,
+  };
+}
+
+function optionalNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export function PersonDrawer({ id }: { id: string }) {
   const [isPending, startTransition] = useTransition();
@@ -17,6 +67,11 @@ export function PersonDrawer({ id }: { id: string }) {
   const [interactionType, setInteractionType] = useState("message");
   const [giftTitle, setGiftTitle] = useState("");
   const [giftDirection, setGiftDirection] = useState<"given" | "received">("given");
+  const [profileForm, setProfileForm] = useState<PersonProfileForm | null>(person ? buildProfileForm(person) : null);
+
+  useEffect(() => {
+    setProfileForm(person ? buildProfileForm(person) : null);
+  }, [person]);
 
   if (!person) {
     return (
@@ -25,6 +80,42 @@ export function PersonDrawer({ id }: { id: string }) {
       </section>
     );
   }
+
+  const saveProfile = () => {
+    if (!profileForm) return;
+    startTransition(async () => {
+      try {
+        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+          `/api/prm/people/${id}/profile`,
+          {
+            name: profileForm.name,
+            nickname: profileForm.nickname,
+            aliases: profileForm.aliases,
+            birthDate: profileForm.birthDate,
+            birthdayMemo: profileForm.birthdayMemo,
+            groups: profileForm.groups.split(",").map((group) => group.trim()).filter(Boolean),
+            dunbarLayer: optionalNumber(profileForm.dunbarLayer),
+            intimacy: optionalNumber(profileForm.intimacy),
+            coreValue: profileForm.coreValue,
+            bio: profileForm.bio,
+            profileBody: profileForm.profileBody,
+            contactCadenceDays: optionalNumber(profileForm.contactCadenceDays),
+            phone: profileForm.phone,
+            email: profileForm.email,
+            address: profileForm.address,
+            socialLinks: profileForm.socialLinks,
+            status: profileForm.status,
+          },
+          replaceSnapshot,
+        );
+        toast.success("인물 프로필을 저장했습니다.");
+      } catch (error) {
+        toast.error("인물 프로필 저장에 실패했습니다.", {
+          description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+        });
+      }
+    });
+  };
 
   return (
     <ContextBundlePanel
@@ -177,14 +268,57 @@ export function PersonDrawer({ id }: { id: string }) {
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-primary">Basic Info</p>
-        <p className="mt-3 text-sm text-foreground">Core Value</p>
-        <p className="mt-1 text-sm text-muted-foreground">{person.coreValue}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-primary">Basic Info</p>
+            <h4 className="mt-2 text-lg font-semibold text-foreground">관계 속성</h4>
+          </div>
+          {profileForm ? (
+            <button
+              className="rounded-2xl bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
+              disabled={isPending}
+              onClick={saveProfile}
+              type="button"
+            >
+              프로필 저장
+            </button>
+          ) : null}
+        </div>
         <div className="mt-4 grid gap-2 text-sm text-muted-foreground">
           <p>Last contacted {person.daysSinceContact} days ago</p>
           <p>Cadence every {person.cadenceDays} days</p>
           <p>Status: {person.status}</p>
+          {person.birthDate ? <p>Birth date: {person.birthDate.slice(0, 10)}</p> : null}
+          {person.address ? <p>Address: {person.address}</p> : null}
         </div>
+        {profileForm ? (
+          <div className="mt-4 space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="이름" value={profileForm.name} onChange={(name) => setProfileForm({ ...profileForm, name })} />
+              <Field label="닉네임" value={profileForm.nickname} onChange={(nickname) => setProfileForm({ ...profileForm, nickname })} />
+              <Field label="별칭" value={profileForm.aliases} onChange={(aliases) => setProfileForm({ ...profileForm, aliases })} />
+              <Field label="그룹" value={profileForm.groups} onChange={(groups) => setProfileForm({ ...profileForm, groups })} />
+              <SelectField
+                label="상태"
+                onChange={(status) => setProfileForm({ ...profileForm, status: status as PersonMock["status"] })}
+                options={["active", "dormant", "observing"]}
+                value={profileForm.status}
+              />
+              <Field label="Dunbar Layer" value={profileForm.dunbarLayer} onChange={(dunbarLayer) => setProfileForm({ ...profileForm, dunbarLayer })} />
+              <Field label="친밀도" value={profileForm.intimacy} onChange={(intimacy) => setProfileForm({ ...profileForm, intimacy })} />
+              <Field label="연락 주기" value={profileForm.contactCadenceDays} onChange={(contactCadenceDays) => setProfileForm({ ...profileForm, contactCadenceDays })} />
+              <Field label="생일" type="date" value={profileForm.birthDate} onChange={(birthDate) => setProfileForm({ ...profileForm, birthDate })} />
+              <Field label="생일 메모" value={profileForm.birthdayMemo} onChange={(birthdayMemo) => setProfileForm({ ...profileForm, birthdayMemo })} />
+              <Field label="전화" value={profileForm.phone} onChange={(phone) => setProfileForm({ ...profileForm, phone })} />
+              <Field label="이메일" value={profileForm.email} onChange={(email) => setProfileForm({ ...profileForm, email })} />
+            </div>
+            <Field label="주소" value={profileForm.address} onChange={(address) => setProfileForm({ ...profileForm, address })} />
+            <Field label="소셜 링크" value={profileForm.socialLinks} onChange={(socialLinks) => setProfileForm({ ...profileForm, socialLinks })} />
+            <TextArea label="Core Value" value={profileForm.coreValue} onChange={(coreValue) => setProfileForm({ ...profileForm, coreValue })} />
+            <TextArea label="Bio" value={profileForm.bio} onChange={(bio) => setProfileForm({ ...profileForm, bio })} />
+            <TextArea label="Profile Body" value={profileForm.profileBody} onChange={(profileBody) => setProfileForm({ ...profileForm, profileBody })} />
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
@@ -316,5 +450,51 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
       <p className="mt-3 text-2xl font-semibold text-foreground">{value}</p>
     </div>
+  );
+}
+
+function Field({ label, onChange, type = "text", value }: { label: string; onChange: (value: string) => void; type?: string; value: string }) {
+  return (
+    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
+      {label}
+      <input
+        className="mt-2 w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case tracking-normal text-foreground outline-none"
+        onChange={(event) => onChange(event.target.value)}
+        type={type}
+        value={value}
+      />
+    </label>
+  );
+}
+
+function SelectField({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: string[]; value: string }) {
+  return (
+    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
+      {label}
+      <select
+        className="mt-2 w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case tracking-normal text-foreground outline-none"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function TextArea({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
+  return (
+    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
+      {label}
+      <textarea
+        className="mt-2 min-h-[92px] w-full resize-y rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case leading-6 tracking-normal text-foreground outline-none"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      />
+    </label>
   );
 }

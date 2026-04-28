@@ -12,6 +12,7 @@ import { ContextBundlePanel } from "@/components/shared/context/context-bundle-p
 import { ContextMapMini } from "@/components/shared/context/context-map-mini";
 import { GlassCard } from "@/components/shared/glass-card";
 import { Heatmap } from "@/components/shared/heatmap";
+import { MarkdownView } from "@/components/shared/markdown-view";
 import { PageBody, PageLayout } from "@/components/shared/page-layout";
 import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
@@ -20,6 +21,7 @@ import { useLifeOpsStore } from "@/stores/use-life-ops-store";
 
 const MOODS = ["😶", "🙂", "😊", "😁", "🤩"];
 const ENERGIES = ["Low", "Soft", "Steady", "Focused", "Hyper"];
+type LifeOpsSnapshotState = Parameters<ReturnType<typeof useLifeOpsStore.getState>["replaceSnapshot"]>[0];
 
 export function DailyLogClient({
   date,
@@ -193,6 +195,7 @@ export function DailyLogClient({
             });
           }}
         />
+        <DailyEntriesSection disabled={isPending} entries={log.entries} replaceSnapshot={replaceSnapshot} />
         <GlassCard priority="secondary">
           <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Meditation & Gratitude</p>
           <div className="mt-4 space-y-4">
@@ -277,6 +280,204 @@ export function DailyLogClient({
         </div>
       </GlassCard>
     </PageLayout>
+  );
+}
+
+function DailyEntriesSection({
+  disabled,
+  entries,
+  replaceSnapshot,
+}: {
+  disabled: boolean;
+  entries: DailyLogMock["entries"];
+  replaceSnapshot: (snapshot: LifeOpsSnapshotState) => void;
+}) {
+  if (!entries.length) {
+    return (
+      <GlassCard priority="secondary">
+        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Journal Archive</p>
+        <p className="mt-3 text-sm text-muted-foreground">이 날짜에 연결된 개별 일기/묵상 기록이 없습니다.</p>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <GlassCard priority="secondary">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Journal Archive</p>
+          <h2 className="mt-2 text-xl font-semibold text-foreground">개별 일기와 묵상</h2>
+        </div>
+        <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-muted-foreground">{entries.length} entries</span>
+      </div>
+      <div className="mt-4 grid gap-3">
+        {entries.map((entry) => (
+          <DailyEntryCard disabled={disabled} entry={entry} key={entry.id} replaceSnapshot={replaceSnapshot} />
+        ))}
+      </div>
+    </GlassCard>
+  );
+}
+
+function DailyEntryCard({
+  disabled,
+  entry,
+  replaceSnapshot,
+}: {
+  disabled: boolean;
+  entry: DailyLogMock["entries"][number];
+  replaceSnapshot: (snapshot: LifeOpsSnapshotState) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState({
+    kind: entry.kind,
+    title: entry.title,
+    body: entry.body,
+    emotion: entry.emotion ?? "",
+    eventSummary: entry.eventSummary ?? "",
+    verse: entry.verse ?? "",
+    background: entry.background ?? "",
+    tagsSnapshot: entry.tagsSnapshot ?? "",
+  });
+
+  useEffect(() => {
+    setDraft({
+      kind: entry.kind,
+      title: entry.title,
+      body: entry.body,
+      emotion: entry.emotion ?? "",
+      eventSummary: entry.eventSummary ?? "",
+      verse: entry.verse ?? "",
+      background: entry.background ?? "",
+      tagsSnapshot: entry.tagsSnapshot ?? "",
+    });
+  }, [entry]);
+
+  const saveEntry = () => {
+    startTransition(async () => {
+      try {
+        await postSnapshotMutation<{ snapshot: LifeOpsSnapshotState }, LifeOpsSnapshotState>(
+          `/api/life-ops/daily-entries/${entry.id}`,
+          draft,
+          replaceSnapshot,
+        );
+        setIsEditing(false);
+        toast.success("개별 기록을 저장했습니다.");
+      } catch (error) {
+        toast.error("개별 기록 저장에 실패했습니다.", {
+          description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+        });
+      }
+    });
+  };
+
+  return (
+    <article className="rounded-3xl border border-white/10 bg-white/5 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-primary">{entry.kind}</p>
+          <h3 className="mt-2 text-lg font-semibold text-foreground">{entry.title}</h3>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {entry.emotion ? <span>감정: {entry.emotion}</span> : null}
+            {entry.eventSummary ? <span>사건: {entry.eventSummary}</span> : null}
+            {entry.verse ? <span>본문: {entry.verse}</span> : null}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {entry.tagsSnapshot ? <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-muted-foreground">{entry.tagsSnapshot}</span> : null}
+          <button
+            className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+            disabled={disabled || isPending}
+            onClick={() => setIsEditing((value) => !value)}
+            type="button"
+          >
+            {isEditing ? "닫기" : "수정"}
+          </button>
+        </div>
+      </div>
+
+      {isEditing ? (
+        <div className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-black/10 p-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
+              Kind
+              <select
+                className="mt-2 w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case tracking-normal text-foreground outline-none"
+                onChange={(event) => setDraft({ ...draft, kind: event.target.value as DailyLogMock["entries"][number]["kind"] })}
+                value={draft.kind}
+              >
+                <option value="journal">journal</option>
+                <option value="meditation">meditation</option>
+                <option value="sermon_note">sermon_note</option>
+                <option value="workout">workout</option>
+                <option value="note">note</option>
+              </select>
+            </label>
+            <EntryField label="제목" value={draft.title} onChange={(title) => setDraft({ ...draft, title })} />
+            <EntryField label="감정" value={draft.emotion} onChange={(emotion) => setDraft({ ...draft, emotion })} />
+            <EntryField label="사건 요약" value={draft.eventSummary} onChange={(eventSummary) => setDraft({ ...draft, eventSummary })} />
+            <EntryField label="본문/구절" value={draft.verse} onChange={(verse) => setDraft({ ...draft, verse })} />
+            <EntryField label="태그 스냅샷" value={draft.tagsSnapshot} onChange={(tagsSnapshot) => setDraft({ ...draft, tagsSnapshot })} />
+          </div>
+          <EntryTextArea label="본문" value={draft.body} onChange={(body) => setDraft({ ...draft, body })} />
+          <EntryTextArea label="배경" value={draft.background} onChange={(background) => setDraft({ ...draft, background })} />
+          <button
+            className="rounded-2xl bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
+            disabled={disabled || isPending}
+            onClick={saveEntry}
+            type="button"
+          >
+            개별 기록 저장
+          </button>
+        </div>
+      ) : (
+        <>
+          {entry.body ? <MarkdownView className="mt-4" value={entry.body} /> : <p className="mt-4 text-sm text-muted-foreground">본문이 비어 있습니다.</p>}
+          {entry.background ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/10 p-3 text-sm text-muted-foreground">
+              <p className="text-xs uppercase tracking-[0.16em] text-primary">Background</p>
+              <p className="mt-2">{entry.background}</p>
+            </div>
+          ) : null}
+        </>
+      )}
+
+      {entry.sourceDocument ? (
+        <details className="mt-4 rounded-2xl border border-white/10 bg-black/10 p-3">
+          <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-muted-foreground">속성 보기</summary>
+          <div className="mt-3">
+            <SourceDocumentPanel sourceDocument={entry.sourceDocument} />
+          </div>
+        </details>
+      ) : null}
+    </article>
+  );
+}
+
+function EntryField({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
+  return (
+    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
+      {label}
+      <input
+        className="mt-2 w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case tracking-normal text-foreground outline-none"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      />
+    </label>
+  );
+}
+
+function EntryTextArea({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
+  return (
+    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
+      {label}
+      <textarea
+        className="mt-2 min-h-[120px] w-full resize-y rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case leading-6 tracking-normal text-foreground outline-none"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      />
+    </label>
   );
 }
 

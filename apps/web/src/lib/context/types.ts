@@ -5,6 +5,7 @@ export type EntityType =
   | "media"
   | "person"
   | "daily_log"
+  | "daily_entry"
   | "workout"
   | "career"
   | "gift"

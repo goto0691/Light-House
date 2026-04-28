@@ -2,6 +2,7 @@ import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core
 
 import { id, timestamps, userId } from "./_helpers";
 import { people } from "./prm";
+import { sourceDocuments } from "./shared";
 
 export const dailyLogs = sqliteTable(
   "daily_logs",
@@ -10,6 +11,7 @@ export const dailyLogs = sqliteTable(
     userId: userId(),
     notionSourceId: text("notion_source_id"),
     importBatchId: text("import_batch_id"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
     date: text("date").notNull(),
     mood: integer("mood"),
     energyLevel: integer("energy_level"),
@@ -27,6 +29,57 @@ export const dailyLogs = sqliteTable(
   }),
 );
 
+export const dailyLogEntries = sqliteTable(
+  "daily_log_entries",
+  {
+    id: id(),
+    userId: userId(),
+    dailyLogId: text("daily_log_id")
+      .notNull()
+      .references(() => dailyLogs.id, { onDelete: "cascade" }),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    kind: text("kind").notNull().default("journal"),
+    title: text("title"),
+    date: text("date").notNull(),
+    body: text("body"),
+    emotion: text("emotion"),
+    eventSummary: text("event_summary"),
+    verse: text("verse"),
+    background: text("background"),
+    tagsSnapshot: text("tags_snapshot"),
+    ...timestamps,
+  },
+  (table) => ({
+    dailyLogIndex: index("idx_daily_entry_log").on(table.dailyLogId),
+    userDateKindIndex: index("idx_daily_entry_user_date_kind").on(table.userId, table.date, table.kind),
+    sourceDocumentIndex: index("idx_daily_entry_source_document").on(table.sourceDocumentId),
+  }),
+);
+
+export const dailyEntryPeopleRelations = sqliteTable(
+  "daily_entry_people_relations",
+  {
+    dailyEntryId: text("daily_entry_id")
+      .notNull()
+      .references(() => dailyLogEntries.id, { onDelete: "cascade" }),
+    personId: text("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
+    context: text("context"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    confidence: real("confidence"),
+    rawValue: text("raw_value"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    pk: index("pk_daily_entry_people").on(table.dailyEntryId, table.personId),
+    personIndex: index("idx_daily_entry_people_person").on(table.personId),
+    sourceDocumentIndex: index("idx_daily_entry_people_source_document").on(table.sourceDocumentId),
+  }),
+);
+
 export const dailyLogPeopleRelations = sqliteTable(
   "daily_log_people_relations",
   {
@@ -37,6 +90,9 @@ export const dailyLogPeopleRelations = sqliteTable(
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
     context: text("context"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    confidence: real("confidence"),
+    rawValue: text("raw_value"),
     createdAt: text("created_at")
       .notNull()
       .$defaultFn(() => new Date().toISOString()),
@@ -44,6 +100,7 @@ export const dailyLogPeopleRelations = sqliteTable(
   (table) => ({
     pk: index("pk_daily_log_people").on(table.dailyLogId, table.personId),
     personIndex: index("idx_daily_log_people_person").on(table.personId),
+    sourceDocumentIndex: index("idx_daily_log_people_source_document").on(table.sourceDocumentId),
   }),
 );
 
@@ -97,6 +154,8 @@ export const workouts = sqliteTable(
     userId: userId(),
     notionSourceId: text("notion_source_id"),
     importBatchId: text("import_batch_id"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    title: text("title"),
     date: text("date").notNull(),
     categories: text("categories").notNull(),
     durationMinutes: integer("duration_minutes"),
@@ -107,6 +166,7 @@ export const workouts = sqliteTable(
   (table) => ({
     userDateIndex: index("idx_wo_user_date").on(table.userId, table.date),
     notionSourceIndex: index("idx_wo_notion_source").on(table.userId, table.notionSourceId),
+    sourceDocumentIndex: index("idx_wo_source_document").on(table.sourceDocumentId),
   }),
 );
 
@@ -143,6 +203,7 @@ export const careerHistory = sqliteTable(
     userId: userId(),
     notionSourceId: text("notion_source_id"),
     importBatchId: text("import_batch_id"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
     organization: text("organization").notNull(),
     role: text("role").notNull(),
     category: text("category").notNull(),
@@ -157,5 +218,6 @@ export const careerHistory = sqliteTable(
   (table) => ({
     userStartIndex: index("idx_career_user_start").on(table.userId, table.startDate),
     notionSourceIndex: index("idx_career_notion_source").on(table.userId, table.notionSourceId),
+    sourceDocumentIndex: index("idx_career_source_document").on(table.sourceDocumentId),
   }),
 );

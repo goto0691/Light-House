@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { BacklinkPanel } from "@/components/vault/backlink-panel";
@@ -12,14 +13,22 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
 import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shared/page-layout";
+import { SavedViewTabs } from "@/components/shared/saved-view-tabs";
 import { Tag } from "@/components/shared/tag";
 import { MarkdownEditor } from "@/components/shared/markdown-editor";
+import type { ZettelMock } from "@/lib/mock/vault";
 import type { SearchItem } from "@/lib/mock/search";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
+import type { SavedView } from "@/lib/server/ui-state";
 import { useVaultStore } from "@/stores/use-vault-store";
 
-export function ZettelsClient() {
+type ZettelsClientProps = {
+  savedViews: SavedView[];
+};
+
+export function ZettelsClient({ savedViews }: ZettelsClientProps) {
   const [isPending, startTransition] = useTransition();
+  const searchParams = useSearchParams();
   const zettels = useVaultStore((state) => state.zettels);
   const selectedZettelId = useVaultStore((state) => state.selectedZettelId);
   const selectZettel = useVaultStore((state) => state.selectZettel);
@@ -35,13 +44,16 @@ export function ZettelsClient() {
   const [typeFilter, setTypeFilter] = useState("");
   const [categoryTags, setCategoryTags] = useState<string[]>([]);
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
+  const activeViewKey = searchParams.get("view") ?? savedViews.find((view) => view.isDefault)?.viewKey ?? savedViews[0]?.viewKey ?? "all";
+  const activeView = savedViews.find((view) => view.viewKey === activeViewKey) ?? savedViews.find((view) => view.isDefault) ?? savedViews[0];
 
   const selected = zettels.find((item) => item.id === selectedZettelId) ?? zettels[0];
   const linkCandidates = useMemo(() => zettels.filter((item) => item.id !== selected?.id), [selected?.id, zettels]);
-  const visibleZettels = zettels.filter((item) => {
+  const viewZettels = activeView ? zettels.filter((item) => zettelMatchesSavedView(item, activeView)) : zettels;
+  const visibleZettels = viewZettels.filter((item) => {
     if (typeFilter && item.type !== typeFilter) return false;
     if (categoryTags.length && !categoryTags.some((tag) => item.category.toLowerCase().includes(tag.toLowerCase()))) return false;
-    if (query && !`${item.title} ${item.summary} ${item.category}`.toLowerCase().includes(query.toLowerCase())) return false;
+    if (query && !`${item.title} ${item.summary} ${item.category} ${item.documentKind ?? ""} ${item.source ?? ""}`.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
 
@@ -111,6 +123,7 @@ export function ZettelsClient() {
       />
 
       <PageToolbar>
+        <SavedViewTabs activeViewKey={activeView?.viewKey ?? activeViewKey} basePath="/vault/zettels" views={savedViews} />
         <FilterBar
           filters={[
             {
@@ -318,6 +331,8 @@ export function ZettelsClient() {
                   <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                     {selected.related.length} related
                   </span>
+                  {selected.documentKind ? <Tag value={selected.documentKind} variant="custom" /> : null}
+                  {selected.status ? <Tag value={selected.status} variant="status" /> : null}
                 </div>
               </div>
               <button
@@ -358,4 +373,25 @@ export function ZettelsClient() {
       </PageBody>
     </PageLayout>
   );
+}
+
+function asStringArray(value: unknown) {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  return typeof value === "string" ? [value] : [];
+}
+
+function normalizeFilterValue(value: string) {
+  return value.toLowerCase().replaceAll("_", " ").trim();
+}
+
+function zettelMatchesSavedView(item: ZettelMock, view: SavedView) {
+  const kinds = asStringArray(view.filterState.kind).map(normalizeFilterValue);
+  const statuses = asStringArray(view.filterState.status).map(normalizeFilterValue);
+  const itemKind = normalizeFilterValue(item.documentKind ?? "");
+  const itemStatus = normalizeFilterValue(item.status ?? "");
+  const haystack = normalizeFilterValue(`${item.documentKind ?? ""} ${item.category} ${item.title} ${item.summary}`);
+
+  if (kinds.length && !kinds.some((kind) => itemKind === kind || haystack.includes(kind))) return false;
+  if (statuses.length && !statuses.includes(itemStatus)) return false;
+  return true;
 }

@@ -214,10 +214,11 @@ export const sourceDocuments = sqliteTable(
   {
     id: id(),
     userId: userId(),
-    sourceType: text("source_type").notNull().default("notion"),
+    sourceType: text("source_type").notNull().default("legacy_export"),
     sourceId: text("source_id").notNull(),
     importBatchId: text("import_batch_id"),
     sourceDatabase: text("source_database"),
+    sourcePath: text("source_path"),
     title: text("title").notNull(),
     documentRole: text("document_role"),
     canonicalEntityType: text("canonical_entity_type"),
@@ -225,7 +226,9 @@ export const sourceDocuments = sqliteTable(
     status: text("status").notNull().default("active"),
     url: text("url"),
     rawProperties: text("raw_properties"),
+    rawContent: text("raw_content"),
     rawContentPreview: text("raw_content_preview"),
+    rawContentHash: text("raw_content_hash"),
     resolvedAt: text("resolved_at"),
     ...timestamps,
   },
@@ -234,6 +237,32 @@ export const sourceDocuments = sqliteTable(
     canonicalIndex: index("idx_source_document_canonical").on(table.canonicalEntityType, table.canonicalEntityId),
     userDatabaseIndex: index("idx_source_document_user_database").on(table.userId, table.sourceDatabase),
     userRoleIndex: index("idx_source_document_user_role").on(table.userId, table.documentRole),
+    rawContentHashIndex: index("idx_source_document_raw_hash").on(table.rawContentHash),
+  }),
+);
+
+export const entityLinks = sqliteTable(
+  "entity_links",
+  {
+    id: id(),
+    userId: userId(),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id").notNull(),
+    targetType: text("target_type").notNull(),
+    targetId: text("target_id").notNull(),
+    relationType: text("relation_type").notNull().default("related"),
+    context: text("context"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
+    confidence: real("confidence"),
+    rawValue: text("raw_value"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    sourceIndex: index("idx_entity_link_source").on(table.userId, table.sourceType, table.sourceId),
+    targetIndex: index("idx_entity_link_target").on(table.userId, table.targetType, table.targetId),
+    sourceDocumentIndex: index("idx_entity_link_source_document").on(table.sourceDocumentId),
   }),
 );
 

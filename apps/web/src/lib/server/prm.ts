@@ -5,7 +5,7 @@ import { ulid } from "ulidx";
 
 import type { GiftMock, NetworkEdgeMock, PersonMock } from "@/lib/mock/prm";
 import type { SourceDocumentInfo } from "@/lib/mock/vault";
-import { getSession } from "@/lib/auth/session";
+import { requireSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
 
 export type PRMSnapshot = {
@@ -19,15 +19,23 @@ type PersonRow = {
   id: string;
   name: string;
   nickname: string | null;
+  aliases: string | null;
+  birthDate: string | null;
+  birthdayMemo: string | null;
   groups: string | null;
   dunbarLayer: number | null;
+  intimacy: number | null;
   status: PersonMock["status"];
   isFavorite: number | null;
   bio: string | null;
+  profileBody: string | null;
   coreValue: string | null;
   lastContactedAt: string | null;
   contactCadenceDays: number | null;
-  birthDate: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  socialLinks: string | null;
   giftsCount: number;
   interactionsCount: number;
   tasksCount: number;
@@ -37,7 +45,7 @@ type TimelineRow = {
   personId: string;
   date: string;
   title: string;
-  kind: "interaction" | "gift" | "task" | "zettel";
+  kind: "interaction" | "gift" | "task" | "zettel" | "daily_entry";
 };
 type GiftRow = {
   id: string;
@@ -57,11 +65,10 @@ type NetworkEdgeRow = {
   notes: string | null;
 };
 type SourceDocumentRow = { id: string; canonicalEntityId: string; sourceDatabase: string | null; sourceId: string; documentRole: string | null; status: string; preview: string | null };
-type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null };
+type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null; type: string | null };
 
 async function resolveUser() {
-  const session = await getSession();
-  if (!session) throw new Error("세션이 없습니다.");
+  const session = await requireSession();
   const found = await queryD1<UserRow>("select id from users where email = ? limit 1", [session.email]);
   const existing = found.rows[0];
   if (existing) return { id: existing.id, session };
@@ -150,12 +157,14 @@ export async function seedPRMSupportData() {
 
 export const getPRMSnapshot = cache(async function getPRMSnapshot(): Promise<PRMSnapshot> {
   const { id: userId } = await resolveUser();
-  const [peopleResult, interactionTimeline, giftTimeline, taskTimeline, zettelTimeline, giftsResult, networkEdgeResult, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
+  const [peopleResult, interactionTimeline, giftTimeline, taskTimeline, zettelTimeline, dailyEntryTimeline, giftsResult, networkEdgeResult, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
     queryD1<PersonRow>(
       `select
-         p.id, p.name, p.nickname, p.groups, p.dunbar_layer as dunbarLayer, p.status, p.is_favorite as isFavorite,
-         p.bio, p.core_value as coreValue, p.last_contacted_at as lastContactedAt, p.contact_cadence_days as contactCadenceDays,
-         p.birth_date as birthDate,
+         p.id, p.name, p.nickname, p.aliases, p.birth_date as birthDate, p.birthday_memo as birthdayMemo,
+         p.groups, p.dunbar_layer as dunbarLayer, p.intimacy, p.status, p.is_favorite as isFavorite,
+         p.bio, p.profile_body as profileBody, p.core_value as coreValue,
+         p.last_contacted_at as lastContactedAt, p.contact_cadence_days as contactCadenceDays,
+         p.phone, p.email, p.address, p.social_links as socialLinks,
          (select count(*) from gifts g where g.person_id = p.id) as giftsCount,
          (select count(*) from interactions i where i.person_id = p.id) as interactionsCount,
          (select count(*) from task_people_relations tpr inner join tasks t on t.id = tpr.task_id where tpr.person_id = p.id and t.deleted_at is null) as tasksCount
@@ -190,6 +199,13 @@ export const getPRMSnapshot = cache(async function getPRMSnapshot(): Promise<PRM
        where z.user_id = ?`,
       [userId],
     ),
+    queryD1<TimelineRow>(
+      `select dle.id as id, depr.person_id as personId, dle.date, coalesce(dle.title, 'Daily Entry') as title, 'daily_entry' as kind
+       from daily_entry_people_relations depr
+       inner join daily_log_entries dle on dle.id = depr.daily_entry_id
+       where dle.user_id = ? and dle.deleted_at is null`,
+      [userId],
+    ),
     queryD1<GiftRow>(
       `select id, person_id as personId, direction, title, occurred_at as occurredAt, satisfaction, notes
        from gifts
@@ -211,7 +227,7 @@ export const getPRMSnapshot = cache(async function getPRMSnapshot(): Promise<PRM
       [userId],
     ),
     queryD1<SourceDocumentPropertyRow>(
-      `select sdp.source_document_id as sourceDocumentId, sdp.property_name as name, sdp.value_text as value
+      `select sdp.source_document_id as sourceDocumentId, sdp.property_name as name, sdp.value_text as value, sdp.property_type as type
        from source_document_properties sdp
        inner join source_documents sd on sd.id = sdp.source_document_id
        where sd.user_id = ? and sd.deleted_at is null and sd.canonical_entity_type = 'person'
@@ -220,11 +236,11 @@ export const getPRMSnapshot = cache(async function getPRMSnapshot(): Promise<PRM
     ),
   ]);
 
-  const sourceProperties = new Map<string, Array<{ name: string; value: string }>>();
+  const sourceProperties = new Map<string, Array<{ name: string; value: string; type?: string | null }>>();
   for (const row of sourcePropertyResult.rows) {
     if (!row.value) continue;
     const properties = sourceProperties.get(row.sourceDocumentId) ?? [];
-    properties.push({ name: row.name, value: row.value });
+    properties.push({ name: row.name, value: row.value, type: row.type });
     sourceProperties.set(row.sourceDocumentId, properties);
   }
 
@@ -242,7 +258,7 @@ export const getPRMSnapshot = cache(async function getPRMSnapshot(): Promise<PRM
   }
 
   const timelineMap = new Map<string, PersonMock["timeline"]>();
-  for (const row of [...interactionTimeline.rows, ...giftTimeline.rows, ...taskTimeline.rows, ...zettelTimeline.rows]) {
+  for (const row of [...interactionTimeline.rows, ...giftTimeline.rows, ...taskTimeline.rows, ...zettelTimeline.rows, ...dailyEntryTimeline.rows]) {
     const list = timelineMap.get(row.personId) ?? [];
     list.push({ id: row.id, date: row.date.slice(0, 10), title: row.title, kind: row.kind });
     timelineMap.set(row.personId, list);
@@ -256,15 +272,24 @@ export const getPRMSnapshot = cache(async function getPRMSnapshot(): Promise<PRM
     id: row.id,
     name: row.name,
     nickname: row.nickname ?? undefined,
+    aliases: row.aliases,
+    birthDate: row.birthDate,
+    birthdayMemo: row.birthdayMemo,
     layer: (row.dunbarLayer ?? 50) as PersonMock["layer"],
     groups: parseGroups(row.groups),
     status: row.status,
     favorite: Boolean(row.isFavorite),
     bio: row.bio ?? "설명이 아직 없습니다.",
+    profileBody: row.profileBody,
     coreValue: row.coreValue ?? "기록 중",
+    intimacy: row.intimacy,
     daysSinceContact: calculateDaysSinceContact(row.lastContactedAt),
     cadenceDays: row.contactCadenceDays ?? 14,
     upcomingBirthday: birthdayLabel(row.birthDate),
+    phone: row.phone,
+    email: row.email,
+    address: row.address,
+    socialLinks: row.socialLinks,
     giftsCount: Number(row.giftsCount ?? 0),
     interactionsCount: Number(row.interactionsCount ?? 0),
     tasksCount: Number(row.tasksCount ?? 0),
@@ -337,6 +362,85 @@ export async function togglePersonFavorite(personId: string) {
   const current = await queryD1<{ isFavorite: number }>("select is_favorite as isFavorite from people where id = ? and user_id = ? limit 1", [personId, userId]);
   const next = current.rows[0]?.isFavorite ? 0 : 1;
   await executeD1(`update people set is_favorite = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [next, personId, userId]);
+  return getPRMSnapshot();
+}
+
+export async function updatePersonProfile(personId: string, input: {
+  name?: string;
+  nickname?: string | null;
+  aliases?: string | null;
+  birthDate?: string | null;
+  birthdayMemo?: string | null;
+  groups?: string[];
+  dunbarLayer?: number | null;
+  intimacy?: number | null;
+  coreValue?: string | null;
+  bio?: string | null;
+  profileBody?: string | null;
+  contactCadenceDays?: number | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  socialLinks?: string | null;
+  status?: PersonMock["status"];
+}) {
+  const { id: userId } = await resolveUser();
+  const name = input.name?.trim();
+  if (!name) throw new Error("이름은 비워둘 수 없습니다.");
+
+  const nullableText = (value: string | null | undefined) => value?.trim() || null;
+  const nullableDate = (value: string | null | undefined) => {
+    const next = value?.trim();
+    return next ? next.slice(0, 10) : null;
+  };
+  const numberOrNull = (value: number | null | undefined) => (Number.isFinite(value) ? Number(value) : null);
+  const layer = numberOrNull(input.dunbarLayer);
+  const status = ["active", "dormant", "observing"].includes(input.status ?? "") ? input.status : "active";
+  const groups = JSON.stringify((input.groups ?? []).map((group) => group.trim()).filter(Boolean));
+
+  await executeD1(
+    `update people
+     set name = ?,
+         nickname = ?,
+         aliases = ?,
+         birth_date = ?,
+         birthday_memo = ?,
+         groups = ?,
+         dunbar_layer = ?,
+         intimacy = ?,
+         core_value = ?,
+         bio = ?,
+         profile_body = ?,
+         contact_cadence_days = ?,
+         phone = ?,
+         email = ?,
+         address = ?,
+         social_links = ?,
+         status = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [
+      name,
+      nullableText(input.nickname),
+      nullableText(input.aliases),
+      nullableDate(input.birthDate),
+      nullableText(input.birthdayMemo),
+      groups,
+      layer,
+      numberOrNull(input.intimacy),
+      nullableText(input.coreValue),
+      nullableText(input.bio),
+      nullableText(input.profileBody),
+      numberOrNull(input.contactCadenceDays),
+      nullableText(input.phone),
+      nullableText(input.email),
+      nullableText(input.address),
+      nullableText(input.socialLinks),
+      status,
+      personId,
+      userId,
+    ],
+  );
   return getPRMSnapshot();
 }
 

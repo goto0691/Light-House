@@ -1,25 +1,5 @@
-import { GlassCard } from "@/components/shared/glass-card";
-import { getLifeOpsSnapshot } from "@/lib/server/life-ops";
+import { redirect } from "next/navigation";
 
-export default async function MeditationsPage() {
-  const snapshot = await getLifeOpsSnapshot();
-  const items = Object.values(snapshot.logs)
-    .filter((log) => log.meditation.trim())
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
-
-  return (
-    <GlassCard>
-      <p className="text-xs uppercase tracking-[0.24em] text-primary">Meditations</p>
-      <h1 className="mt-3 text-3xl font-semibold">묵상 아카이브</h1>
-      <div className="mt-5 space-y-3">
-        {items.map((item) => (
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-4" key={item.date}>
-            <p className="text-xs uppercase tracking-[0.2em] text-primary">{item.date}</p>
-            <p className="mt-2 text-lg text-foreground">{item.meditationVerse}</p>
-            <p className="mt-2 text-sm text-muted-foreground">{item.meditation}</p>
-          </div>
-        ))}
-      </div>
-    </GlassCard>
-  );
+export default function MeditationsPage() {
+  redirect("/life-ops/entries?view=meditation");
 }

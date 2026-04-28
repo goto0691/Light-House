@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { HitThemUpPanel } from "@/components/prm/hit-them-up-panel";
 import { PersonCard } from "@/components/prm/person-card";
@@ -9,17 +10,28 @@ import { PersonFilterTabs, type PersonFilterKey } from "@/components/prm/person-
 import { EmptyState } from "@/components/shared/empty-state";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shared/page-layout";
+import { SavedViewTabs } from "@/components/shared/saved-view-tabs";
+import type { PersonMock } from "@/lib/mock/prm";
+import type { SavedView } from "@/lib/server/ui-state";
 import { usePRMStore } from "@/stores/use-prm-store";
 
-export function PRMClient() {
+type PRMClientProps = {
+  savedViews: SavedView[];
+};
+
+export function PRMClient({ savedViews }: PRMClientProps) {
+  const searchParams = useSearchParams();
   const people = usePRMStore((state) => state.people);
   const [filter, setFilter] = useState<PersonFilterKey>("all");
   const [query, setQuery] = useState("");
   const [groupTags, setGroupTags] = useState<string[]>([]);
+  const activeViewKey = searchParams.get("view") ?? savedViews.find((view) => view.isDefault)?.viewKey ?? savedViews[0]?.viewKey ?? "core";
+  const activeView = savedViews.find((view) => view.viewKey === activeViewKey) ?? savedViews.find((view) => view.isDefault) ?? savedViews[0];
   const needsContact = people
     .filter((person) => person.daysSinceContact > person.cadenceDays)
     .sort((a, b) => b.daysSinceContact - a.daysSinceContact);
-  const visiblePeople = people.filter((person) => {
+  const viewPeople = activeView ? people.filter((person) => personMatchesSavedView(person, activeView)) : people;
+  const visiblePeople = viewPeople.filter((person) => {
     if (filter === "needs-contact" && person.daysSinceContact <= person.cadenceDays) return false;
     if (filter === "favorites" && !person.favorite) return false;
     if ((filter === "5" || filter === "15" || filter === "50" || filter === "150") && `${person.layer}` !== filter) return false;
@@ -48,6 +60,7 @@ export function PRMClient() {
 
       <PersonFilterTabs onChange={setFilter} value={filter} />
       <PageToolbar>
+        <SavedViewTabs activeViewKey={activeView?.viewKey ?? activeViewKey} basePath="/prm" views={savedViews} />
         <FilterBar
           filters={[{ kind: "tag", key: "group", label: "Group tag" }]}
           onChange={(state) => {
@@ -72,4 +85,27 @@ export function PRMClient() {
       </PageBody>
     </PageLayout>
   );
+}
+
+function asStringArray(value: unknown) {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  return typeof value === "string" ? [value] : [];
+}
+
+function asNumberArray(value: unknown) {
+  const raw = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+  return raw.map((item) => Number(item)).filter((item) => Number.isFinite(item));
+}
+
+function personMatchesSavedView(person: PersonMock, view: SavedView) {
+  const layers = asNumberArray(view.filterState.layer);
+  const statuses = asStringArray(view.filterState.status);
+  const hasGifts = typeof view.filterState.hasGifts === "boolean" ? view.filterState.hasGifts : null;
+  const linkedDailyEntries = typeof view.filterState.linkedDailyEntries === "boolean" ? view.filterState.linkedDailyEntries : null;
+
+  if (layers.length && !layers.includes(person.layer)) return false;
+  if (statuses.length && !statuses.includes(person.status)) return false;
+  if (hasGifts !== null && (person.giftsCount > 0) !== hasGifts) return false;
+  if (linkedDailyEntries !== null && person.timeline.some((item) => item.kind === "daily_entry") !== linkedDailyEntries) return false;
+  return true;
 }

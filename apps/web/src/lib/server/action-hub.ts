@@ -4,7 +4,7 @@ import { cache } from "react";
 import { ulid } from "ulidx";
 
 import type { ActionHubReference, PendingCaptureMock, ProjectMock, TaskMock } from "@/lib/mock/action-hub";
-import { getSession } from "@/lib/auth/session";
+import { requireSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
 import { analyzeQuickCaptureWithAI } from "@/lib/server/gemini";
 import { attachTaskRelationsFromContent } from "@/lib/server/relations";
@@ -118,8 +118,7 @@ function slugify(value: string) {
 }
 
 async function resolveUser() {
-  const session = await getSession();
-  if (!session) throw new Error("세션이 없습니다.");
+  const session = await requireSession();
 
   const found = await queryD1<UserRow>("select id from users where email = ? limit 1", [session.email]);
   const existing = found.rows[0];

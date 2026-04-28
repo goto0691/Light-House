@@ -9,7 +9,7 @@ const DEFAULT_TYPES: EntityType[] = ["person", "zettel", "media", "place", "task
 const RELATION_OPTIONS: Array<{ label: string; value: RelationKind }> = [
   { label: "직접", value: "explicit" },
   { label: "언급", value: "mention" },
-  { label: "원천", value: "source" },
+  { label: "레코드", value: "source" },
   { label: "의미", value: "semantic" },
 ];
 

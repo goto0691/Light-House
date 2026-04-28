@@ -1,5 +1,7 @@
 # Data Reclassification Plan
 
+> 후속 기준: AS-IS 속성을 먼저 TO-BE 스키마와 UI에 맞추는 작업은 [`13_ASIS_TO_BE_SCHEMA_ALIGNMENT.md`](./13_ASIS_TO_BE_SCHEMA_ALIGNMENT.md)를 우선 기준으로 삼는다. 이 문서는 재분류 방향성 문서이고, 실제 schema gap/field mapping/source 재색인 순서는 13번 문서가 SSOT다.
+
 ## 0. Goal
 
 Notion data has already been migrated into Light House, but many records are still hard to read because the original Notion schema, relations, rollups, and database-specific meanings were flattened during import. This document is the handoff plan for GPT or an agentic worker to inspect the imported D1 data, compare it with the original Notion export, and reclassify the data into useful Light House views.

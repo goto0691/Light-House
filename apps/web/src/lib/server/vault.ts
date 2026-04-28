@@ -4,7 +4,7 @@ import { cache } from "react";
 import { ulid } from "ulidx";
 
 import type { AssetMock, MediaMock, PlaceMock, SourceDocumentInfo, ZettelMock } from "@/lib/mock/vault";
-import { getSession } from "@/lib/auth/session";
+import { requireSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
 import { syncZettelRelationsFromContent } from "@/lib/server/relations";
 import { syncTagsForEntity } from "@/lib/server/tagging";
@@ -23,12 +23,43 @@ type ZettelRow = {
   title: string;
   type: ZettelMock["type"];
   category: string | null;
+  status: string | null;
+  documentKind: string | null;
+  originalCreatedAt: string | null;
+  source: string | null;
+  sourceUrl: string | null;
   summary: string | null;
   content: string | null;
 };
 type BacklinkRow = { targetId: string; sourceTitle: string };
 type OutgoingRow = { id: string; sourceId: string; targetId: string; targetTitle: string };
-type MediaRow = { id: string; mediaType: MediaMock["mediaType"]; title: string; creator: string | null; status: MediaMock["status"]; review: string | null };
+type MediaRow = {
+  id: string;
+  mediaType: MediaMock["mediaType"];
+  title: string;
+  originalTitle: string | null;
+  subtype: string | null;
+  platformOrPublisher: string | null;
+  creator: string | null;
+  studio: string | null;
+  genre: string | null;
+  releaseYear: number | null;
+  status: MediaMock["status"];
+  rating: number | null;
+  evaluation: string | null;
+  review: string | null;
+  content: string | null;
+  relationNote: string | null;
+  playTime: number | null;
+  author: string | null;
+  pages: number | null;
+  screenKind: string | null;
+  rewatchValue: number | null;
+  coverImageUrl: string | null;
+  loggedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+};
 type AssetRow = { id: string; category: AssetMock["category"]; name: string; brand: string | null; currentCondition: string | null };
 type PlaceRow = { id: string; category: PlaceMock["category"]; name: string; address: string | null; notes: string | null };
 type SourceDocumentRow = {
@@ -41,11 +72,10 @@ type SourceDocumentRow = {
   status: string;
   preview: string | null;
 };
-type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null };
+type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null; type: string | null };
 
 async function resolveUser() {
-  const session = await getSession();
-  if (!session) throw new Error("세션이 없습니다.");
+  const session = await requireSession();
   const found = await queryD1<UserRow>("select id from users where email = ? limit 1", [session.email]);
   const existing = found.rows[0];
   if (existing) return { id: existing.id, session };
@@ -125,7 +155,18 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
   const { id: userId } = await resolveUser();
   const [zettelResult, backlinkResult, outgoingResult, mediaResult, assetResult, placeResult, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
     queryD1<ZettelRow>(
-      `select id, title, type, category, summary, content
+      `select
+         id,
+         title,
+         type,
+         category,
+         status,
+         document_kind as documentKind,
+         original_created_at as originalCreatedAt,
+         source,
+         source_url as sourceUrl,
+         summary,
+         content
        from zettels
        where user_id = ?
          and deleted_at is null
@@ -156,7 +197,38 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
        where zs.user_id = ? and zs.deleted_at is null and zt.deleted_at is null`,
       [userId],
     ),
-    queryD1<MediaRow>(`select id, media_type as mediaType, title, creator, status, review from media_logs where user_id = ? and deleted_at is null order by updated_at desc`, [userId]),
+    queryD1<MediaRow>(
+      `select
+         id,
+         media_type as mediaType,
+         title,
+         original_title as originalTitle,
+         subtype,
+         platform_or_publisher as platformOrPublisher,
+         creator,
+         studio,
+         genre,
+         release_year as releaseYear,
+         status,
+         rating,
+         evaluation,
+         review,
+         content,
+         relation_note as relationNote,
+         play_time as playTime,
+         author,
+         pages,
+         screen_kind as screenKind,
+         rewatch_value as rewatchValue,
+         cover_image_url as coverImageUrl,
+         logged_at as loggedAt,
+         started_at as startedAt,
+         completed_at as completedAt
+       from media_logs
+       where user_id = ? and deleted_at is null
+       order by updated_at desc`,
+      [userId],
+    ),
     queryD1<AssetRow>(`select id, category, name, brand, current_condition as currentCondition from assets where user_id = ? and deleted_at is null order by created_at asc`, [userId]),
     queryD1<PlaceRow>(`select id, category, name, address, notes from places where user_id = ? and deleted_at is null order by updated_at desc`, [userId]),
     queryD1<SourceDocumentRow>(
@@ -179,7 +251,8 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
       `select
          sdp.source_document_id as sourceDocumentId,
          sdp.property_name as name,
-         sdp.value_text as value
+         sdp.value_text as value,
+         sdp.property_type as type
        from source_document_properties sdp
        inner join source_documents sd on sd.id = sdp.source_document_id
        where sd.user_id = ?
@@ -204,11 +277,11 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
     outgoing.set(row.sourceId, list);
   }
 
-  const sourceProperties = new Map<string, Array<{ name: string; value: string }>>();
+  const sourceProperties = new Map<string, Array<{ name: string; value: string; type?: string | null }>>();
   for (const row of sourcePropertyResult.rows) {
     if (!row.value) continue;
     const properties = sourceProperties.get(row.sourceDocumentId) ?? [];
-    properties.push({ name: row.name, value: row.value });
+    properties.push({ name: row.name, value: row.value, type: row.type });
     sourceProperties.set(row.sourceDocumentId, properties);
   }
 
@@ -237,6 +310,11 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
       outgoingLinks: links,
       backlinks: backlinks.get(row.id) ?? [],
       related: links.map((link) => link.title),
+      status: row.status,
+      documentKind: row.documentKind,
+      originalCreatedAt: row.originalCreatedAt,
+      source: row.source,
+      sourceUrl: row.sourceUrl,
       sourceDocument: sourceDocuments.get(`zettel:${row.id}`) ?? null,
     };
   });
@@ -244,10 +322,29 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
     id: row.id,
     mediaType: row.mediaType,
     title: row.title,
+    originalTitle: row.originalTitle,
+    subtype: row.subtype,
+    platformOrPublisher: row.platformOrPublisher,
     creator: row.creator ?? "Unknown",
+    studio: row.studio,
+    genre: row.genre,
+    releaseYear: row.releaseYear,
     status: row.status,
+    rating: row.rating,
+    evaluation: row.evaluation,
     sourceDocument: sourceDocuments.get(`media:${row.id}`) ?? null,
     review: row.review ?? "감상이 아직 없습니다.",
+    content: row.content,
+    relationNote: row.relationNote,
+    playTime: row.playTime,
+    author: row.author,
+    pages: row.pages,
+    screenKind: row.screenKind,
+    rewatchValue: Boolean(row.rewatchValue),
+    coverImageUrl: row.coverImageUrl,
+    loggedAt: row.loggedAt,
+    startedAt: row.startedAt,
+    completedAt: row.completedAt,
   }));
   const assets: AssetMock[] = assetResult.rows.map((row) => ({
     id: row.id,
@@ -308,6 +405,102 @@ export async function cycleVaultMediaStatus(mediaId: string) {
   const currentIndex = order.indexOf(current.rows[0]?.status ?? "backlog");
   const next = order[(currentIndex + 1) % order.length];
   await executeD1(`update media_logs set status = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [next, mediaId, userId]);
+  return getVaultSnapshot();
+}
+
+export async function updateVaultMediaDetails(mediaId: string, input: {
+  title?: string;
+  mediaType?: MediaMock["mediaType"];
+  originalTitle?: string | null;
+  subtype?: string | null;
+  platformOrPublisher?: string | null;
+  creator?: string | null;
+  studio?: string | null;
+  genre?: string | null;
+  releaseYear?: number | null;
+  status?: MediaMock["status"];
+  rating?: number | null;
+  evaluation?: string | null;
+  review?: string | null;
+  content?: string | null;
+  relationNote?: string | null;
+  playTime?: number | null;
+  author?: string | null;
+  pages?: number | null;
+  screenKind?: string | null;
+  rewatchValue?: boolean | null;
+  loggedAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+}) {
+  const { id: userId } = await resolveUser();
+  const title = input.title?.trim();
+  if (!title) throw new Error("미디어 제목은 비워둘 수 없습니다.");
+
+  const mediaType = ["game", "book", "screen"].includes(input.mediaType ?? "") ? input.mediaType : "screen";
+  const status = ["backlog", "consuming", "completed", "dropped"].includes(input.status ?? "") ? input.status : "backlog";
+  const nullableText = (value: string | null | undefined) => value?.trim() || null;
+  const nullableDate = (value: string | null | undefined) => {
+    const next = value?.trim();
+    return next ? next.slice(0, 10) : null;
+  };
+  const nullableNumber = (value: number | null | undefined) => (Number.isFinite(value) ? Number(value) : null);
+
+  await executeD1(
+    `update media_logs
+     set media_type = ?,
+         title = ?,
+         original_title = ?,
+         subtype = ?,
+         platform_or_publisher = ?,
+         creator = ?,
+         studio = ?,
+         genre = ?,
+         release_year = ?,
+         status = ?,
+         rating = ?,
+         evaluation = ?,
+         review = ?,
+         content = ?,
+         relation_note = ?,
+         play_time = ?,
+         author = ?,
+         pages = ?,
+         screen_kind = ?,
+         rewatch_value = ?,
+         logged_at = ?,
+         started_at = ?,
+         completed_at = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [
+      mediaType,
+      title,
+      nullableText(input.originalTitle),
+      nullableText(input.subtype),
+      nullableText(input.platformOrPublisher),
+      nullableText(input.creator),
+      nullableText(input.studio),
+      nullableText(input.genre),
+      nullableNumber(input.releaseYear),
+      status,
+      nullableNumber(input.rating),
+      nullableText(input.evaluation),
+      nullableText(input.review),
+      nullableText(input.content),
+      nullableText(input.relationNote),
+      nullableNumber(input.playTime),
+      nullableText(input.author),
+      nullableNumber(input.pages),
+      nullableText(input.screenKind),
+      input.rewatchValue ? 1 : 0,
+      nullableDate(input.loggedAt),
+      nullableDate(input.startedAt),
+      nullableDate(input.completedAt),
+      mediaId,
+      userId,
+    ],
+  );
   return getVaultSnapshot();
 }
 

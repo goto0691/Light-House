@@ -44,6 +44,21 @@ export type HealthMetric = {
   stepsCount?: number;
 };
 
+export type DailyEntry = {
+  id: string;
+  kind: "journal" | "meditation" | "sermon_note" | "workout" | "note";
+  title: string;
+  date: string;
+  body: string;
+  emotion?: string | null;
+  eventSummary?: string | null;
+  verse?: string | null;
+  background?: string | null;
+  tagsSnapshot?: string | null;
+  people?: Array<{ id: string; name: string; context?: string | null }>;
+  sourceDocument?: SourceDocumentInfo | null;
+};
+
 export type DailyLogMock = {
   date: string;
   mood: number;
@@ -54,6 +69,7 @@ export type DailyLogMock = {
   meditation: string;
   meditationVerse: string;
   habits: Habit[];
+  entries: DailyEntry[];
   sleepHours: number[];
   deepWorkMinutes: number;
   timeline: Array<{ time: string; label: string; type: string }>;
@@ -82,6 +98,7 @@ export function getDailyLogMock(date: string): DailyLogMock {
       { id: "habit-3", title: "Workout", icon: "🏃", streak: 2, completedToday: false },
       { id: "habit-4", title: "Water 2L", icon: "💧", streak: 6, completedToday: true },
     ],
+    entries: [],
     sleepHours: [6.2, 7.1, 6.8, 7.4, 5.9, 7.8, 6.9, 7.2, 6.7, 7.5, 6.4, 7.0, 6.8, 7.3],
     deepWorkMinutes: 165,
     timeline: [

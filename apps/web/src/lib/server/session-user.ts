@@ -1,5 +1,7 @@
 import "server-only";
 
+import { redirect } from "next/navigation";
+
 import { getSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
 
@@ -57,7 +59,7 @@ function parsePreferences(value: string | null) {
 export async function resolveCurrentUser(): Promise<CurrentUser> {
   const session = await getSession();
   if (!session) {
-    throw new Error("세션이 없습니다.");
+    redirect("/login");
   }
 
   const found = await queryD1<UserRow>(

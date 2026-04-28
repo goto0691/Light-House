@@ -19,7 +19,14 @@
     "db:refine-migration": "tsx ./scripts/refine-migrated-data.ts",
     "db:ai-curate": "tsx ./scripts/ai-curate-migrated-data.ts",
     "db:apply-ai-curation": "tsx ./scripts/apply-ai-curation.ts",
-    "db:ai-curate-queue": "tsx ./scripts/run-ai-curation-queue.ts"
+    "db:ai-curate-queue": "tsx ./scripts/run-ai-curation-queue.ts",
+    "db:finalize-curated-data": "tsx ./scripts/finalize-curated-data.ts",
+    "db:backup": "tsx ./scripts/backup-d1.ts",
+    "db:reset-domain-data": "tsx ./scripts/reset-domain-data.ts",
+    "db:apply-migration": "tsx ./scripts/apply-d1-migration.ts",
+    "db:reindex-legacy-source": "tsx ./scripts/reindex-legacy-source.ts",
+    "db:apply-legacy-source-mapping": "tsx ./scripts/apply-legacy-source-mapping.ts",
+    "db:materialize-legacy-relations": "tsx ./scripts/materialize-legacy-relations.ts"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.4",

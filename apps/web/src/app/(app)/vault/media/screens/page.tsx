@@ -14,7 +14,7 @@ export default async function ScreensPage() {
       <GlassCard className="p-5">
         <p className="text-xs uppercase tracking-[0.24em] text-primary">Vault Media</p>
         <h1 className="mt-3 font-display text-4xl text-foreground">영상 서가</h1>
-        <p className="mt-3 max-w-2xl text-sm text-muted-foreground">영화와 영상 감상 기록을 관련 메모, 사람, 원본 문서와 함께 탐색합니다.</p>
+        <p className="mt-3 max-w-2xl text-sm text-muted-foreground">영화와 영상 감상 기록을 관련 메모, 사람, 속성 정보와 함께 탐색합니다.</p>
       </GlassCard>
 
       {screens.length ? (

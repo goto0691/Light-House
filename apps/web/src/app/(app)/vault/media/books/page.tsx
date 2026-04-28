@@ -14,7 +14,7 @@ export default async function BooksPage() {
       <GlassCard className="p-5">
         <p className="text-xs uppercase tracking-[0.24em] text-primary">Vault Media</p>
         <h1 className="mt-3 font-display text-4xl text-foreground">책 서가</h1>
-        <p className="mt-3 max-w-2xl text-sm text-muted-foreground">읽는 중인 책과 완독 기록을 지식 메모, 인물, 원본 문서와 이어서 확인합니다.</p>
+        <p className="mt-3 max-w-2xl text-sm text-muted-foreground">읽는 중인 책과 완독 기록을 지식 메모, 인물, 속성 정보와 이어서 확인합니다.</p>
       </GlassCard>
 
       {books.length ? (

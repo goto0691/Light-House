@@ -19,7 +19,7 @@ const LENSES: Array<{ key: Person360Lens; label: string }> = [
   { key: "notes", label: "Notes" },
   { key: "places", label: "Places" },
   { key: "gifts", label: "Gifts" },
-  { key: "source", label: "Source" },
+  { key: "source", label: "Records" },
 ];
 
 function edgeNodes(bundle: ContextBundle, predicate: (node: ContextNode) => boolean) {

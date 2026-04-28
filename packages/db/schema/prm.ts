@@ -1,6 +1,7 @@
 import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import { id, timestamps, userId } from "./_helpers";
+import { sourceDocuments } from "./shared";
 
 export const people = sqliteTable(
   "people",
@@ -9,15 +10,19 @@ export const people = sqliteTable(
     userId: userId(),
     notionSourceId: text("notion_source_id"),
     importBatchId: text("import_batch_id"),
+    sourceDocumentId: text("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
     name: text("name").notNull(),
     nickname: text("nickname"),
+    aliases: text("aliases"),
     birthDate: text("birth_date"),
+    birthdayMemo: text("birthday_memo"),
     photoUrl: text("photo_url"),
     groups: text("groups"),
     dunbarLayer: integer("dunbar_layer"),
     intimacy: integer("intimacy"),
     coreValue: text("core_value"),
     bio: text("bio"),
+    profileBody: text("profile_body"),
     lastContactedAt: text("last_contacted_at"),
     contactCadenceDays: integer("contact_cadence_days"),
     phone: text("phone"),
@@ -33,6 +38,7 @@ export const people = sqliteTable(
     layerIndex: index("idx_person_layer").on(table.userId, table.dunbarLayer),
     lastContactIndex: index("idx_person_last_contact").on(table.lastContactedAt),
     notionSourceIndex: index("idx_person_notion_source").on(table.userId, table.notionSourceId),
+    sourceDocumentIndex: index("idx_person_source_document").on(table.sourceDocumentId),
   }),
 );
 

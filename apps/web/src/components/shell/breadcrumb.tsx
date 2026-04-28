@@ -12,6 +12,9 @@ const LABELS: Record<string, string> = {
   "life-ops": "Life Ops",
   settings: "Settings",
   inbox: "Inbox",
+  entries: "Daily Entries",
+  diaries: "Journal",
+  meditations: "Meditation",
 };
 
 export function Breadcrumb() {

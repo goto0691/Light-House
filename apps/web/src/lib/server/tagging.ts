@@ -53,7 +53,7 @@ async function refreshUsageCount(tagId: string) {
 
 export async function syncTagsForEntity(input: {
   userId: string;
-  taggableType: "task" | "zettel" | "daily_log";
+  taggableType: "task" | "zettel" | "daily_log" | "daily_entry";
   taggableId: string;
   content: string;
 }) {

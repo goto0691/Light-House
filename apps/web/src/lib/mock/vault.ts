@@ -5,7 +5,7 @@ export type SourceDocumentInfo = {
   documentRole: string | null;
   status: string;
   preview: string | null;
-  properties: Array<{ name: string; value: string }>;
+  properties: Array<{ name: string; value: string; type?: string | null }>;
 };
 
 export type ZettelMock = {
@@ -18,6 +18,11 @@ export type ZettelMock = {
   outgoingLinks: Array<{ id: string; targetId: string; title: string }>;
   backlinks: string[];
   related: string[];
+  status?: string | null;
+  documentKind?: string | null;
+  originalCreatedAt?: string | null;
+  source?: string | null;
+  sourceUrl?: string | null;
   sourceDocument?: SourceDocumentInfo | null;
 };
 
@@ -25,9 +30,28 @@ export type MediaMock = {
   id: string;
   mediaType: "game" | "book" | "screen";
   title: string;
+  originalTitle?: string | null;
+  subtype?: string | null;
+  platformOrPublisher?: string | null;
   creator: string;
-  status: "backlog" | "consuming" | "completed";
+  studio?: string | null;
+  genre?: string | null;
+  releaseYear?: number | null;
+  status: "backlog" | "consuming" | "completed" | "dropped";
+  rating?: number | null;
+  evaluation?: string | null;
   review: string;
+  content?: string | null;
+  relationNote?: string | null;
+  playTime?: number | null;
+  author?: string | null;
+  pages?: number | null;
+  screenKind?: string | null;
+  rewatchValue?: boolean | null;
+  coverImageUrl?: string | null;
+  loggedAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
   sourceDocument?: SourceDocumentInfo | null;
 };
 

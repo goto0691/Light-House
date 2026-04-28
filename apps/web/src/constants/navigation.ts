@@ -68,6 +68,7 @@ export const LOCAL_NAV: Record<DomainKey, Array<{ label: string; href: string }>
   ],
   "life-ops": [
     { label: "Today's Log", href: "/life-ops" },
+    { label: "Daily Entries", href: "/life-ops/entries" },
     { label: "Habits", href: "/life-ops/habits" },
     { label: "Workouts", href: "/life-ops/workouts" },
     { label: "Trends", href: "/life-ops/trends" },
