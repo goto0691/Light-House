@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { KanbanBoard } from "@/components/action-hub/kanban-board";
@@ -16,14 +16,15 @@ import type { ProjectMock, TaskMock } from "@/lib/mock/action-hub";
 
 export function KanbanClient({ project }: { project: ProjectMock }) {
   const [isPending, startTransition] = useTransition();
-  const tasks = useActionHubStore((state) => state.tasks.filter((task) => task.projectId === project.id));
+  const allTasks = useActionHubStore((state) => state.tasks);
   const replaceSnapshot = useActionHubStore((state) => state.replaceSnapshot);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
   const [energyFilter, setEnergyFilter] = useState<string[]>([]);
 
-  const visibleTasks = tasks.filter((task) => {
+  const projectTasks = useMemo(() => allTasks.filter((task) => task.projectId === project.id), [allTasks, project.id]);
+  const visibleTasks = projectTasks.filter((task) => {
     if (statusFilter && task.status !== statusFilter) return false;
     if (priorityFilter.length && !priorityFilter.includes(task.priority)) return false;
     if (energyFilter.length && !energyFilter.includes(task.brainEnergy)) return false;

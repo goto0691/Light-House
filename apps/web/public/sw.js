@@ -1,4 +1,4 @@
-const CACHE_NAME = "project-light-house-v1";
+const CACHE_NAME = "project-light-house-v2";
 const APP_SHELL = ["/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -21,21 +21,12 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(() =>
-          caches.match(request).then(
-            (cached) =>
-              cached ||
-              new Response("<!doctype html><title>Offline</title><main style=\"font-family:sans-serif;padding:24px\">Project Light House is offline. Reconnect to continue.</main>", {
-                headers: { "Content-Type": "text/html; charset=utf-8" },
-              }),
-          ),
-        ),
+      fetch(request).catch(
+        () =>
+          new Response("<!doctype html><title>Offline</title><main style=\"font-family:sans-serif;padding:24px\">Project Light House is offline. Reconnect to continue.</main>", {
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          }),
+      ),
     );
     return;
   }
@@ -50,7 +41,7 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => cached);
+        .catch(() => cached || new Response("", { status: 504, statusText: "Gateway Timeout" }));
       return cached || fetched;
     }),
   );

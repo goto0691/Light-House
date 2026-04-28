@@ -12,8 +12,9 @@ export function InboxClient() {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const projects = useActionHubStore((state) => state.projects);
   const pendingCaptures = useActionHubStore((state) => state.pendingCaptures);
-  const inboxTasks = useActionHubStore((state) => state.tasks.filter((task) => task.projectId === null));
+  const tasks = useActionHubStore((state) => state.tasks);
   const replaceSnapshot = useActionHubStore((state) => state.replaceSnapshot);
+  const inboxTasks = useMemo(() => tasks.filter((task) => task.projectId === null), [tasks]);
   const routableProjects = useMemo(() => projects.filter((project) => project.progress < 100), [projects]);
   const targetProjectId = selectedProjectId || routableProjects[0]?.id || "";
   const targetProjectTitle = routableProjects.find((project) => project.id === targetProjectId)?.title;

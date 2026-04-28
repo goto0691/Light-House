@@ -32,6 +32,11 @@ export const metadata: Metadata = {
   description: "Personal second-brain workspace for action, knowledge, relationships, and life ops.",
   applicationName: "Project Light House",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icons/icon-192.svg", type: "image/svg+xml" }],
+    shortcut: [{ url: "/icons/icon-192.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icons/icon-192.svg", type: "image/svg+xml" }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -48,7 +53,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html className={`${sans.variable} ${serif.variable} ${display.variable} ${mono.variable}`} lang="ko" suppressHydrationWarning>
+    <html className={`${sans.variable} ${serif.variable} ${display.variable} ${mono.variable}`} data-scroll-behavior="smooth" lang="ko" suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem={false}>
           {children}

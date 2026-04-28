@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
@@ -61,8 +61,9 @@ function optionalNumber(value: string) {
 export function PersonDrawer({ id }: { id: string }) {
   const [isPending, startTransition] = useTransition();
   const person = usePRMStore((state) => state.people.find((item) => item.id === id));
-  const gifts = usePRMStore((state) => state.gifts.filter((item) => item.personId === id));
+  const allGifts = usePRMStore((state) => state.gifts);
   const replaceSnapshot = usePRMStore((state) => state.replaceSnapshot);
+  const gifts = useMemo(() => allGifts.filter((item) => item.personId === id), [allGifts, id]);
   const [interactionSummary, setInteractionSummary] = useState("");
   const [interactionType, setInteractionType] = useState("message");
   const [giftTitle, setGiftTitle] = useState("");
