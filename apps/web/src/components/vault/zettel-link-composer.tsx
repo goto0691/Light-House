@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { GlassCard } from "@/components/shared/glass-card";
 import type { SearchItem } from "@/lib/mock/search";
 import type { ZettelMock } from "@/lib/mock/vault";
+import { getZettelSearchText } from "@/lib/vault/zettel-properties";
 
 type ZettelLinkComposerProps = {
   currentZettelId?: string;
@@ -24,7 +25,7 @@ export function ZettelLinkComposer({ currentZettelId, candidates, semanticResult
         .filter((zettel) => zettel.id !== currentZettelId)
         .filter((zettel) => {
           if (!normalized) return true;
-          return `${zettel.title} ${zettel.summary} ${zettel.category} ${zettel.documentKind ?? ""}`.toLowerCase().includes(normalized);
+          return getZettelSearchText(zettel).includes(normalized);
         })
         .slice(0, 8),
     [candidates, currentZettelId, normalized],

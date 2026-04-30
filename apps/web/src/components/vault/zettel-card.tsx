@@ -2,6 +2,7 @@ import { GlassCard } from "@/components/shared/glass-card";
 import { Tag } from "@/components/shared/tag";
 import { cn } from "@/lib/utils/cn";
 import type { ZettelMock } from "@/lib/mock/vault";
+import { getZettelDocumentKindLabel } from "@/lib/vault/zettel-properties";
 
 type ZettelCardProps = {
   zettel: ZettelMock;
@@ -11,6 +12,8 @@ type ZettelCardProps = {
 };
 
 export function ZettelCard({ zettel, selected, onSelect, actions }: ZettelCardProps) {
+  const documentKindLabel = getZettelDocumentKindLabel(zettel.documentKind);
+
   return (
     <GlassCard
       className={cn(
@@ -27,8 +30,11 @@ export function ZettelCard({ zettel, selected, onSelect, actions }: ZettelCardPr
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Tag value={zettel.category} variant="custom" />
-          {zettel.documentKind ? <Tag value={zettel.documentKind} variant="neutral" /> : null}
+          {documentKindLabel ? <Tag value={documentKindLabel} variant="neutral" /> : null}
           {zettel.status ? <Tag value={zettel.status} variant="status" /> : null}
+          {zettel.tags.slice(0, 3).map((tag) => (
+            <Tag key={tag} value={`#${tag}`} variant="neutral" />
+          ))}
           <span className="tabular-nums rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             {zettel.backlinks.length} backlinks
           </span>

@@ -1,8 +1,10 @@
 import type { ZettelMock } from "@/lib/mock/vault";
+import { normalizeZettelDocumentKind, ZETTEL_DOCUMENT_KIND_OPTIONS } from "@/lib/vault/zettel-properties";
 
 export type ZettelFormState = {
   title: string;
   content: string;
+  tags: string[];
   type: ZettelMock["type"];
   documentKind: string;
   category: string;
@@ -28,26 +30,15 @@ export const ZETTEL_STATUS_OPTIONS = [
   { value: "archived", label: "Archived" },
 ];
 
-export const DOCUMENT_KIND_OPTIONS = [
-  { value: "sermon", label: "Sermon" },
-  { value: "sermon_note", label: "Sermon Note" },
-  { value: "bible_study", label: "Bible Study" },
-  { value: "meditation", label: "Meditation" },
-  { value: "essay", label: "Essay" },
-  { value: "reflection", label: "Reflection" },
-  { value: "prompt", label: "Prompt" },
-  { value: "fiction", label: "Fiction" },
-  { value: "story_idea", label: "Story Idea" },
-  { value: "personal_note", label: "Personal Note" },
-  { value: "archive", label: "Archive" },
-];
+export const DOCUMENT_KIND_OPTIONS = ZETTEL_DOCUMENT_KIND_OPTIONS;
 
 export function buildZettelForm(zettel?: ZettelMock | null): ZettelFormState {
   return {
     title: zettel?.title ?? "",
     content: zettel?.content ?? "",
+    tags: zettel?.tags ?? [],
     type: zettel?.type ?? "fleeting",
-    documentKind: zettel?.documentKind ?? "",
+    documentKind: normalizeZettelDocumentKind(zettel?.documentKind),
     category: zettel?.category ?? "",
     status: zettel?.status ?? "draft",
     summary: zettel?.summary && zettel.summary !== "요약이 아직 없습니다." ? zettel.summary : "",
@@ -61,6 +52,7 @@ export function zettelFormPayload(form: ZettelFormState) {
   return {
     title: form.title,
     content: form.content,
+    tags: form.tags,
     type: form.type,
     category: form.category,
     status: form.status,

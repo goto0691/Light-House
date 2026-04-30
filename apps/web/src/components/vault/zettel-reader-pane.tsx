@@ -1,71 +1,218 @@
-import Link from "next/link";
-import { Edit3, ExternalLink, Plus } from "lucide-react";
+"use client";
+
+import { useMemo, useState } from "react";
+import { RotateCcw, Save, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { GlassCard } from "@/components/shared/glass-card";
-import { MarkdownView } from "@/components/shared/markdown-view";
+import { MarkdownEditor } from "@/components/shared/markdown-editor";
 import { Tag } from "@/components/shared/tag";
+import { buildZettelForm, type ZettelFormState, zettelFormPayload } from "@/components/vault/zettel-form";
+import { ZettelPropertiesPanel } from "@/components/vault/zettel-properties-panel";
+import { ZettelRelationsPanel } from "@/components/vault/zettel-relations-panel";
 import type { ZettelMock } from "@/lib/mock/vault";
+import { postSnapshotMutation } from "@/lib/snapshot-client";
+import { getZettelDocumentKindLabel } from "@/lib/vault/zettel-properties";
+import { useVaultStore } from "@/stores/use-vault-store";
 
 type ZettelReaderPaneProps = {
-  zettel: ZettelMock;
+  zettel?: ZettelMock | null;
+  categoryOptions?: string[];
   isPending?: boolean;
+  mode?: "existing" | "new";
+  contextRefreshKey?: number | string;
+  onCancelNew?: () => void;
   onDelete?: () => void;
+  onRelationsChanged?: () => void;
+  onSaved?: (zettelId: string) => void;
 };
 
-export function ZettelReaderPane({ zettel, isPending, onDelete }: ZettelReaderPaneProps) {
+export function ZettelReaderPane({
+  zettel,
+  categoryOptions,
+  isPending,
+  mode = "existing",
+  contextRefreshKey,
+  onCancelNew,
+  onDelete,
+  onRelationsChanged,
+  onSaved,
+}: ZettelReaderPaneProps) {
+  const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
+  const initialForm = useMemo(() => buildZettelForm(mode === "new" ? null : zettel), [mode, zettel]);
+  const draftKey = `${mode}:${zettel?.id ?? "new"}`;
+  const initialDraft = useMemo(
+    () => ({
+      form: initialForm,
+      key: draftKey,
+      savedSignature: JSON.stringify(initialForm),
+    }),
+    [draftKey, initialForm],
+  );
+  const [draft, setDraft] = useState(initialDraft);
+  const [isSaving, setIsSaving] = useState(false);
+  const activeDraft = draft.key === draftKey ? draft : initialDraft;
+  const form = activeDraft.form;
+  const signature = JSON.stringify(form);
+  const dirty = signature !== activeDraft.savedSignature;
+  const documentKindLabel = getZettelDocumentKindLabel(form.documentKind);
+
+  function patchForm(patch: Partial<ZettelFormState>) {
+    setDraft((current) => {
+      const base = current.key === draftKey ? current : initialDraft;
+      return {
+        ...base,
+        form: { ...base.form, ...patch },
+      };
+    });
+  }
+
+  function resetDraft() {
+    setDraft(initialDraft);
+  }
+
+  async function save() {
+    if (!form.title.trim()) {
+      toast.error("제목은 비워둘 수 없습니다.");
+      return;
+    }
+    if (mode === "existing" && !zettel) return;
+
+    setIsSaving(true);
+    try {
+      const payload = await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+        mode === "new" ? "/api/vault/zettels" : `/api/vault/zettels/${zettel?.id}/details`,
+        zettelFormPayload(form),
+        replaceSnapshot,
+      );
+      const savedId = mode === "new" ? payload.snapshot.selectedZettelId : zettel?.id;
+      setDraft((current) => ({
+        ...(current.key === draftKey ? current : initialDraft),
+        savedSignature: JSON.stringify(form),
+      }));
+      toast.success(mode === "new" ? "새 Zettel을 만들었습니다." : "Zettel을 저장했습니다.");
+      if (savedId) onSaved?.(savedId);
+    } catch (error) {
+      toast.error("Zettel 저장에 실패했습니다.", {
+        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <GlassCard priority="secondary">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.2em] text-primary">{zettel.type}</p>
-            <h2 className="mt-3 text-balance font-display text-4xl leading-tight text-foreground">{zettel.title}</h2>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Tag value={zettel.category} variant="custom" />
-              {zettel.documentKind ? <Tag value={zettel.documentKind} variant="neutral" /> : null}
-              {zettel.status ? <Tag value={zettel.status} variant="status" /> : null}
-              <Tag value={`${zettel.outgoingLinks.length} outgoing`} variant="neutral" />
-              <Tag value={`${zettel.backlinks.length} backlinks`} variant="neutral" />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Tag value={form.type} variant="neutral" />
+              {documentKindLabel ? <Tag value={documentKindLabel} variant="neutral" /> : null}
+              {form.status ? <Tag value={form.status} variant="status" /> : null}
+              <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {dirty ? "unsaved" : mode === "new" ? "new" : "saved"}
+              </span>
             </div>
+            <input
+              className="mt-4 w-full border-0 bg-transparent font-display text-4xl leading-tight text-foreground outline-none placeholder:text-muted-foreground"
+              onChange={(event) => patchForm({ title: event.target.value })}
+              placeholder="메모 제목"
+              value={form.title}
+            />
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8" href="/vault/zettels/new">
-              <Plus className="h-4 w-4" />
-              새 메모
-            </Link>
-            <Link className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90" href={`/vault/zettels/${zettel.id}/edit`}>
-              <Edit3 className="h-4 w-4" />
-              편집
-            </Link>
-            {onDelete ? (
+            {mode === "new" && onCancelNew ? (
               <button
-                className="focus-ring min-h-10 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isPending}
+                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8"
+                onClick={onCancelNew}
+                type="button"
+              >
+                <X className="h-4 w-4" />
+                취소
+              </button>
+            ) : null}
+            <button
+              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!dirty || isSaving}
+              onClick={resetDraft}
+              type="button"
+            >
+              <RotateCcw className="h-4 w-4" />
+              되돌리기
+            </button>
+            <button
+              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isSaving || isPending || (!dirty && mode !== "new")}
+              onClick={() => void save()}
+              type="button"
+            >
+              <Save className="h-4 w-4" />
+              {isSaving ? "저장 중" : "저장"}
+            </button>
+            {onDelete && mode !== "new" ? (
+              <button
+                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isPending || isSaving}
                 onClick={onDelete}
                 type="button"
               >
+                <Trash2 className="h-4 w-4" />
                 삭제
               </button>
             ) : null}
           </div>
         </div>
-        {zettel.summary ? <p className="mt-5 max-w-3xl text-sm leading-7 text-muted-foreground">{zettel.summary}</p> : null}
-        {zettel.source || zettel.sourceUrl || zettel.originalCreatedAt ? (
-          <div className="mt-5 flex flex-wrap gap-2 text-xs text-muted-foreground">
-            {zettel.source ? <span className="rounded-md border border-white/10 bg-black/10 px-3 py-1.5">Source {zettel.source}</span> : null}
-            {zettel.originalCreatedAt ? <span className="rounded-md border border-white/10 bg-black/10 px-3 py-1.5">{zettel.originalCreatedAt}</span> : null}
-            {zettel.sourceUrl ? (
-              <a className="focus-ring inline-flex items-center gap-1 rounded-md border border-white/10 bg-black/10 px-3 py-1.5 text-primary" href={zettel.sourceUrl} rel="noreferrer" target="_blank">
-                원문 <ExternalLink className="h-3 w-3" />
-              </a>
-            ) : null}
-          </div>
-        ) : null}
+
+        <label className="mt-5 block">
+          <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">Summary</span>
+          <textarea
+            className="input-base min-h-24 resize-y leading-6"
+            onChange={(event) => patchForm({ summary: event.target.value })}
+            placeholder="짧은 요약"
+            value={form.summary}
+          />
+        </label>
       </GlassCard>
 
-      <GlassCard className="p-6 md:p-8" priority="secondary">
-        <MarkdownView value={zettel.content || zettel.summary || "아직 본문이 없습니다."} />
-      </GlassCard>
+      <MarkdownEditor onChange={(content) => patchForm({ content })} value={form.content} />
+
+      <ZettelPropertiesPanel categoryOptions={categoryOptions} form={form} onChange={patchForm} />
+
+      {mode === "existing" && zettel ? <ZettelRelationsPanel onChanged={onRelationsChanged} refreshKey={contextRefreshKey} zettelId={zettel.id} /> : null}
+
+      {zettel?.sourceDocument ? (
+        <GlassCard priority="secondary">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-primary">Imported Properties</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {zettel.sourceDocument.sourceDatabase ?? "source"} · {zettel.sourceDocument.status}
+              </p>
+            </div>
+            <span className="rounded-md border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              {zettel.sourceDocument.properties.length} properties
+            </span>
+          </div>
+          {zettel.sourceDocument.properties.length ? (
+            <div className="mt-4 grid gap-2 md:grid-cols-2">
+              {zettel.sourceDocument.properties.map((property) => (
+                <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2" key={`${property.name}:${property.value}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{property.name}</p>
+                    {property.type ? <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{property.type}</span> : null}
+                  </div>
+                  <p className="mt-1 break-words text-sm text-foreground">{property.value}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 rounded-md border border-dashed border-white/15 bg-black/10 p-3 text-sm text-muted-foreground">
+              가져온 원본 문서는 있지만 노출된 속성은 없습니다.
+            </p>
+          )}
+        </GlassCard>
+      ) : null}
     </div>
   );
 }

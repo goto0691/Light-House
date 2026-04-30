@@ -4,12 +4,24 @@ import { VaultHydrator } from "@/components/vault/vault-hydrator";
 import { getVaultSnapshot, seedVaultSupportData } from "@/lib/server/vault";
 
 export default async function VaultLayout({ children }: { children: ReactNode }) {
-  await seedVaultSupportData();
-  const snapshot = await getVaultSnapshot();
+  let initialError: string | undefined;
+  let snapshot: Awaited<ReturnType<typeof getVaultSnapshot>> | undefined;
+
+  try {
+    await seedVaultSupportData();
+    snapshot = await getVaultSnapshot();
+  } catch (error) {
+    initialError = getVaultBootstrapErrorMessage(error);
+  }
 
   return (
-    <VaultHydrator initialSnapshot={snapshot}>
+    <VaultHydrator initialError={initialError} initialSnapshot={snapshot}>
       {children}
     </VaultHydrator>
   );
+}
+
+function getVaultBootstrapErrorMessage(error: unknown) {
+  const detail = error instanceof Error ? error.message : "알 수 없는 서버 오류가 발생했습니다.";
+  return `서버에서 Vault 데이터를 준비하지 못했습니다. ${detail}`;
 }

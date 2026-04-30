@@ -1,5 +1,5 @@
-import { ZettelEditorClient } from "@/components/vault/zettel-editor-client";
+import { redirect } from "next/navigation";
 
 export default function NewZettelPage() {
-  return <ZettelEditorClient mode="new" />;
+  redirect("/vault/zettels?new=1");
 }

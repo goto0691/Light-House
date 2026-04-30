@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     type?: string;
     category?: string;
     content?: string;
+    tags?: string[];
     status?: string;
     documentKind?: string;
     originalCreatedAt?: string;
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
     type: body.type,
     category: body.category,
     content: body.content,
+    tags: body.tags,
     status: body.status,
     documentKind: body.documentKind,
     originalCreatedAt: body.originalCreatedAt,

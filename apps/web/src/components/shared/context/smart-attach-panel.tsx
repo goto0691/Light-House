@@ -6,6 +6,13 @@ import { toast } from "sonner";
 import type { ContextBundle, ContextSearchResult, EntityType, RelationKind } from "@/lib/context/types";
 
 const DEFAULT_TYPES: EntityType[] = ["person", "zettel", "media", "place", "task", "daily_log"];
+const SUPPORTED_TARGETS_BY_FOCUS: Partial<Record<EntityType, EntityType[]>> = {
+  daily_log: ["person"],
+  media: ["person", "zettel"],
+  person: ["task", "zettel", "media", "daily_log"],
+  task: ["person", "zettel"],
+  zettel: ["person", "media", "zettel", "task"],
+};
 const RELATION_OPTIONS: Array<{ label: string; value: RelationKind }> = [
   { label: "직접", value: "explicit" },
   { label: "언급", value: "mention" },
@@ -20,13 +27,24 @@ type SmartAttachPanelProps = {
   targetTypes?: EntityType[];
 };
 
+type SearchState = {
+  key: string;
+  results: ContextSearchResult[];
+};
+
 export function SmartAttachPanel({ focusId, focusType, onAttached, targetTypes = DEFAULT_TYPES }: SmartAttachPanelProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ContextSearchResult[]>([]);
+  const [searchState, setSearchState] = useState<SearchState | null>(null);
   const [relationKind, setRelationKind] = useState<RelationKind>("explicit");
   const [isPending, startTransition] = useTransition();
 
-  const filteredTypes = useMemo(() => targetTypes.filter((type) => type !== focusType), [focusType, targetTypes]);
+  const filteredTypes = useMemo(() => targetTypes.filter((type) => type !== focusType && isAttachSupported(focusType, type)), [focusType, targetTypes]);
+  const trimmedQuery = query.trim();
+  const searchKey = `${filteredTypes.join(",")}:${trimmedQuery}`;
+  const results = useMemo(
+    () => (trimmedQuery.length >= 2 && searchState?.key === searchKey ? searchState.results : []),
+    [searchKey, searchState, trimmedQuery.length],
+  );
   const titleCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const result of results) {
@@ -37,22 +55,24 @@ export function SmartAttachPanel({ focusId, focusType, onAttached, targetTypes =
 
   useEffect(() => {
     const controller = new AbortController();
-    const trimmedQuery = query.trim();
 
     if (trimmedQuery.length < 2) {
-      setResults([]);
       return () => controller.abort();
     }
 
+    const currentSearchKey = searchKey;
     const timer = window.setTimeout(async () => {
       try {
         const params = new URLSearchParams({ q: trimmedQuery, types: filteredTypes.join(",") });
         const response = await fetch(`/api/context/search?${params.toString()}`, { signal: controller.signal });
         if (!response.ok) throw new Error("Search failed");
         const payload = (await response.json()) as { results: ContextSearchResult[] };
-        setResults(payload.results.filter((item) => !(item.type === focusType && item.id === focusId)).slice(0, 8));
+        setSearchState({
+          key: currentSearchKey,
+          results: payload.results.filter((item) => !(item.type === focusType && item.id === focusId)).slice(0, 8),
+        });
       } catch (error) {
-        if (!controller.signal.aborted) setResults([]);
+        if (!controller.signal.aborted) setSearchState({ key: currentSearchKey, results: [] });
       }
     }, 250);
 
@@ -60,7 +80,7 @@ export function SmartAttachPanel({ focusId, focusType, onAttached, targetTypes =
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [filteredTypes, focusId, focusType, query]);
+  }, [filteredTypes, focusId, focusType, searchKey, trimmedQuery]);
 
   return (
     <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -101,22 +121,17 @@ export function SmartAttachPanel({ focusId, focusType, onAttached, targetTypes =
                 startTransition(async () => {
                   try {
                     const response = await fetch("/api/context/edges", {
-                      body: JSON.stringify({
-                        focusId,
-                        focusType,
-                        relationKind,
-                        targetId: result.id,
-                        targetType: result.type,
-                      }),
+                      body: JSON.stringify(edgePayload(focusType, focusId, result.type, result.id, relationKind)),
                       headers: { "Content-Type": "application/json" },
                       method: "POST",
                     });
                     if (!response.ok) throw new Error("Attach failed");
                     const payload = (await response.json()) as { bundle: ContextBundle };
+                    const bundle = payload.bundle.focus.type === focusType && payload.bundle.focus.id === focusId ? payload.bundle : await fetchFocusBundle(focusType, focusId);
                     toast.success("맥락 연결을 추가했습니다.");
                     setQuery("");
-                    setResults([]);
-                    onAttached?.(payload.bundle);
+                    setSearchState(null);
+                    onAttached?.(bundle);
                   } catch (error) {
                     toast.error("맥락 연결에 실패했습니다.", {
                       description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
@@ -143,4 +158,35 @@ function resultLabel(result: ContextSearchResult, titleCounts: Map<string, numbe
     return `${base} · ID ${result.id}`;
   }
   return base;
+}
+
+function isAttachSupported(focusType: EntityType, targetType: EntityType) {
+  return Boolean(SUPPORTED_TARGETS_BY_FOCUS[focusType]?.includes(targetType));
+}
+
+function edgePayload(focusType: EntityType, focusId: string, targetType: EntityType, targetId: string, label: RelationKind) {
+  if (focusType === "zettel" && targetType === "task") {
+    return {
+      focusId: targetId,
+      focusType: "task",
+      label,
+      targetId: focusId,
+      targetType: "zettel",
+    };
+  }
+
+  return {
+    focusId,
+    focusType,
+    label,
+    targetId,
+    targetType,
+  };
+}
+
+async function fetchFocusBundle(focusType: EntityType, focusId: string) {
+  const response = await fetch(`/api/context/${focusType}/${encodeURIComponent(focusId)}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Context refresh failed");
+  const payload = (await response.json()) as { bundle: ContextBundle };
+  return payload.bundle;
 }

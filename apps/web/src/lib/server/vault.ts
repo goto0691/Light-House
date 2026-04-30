@@ -8,6 +8,7 @@ import { requireSession } from "@/lib/auth/session";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
 import { syncZettelRelationsFromContent } from "@/lib/server/relations";
 import { syncTagsForEntity } from "@/lib/server/tagging";
+import { normalizeZettelDocumentKind } from "@/lib/vault/zettel-properties";
 
 export type VaultSnapshot = {
   selectedZettelId: string;
@@ -30,9 +31,13 @@ type ZettelRow = {
   sourceUrl: string | null;
   summary: string | null;
   content: string | null;
+  pinned: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 type BacklinkRow = { targetId: string; sourceTitle: string };
 type OutgoingRow = { id: string; sourceId: string; targetId: string; targetTitle: string };
+type ZettelTagRow = { zettelId: string; name: string };
 type MediaRow = {
   id: string;
   mediaType: MediaMock["mediaType"];
@@ -79,6 +84,7 @@ const ZETTEL_TYPES = ["fleeting", "literature", "permanent", "moc", "reference"]
 type ZettelDetailsInput = {
   title: string;
   content?: string;
+  tags?: string[];
   type?: string | null;
   category?: string | null;
   status?: string | null;
@@ -111,6 +117,23 @@ function summarize(content: string) {
 function optionalText(value: string | null | undefined) {
   const next = value?.trim();
   return next || null;
+}
+
+function normalizeTagValues(values: string[] | null | undefined) {
+  const unique = new Map<string, string>();
+  for (const value of values ?? []) {
+    const name = value.trim().replace(/^#/, "").replace(/\s+/g, " ");
+    if (!name) continue;
+    unique.set(name.toLowerCase(), name.slice(0, 40));
+  }
+  return [...unique.values()];
+}
+
+function getTagSyncText(content: string, tags: string[] | null | undefined) {
+  const tagText = normalizeTagValues(tags)
+    .map((tag) => `#${tag.replace(/\s+/g, "_")}`)
+    .join(" ");
+  return [content, tagText].filter(Boolean).join("\n");
 }
 
 function normalizeZettelType(value: string | null | undefined): ZettelMock["type"] {
@@ -177,7 +200,7 @@ export async function seedVaultSupportData() {
 
 export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise<VaultSnapshot> {
   const { id: userId } = await resolveUser();
-  const [zettelResult, backlinkResult, outgoingResult, mediaResult, assetResult, placeResult, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
+  const [zettelResult, backlinkResult, outgoingResult, zettelTagResult, mediaResult, assetResult, placeResult, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
     queryD1<ZettelRow>(
       `select
          id,
@@ -190,7 +213,10 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
          source,
          source_url as sourceUrl,
          summary,
-         content
+         content,
+         pinned,
+         created_at as createdAt,
+         updated_at as updatedAt
        from zettels
        where user_id = ?
          and deleted_at is null
@@ -219,6 +245,17 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
        inner join zettels zs on zs.id = zl.source_id
        inner join zettels zt on zt.id = zl.target_id
        where zs.user_id = ? and zs.deleted_at is null and zt.deleted_at is null`,
+      [userId],
+    ),
+    queryD1<ZettelTagRow>(
+      `select tg.taggable_id as zettelId, t.name
+       from taggings tg
+       inner join tags t on t.id = tg.tag_id
+       inner join zettels z on z.id = tg.taggable_id
+       where z.user_id = ?
+         and z.deleted_at is null
+         and tg.taggable_type = 'zettel'
+       order by t.name asc`,
       [userId],
     ),
     queryD1<MediaRow>(
@@ -301,6 +338,13 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
     outgoing.set(row.sourceId, list);
   }
 
+  const zettelTags = new Map<string, string[]>();
+  for (const row of zettelTagResult.rows) {
+    const list = zettelTags.get(row.zettelId) ?? [];
+    list.push(row.name);
+    zettelTags.set(row.zettelId, list);
+  }
+
   const sourceProperties = new Map<string, Array<{ name: string; value: string; type?: string | null }>>();
   for (const row of sourcePropertyResult.rows) {
     if (!row.value) continue;
@@ -334,6 +378,10 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
       outgoingLinks: links,
       backlinks: backlinks.get(row.id) ?? [],
       related: links.map((link) => link.title),
+      tags: zettelTags.get(row.id) ?? [],
+      pinned: Boolean(row.pinned),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
       status: row.status,
       documentKind: row.documentKind,
       originalCreatedAt: row.originalCreatedAt,
@@ -538,6 +586,17 @@ export async function updateVaultZettelTitle(zettelId: string, title: string) {
 
 export async function updateVaultZettelContent(zettelId: string, content: string) {
   const { id: userId } = await resolveUser();
+  const currentTags = await queryD1<{ name: string }>(
+    `select t.name
+     from taggings tg
+     inner join tags t on t.id = tg.tag_id
+     inner join zettels z on z.id = tg.taggable_id
+     where z.user_id = ?
+       and z.id = ?
+       and z.deleted_at is null
+       and tg.taggable_type = 'zettel'`,
+    [userId, zettelId],
+  );
   await executeD1(
     `update zettels
      set content = ?, content_text = ?, summary = ?, updated_at = datetime('now')
@@ -548,7 +607,7 @@ export async function updateVaultZettelContent(zettelId: string, content: string
     userId,
     taggableType: "zettel",
     taggableId: zettelId,
-    content,
+    content: getTagSyncText(content, currentTags.rows.map((row) => row.name)),
   });
   await syncZettelRelationsFromContent({
     userId,
@@ -579,7 +638,7 @@ export async function createVaultZettel(input: ZettelDetailsInput) {
       normalizeZettelType(input.type),
       optionalText(input.category) ?? "미분류",
       optionalText(input.status) ?? "draft",
-      optionalText(input.documentKind),
+      optionalText(normalizeZettelDocumentKind(input.documentKind)),
       optionalText(input.originalCreatedAt),
       optionalText(input.source),
       optionalText(input.sourceUrl),
@@ -589,7 +648,7 @@ export async function createVaultZettel(input: ZettelDetailsInput) {
     userId,
     taggableType: "zettel",
     taggableId: id,
-    content,
+    content: getTagSyncText(content, input.tags),
   });
   await syncZettelRelationsFromContent({
     userId,
@@ -634,7 +693,7 @@ export async function updateVaultZettelDetails(zettelId: string, input: ZettelDe
       normalizeZettelType(input.type),
       optionalText(input.category) ?? "미분류",
       optionalText(input.status),
-      optionalText(input.documentKind),
+      optionalText(normalizeZettelDocumentKind(input.documentKind)),
       optionalText(input.originalCreatedAt),
       optionalText(input.source),
       optionalText(input.sourceUrl),
@@ -647,7 +706,7 @@ export async function updateVaultZettelDetails(zettelId: string, input: ZettelDe
     userId,
     taggableType: "zettel",
     taggableId: zettelId,
-    content,
+    content: getTagSyncText(content, input.tags),
   });
   await syncZettelRelationsFromContent({
     userId,

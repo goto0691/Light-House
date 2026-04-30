@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Workflow } from "lucide-react";
+import { Plus, Save, Trash2, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { BacklinkPanel } from "@/components/vault/backlink-panel";
 import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { ContextMapMini } from "@/components/shared/context/context-map-mini";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -15,13 +14,12 @@ import { GlassCard } from "@/components/shared/glass-card";
 import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shared/page-layout";
 import { SavedViewTabs } from "@/components/shared/saved-view-tabs";
 import { ZettelCard } from "@/components/vault/zettel-card";
-import { ZettelLinkComposer } from "@/components/vault/zettel-link-composer";
 import { ZettelReaderPane } from "@/components/vault/zettel-reader-pane";
 import { DOCUMENT_KIND_OPTIONS, ZETTEL_STATUS_OPTIONS, ZETTEL_TYPE_OPTIONS } from "@/components/vault/zettel-form";
-import type { SearchItem } from "@/lib/mock/search";
 import type { ZettelMock } from "@/lib/mock/vault";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import type { SavedView } from "@/lib/server/ui-state";
+import { getZettelSearchText, normalizeZettelDocumentKind } from "@/lib/vault/zettel-properties";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 type ZettelsClientProps = {
@@ -39,116 +37,142 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   const storeSelectedZettelId = useVaultStore((state) => state.selectedZettelId);
   const selectZettel = useVaultStore((state) => state.selectZettel);
   const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
+  const [localSavedViews, setLocalSavedViews] = useState(savedViews);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [documentKindFilter, setDocumentKindFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryTags, setCategoryTags] = useState<string[]>([]);
-  const [semanticResults, setSemanticResults] = useState<SearchItem[]>([]);
-  const activeViewKey = searchParams.get("view") ?? savedViews.find((view) => view.isDefault)?.viewKey ?? savedViews[0]?.viewKey ?? "all";
-  const activeView = savedViews.find((view) => view.viewKey === activeViewKey) ?? savedViews.find((view) => view.isDefault) ?? savedViews[0];
+  const [propertyTags, setPropertyTags] = useState<string[]>([]);
+  const [sortKey, setSortKey] = useState("updated-desc");
+  const [contextRefreshKey, setContextRefreshKey] = useState(0);
+  const [creatingDraftOpen, setCreatingDraftOpen] = useState(false);
+  const isCreating = creatingDraftOpen || searchParams.get("new") === "1";
+  const activeViewKey = searchParams.get("view") ?? getSavedViewKey(localSavedViews.find((view) => view.isDefault)) ?? getSavedViewKey(localSavedViews[0]) ?? "all";
+  const activeView = localSavedViews.find((view) => getSavedViewKey(view) === activeViewKey) ?? localSavedViews.find((view) => view.isDefault) ?? localSavedViews[0];
+  const activeViewIsPersisted = Boolean(activeView && !activeView.id.startsWith("default-"));
   const resolvedSelectedId = selectedZettelId ?? storeSelectedZettelId;
-  const filterKey = [activeViewKey, query, typeFilter, documentKindFilter, statusFilter, categoryTags.join("|")].join("\u0000");
+  const filterKey = [activeViewKey, query, typeFilter, documentKindFilter, statusFilter, categoryTags.join("|"), propertyTags.join("|"), sortKey].join("\u0000");
   const [visiblePage, setVisiblePage] = useState({ key: filterKey, limit: LIST_PAGE_SIZE });
   const visibleLimit = visiblePage.key === filterKey ? visiblePage.limit : LIST_PAGE_SIZE;
 
-  const documentKindOptions = useMemo(() => {
-    const values = new Set(DOCUMENT_KIND_OPTIONS.map((option) => option.value));
-    zettels.forEach((zettel) => {
-      if (zettel.documentKind) values.add(zettel.documentKind);
-    });
-    return Array.from(values).map((value) => ({
-      value,
-      label: DOCUMENT_KIND_OPTIONS.find((option) => option.value === value)?.label ?? value,
-    }));
-  }, [zettels]);
-
   const viewZettels = activeView ? zettels.filter((item) => zettelMatchesSavedView(item, activeView)) : zettels;
-  const visibleZettels = viewZettels.filter((item) => {
+  const visibleZettels = sortZettels(viewZettels.filter((item) => {
     if (typeFilter && item.type !== typeFilter) return false;
-    if (documentKindFilter && item.documentKind !== documentKindFilter) return false;
+    if (documentKindFilter && normalizeZettelDocumentKind(item.documentKind) !== documentKindFilter) return false;
     if (statusFilter && item.status !== statusFilter) return false;
-    if (categoryTags.length && !categoryTags.some((tag) => item.category.toLowerCase().includes(tag.toLowerCase()))) return false;
-    if (query && !`${item.title} ${item.summary} ${item.category} ${item.documentKind ?? ""} ${item.source ?? ""}`.toLowerCase().includes(query.toLowerCase())) return false;
+    if (categoryTags.length && !categoryTags.some((tag) => getCategorySearchText(item).includes(tag.toLowerCase()))) return false;
+    if (propertyTags.length && !propertyTags.every((tag) => getSourcePropertySearchText(item).includes(tag.toLowerCase()))) return false;
+    if (query && !getZettelSearchText(item).includes(query.toLowerCase())) return false;
     return true;
-  });
-  const selected = zettels.find((item) => item.id === resolvedSelectedId) ?? visibleZettels[0] ?? zettels[0];
+  }), sortKey);
+  const selected = isCreating ? null : zettels.find((item) => item.id === resolvedSelectedId) ?? visibleZettels[0] ?? zettels[0];
   const listedZettels = visibleZettels.slice(0, visibleLimit);
-  const linkCandidates = zettels.filter((item) => item.id !== selected?.id);
+  const categoryOptions = useMemo(() => Array.from(new Set(zettels.map((zettel) => zettel.category).filter(Boolean))).sort(), [zettels]);
 
   useEffect(() => {
     if (!selected?.id) return;
     if (storeSelectedZettelId !== selected.id) selectZettel(selected.id);
   }, [selectZettel, selected?.id, storeSelectedZettelId]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSemanticResults() {
-      if (!selected?.title.trim()) {
-        setSemanticResults([]);
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(selected.title)}&types=zettel&semantic=1`, {
-          cache: "no-store",
-        });
-        if (!response.ok) return;
-        const payload = (await response.json()) as { results: SearchItem[] };
-        if (!cancelled) {
-          setSemanticResults(payload.results.filter((item) => item.type === "zettel" && item.id !== selected.id).slice(0, 8));
-        }
-      } catch {
-        if (!cancelled) setSemanticResults([]);
-      }
-    }
-
-    void loadSemanticResults();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selected?.id, selected?.title]);
-
   function openZettel(id: string) {
+    setCreatingDraftOpen(false);
     selectZettel(id);
     router.push(`/vault/zettels/${id}`);
   }
 
-  function addLink(targetId: string) {
-    if (!selected) return;
-    startTransition(async () => {
-      try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-          "/api/vault/zettel-links",
-          { sourceId: selected.id, targetId },
-          replaceSnapshot,
-        );
-        toast.success("메모 링크를 추가했습니다.");
-      } catch (error) {
-        toast.error("메모 링크 추가에 실패했습니다.", {
-          description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-        });
-      }
-    });
+  function openNewZettel() {
+    setCreatingDraftOpen(true);
+    router.push("/vault/zettels?new=1");
   }
 
-  function removeLink(linkId: string) {
-    startTransition(async () => {
-      try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-          `/api/vault/zettel-links/${linkId}/delete`,
-          undefined,
-          replaceSnapshot,
-        );
-        toast.success("메모 링크를 제거했습니다.");
-      } catch (error) {
-        toast.error("메모 링크 제거에 실패했습니다.", {
-          description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-        });
-      }
-    });
+  function buildSavedViewPayload(name?: string) {
+    const filterState: Record<string, unknown> = {
+      ...(activeView?.filterState ?? {}),
+    };
+    if (typeFilter) filterState.type = [typeFilter];
+    if (documentKindFilter) filterState.documentKind = [documentKindFilter];
+    if (statusFilter) filterState.status = [statusFilter];
+    if (categoryTags.length) filterState.category = categoryTags;
+    if (propertyTags.length) filterState.property = propertyTags;
+
+    return {
+      domain: "library",
+      scope: "knowledge",
+      name: name ?? activeView?.name ?? "Zettel View",
+      icon: activeView?.icon ?? "library",
+      searchQuery: query.trim() || activeView?.searchQuery || "",
+      filterState,
+      sortState: { key: sortKey || getSavedViewSortKey(activeView) || "updated-desc" },
+    };
+  }
+
+  async function saveCurrentView() {
+    const name = window.prompt("저장할 조회 이름", query.trim() || activeView?.name || "Zettel View");
+    if (!name?.trim()) return;
+    try {
+      const viewKey = `${slugifyViewKey(name)}-${Date.now().toString(36)}`;
+      const response = await fetch("/api/saved-views", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...buildSavedViewPayload(name),
+          viewKey,
+          displayOrder: localSavedViews.length,
+        }),
+      });
+      const payload = (await response.json()) as { views?: SavedView[]; error?: string };
+      if (!response.ok || !payload.views) throw new Error(payload.error ?? "Saved view 저장에 실패했습니다.");
+      setLocalSavedViews(payload.views);
+      router.push(`/vault/zettels?view=${encodeURIComponent(viewKey)}`);
+      toast.success("현재 조회를 저장했습니다.");
+    } catch (error) {
+      toast.error("Saved view 저장에 실패했습니다.", {
+        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+      });
+    }
+  }
+
+  async function updateActiveView() {
+    if (!activeView || !activeViewIsPersisted) return;
+    try {
+      const response = await fetch(`/api/saved-views/${activeView.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...buildSavedViewPayload(),
+          viewKey: getSavedViewKey(activeView),
+          displayOrder: activeView.displayOrder,
+        }),
+      });
+      const payload = (await response.json()) as { views?: SavedView[]; error?: string };
+      if (!response.ok || !payload.views) throw new Error(payload.error ?? "Saved view 업데이트에 실패했습니다.");
+      setLocalSavedViews(payload.views);
+      toast.success("Saved view를 업데이트했습니다.");
+    } catch (error) {
+      toast.error("Saved view 업데이트에 실패했습니다.", {
+        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+      });
+    }
+  }
+
+  async function deleteActiveView() {
+    if (!activeView || !activeViewIsPersisted || !window.confirm(`"${activeView.name}" saved view를 삭제할까요?`)) return;
+    try {
+      const response = await fetch(`/api/saved-views/${activeView.id}`, { method: "DELETE" });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Saved view 삭제에 실패했습니다.");
+      const refreshed = await fetch("/api/saved-views?domain=library&scope=knowledge", { cache: "no-store" });
+      const refreshedPayload = (await refreshed.json()) as { views?: SavedView[]; error?: string };
+      if (!refreshed.ok || !refreshedPayload.views) throw new Error(refreshedPayload.error ?? "Saved view 목록을 다시 불러오지 못했습니다.");
+      setLocalSavedViews(refreshedPayload.views);
+      router.push("/vault/zettels");
+      toast.success("Saved view를 삭제했습니다.");
+    } catch (error) {
+      toast.error("Saved view 삭제에 실패했습니다.", {
+        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+      });
+    }
   }
 
   function deleteSelected() {
@@ -173,7 +197,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   if (!zettels.length) {
     return (
       <EmptyState
-        cta={{ label: "첫 Zettel 쓰기", hotkey: "Cmd+N", onClick: () => router.push("/vault/zettels/new") }}
+        cta={{ label: "첫 Zettel 쓰기", hotkey: "Cmd+N", onClick: () => router.push("/vault/zettels?new=1") }}
         description="생각은 쓰는 순간 연결을 얻습니다. 첫 메모를 만들어 Vault에 불을 켜보세요."
         illustration="zettel"
         title="첫 번째 원석을 던져보세요"
@@ -186,10 +210,10 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
       <PageHeader
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" href="/vault/zettels/new">
+            <button className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={openNewZettel} type="button">
               <Plus className="h-4 w-4" />
               새 메모
-            </Link>
+            </button>
             <Link className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8" href="/vault/zettels/graph">
               <Workflow className="h-4 w-4" />
               Graph
@@ -199,19 +223,21 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             </span>
           </div>
         }
-        description="읽기 모드에서는 탐색, 독서, 연결 확인만 다룹니다. 작성과 속성 편집은 별도 입력 모드에서 이어집니다."
+        description="메모를 고르고, 읽고, 고치는 흐름을 한 화면에서 이어갑니다."
         eyebrow="Vault"
         title="Zettelkasten"
       />
 
       <PageToolbar>
-        <SavedViewTabs activeViewKey={activeView?.viewKey ?? activeViewKey} basePath="/vault/zettels" views={savedViews} />
+        <SavedViewTabs activeViewKey={getSavedViewKey(activeView) ?? activeViewKey} basePath="/vault/zettels" views={localSavedViews} />
         <FilterBar
+          key={activeViewKey}
           filters={[
             { kind: "select", key: "type", label: "Type", options: ZETTEL_TYPE_OPTIONS },
-            { kind: "select", key: "documentKind", label: "Kind", options: documentKindOptions },
+            { kind: "select", key: "documentKind", label: "Kind", options: DOCUMENT_KIND_OPTIONS },
             { kind: "select", key: "status", label: "Status", options: ZETTEL_STATUS_OPTIONS },
             { kind: "tag", key: "category", label: "Category tag" },
+            { kind: "tag", key: "property", label: "Property search" },
           ]}
           onChange={(state) => {
             setQuery(state.q);
@@ -219,31 +245,63 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             setDocumentKindFilter(typeof state.filters.documentKind === "string" ? state.filters.documentKind : "");
             setStatusFilter(typeof state.filters.status === "string" ? state.filters.status : "");
             setCategoryTags(Array.isArray(state.filters.category) ? state.filters.category : []);
+            setPropertyTags(Array.isArray(state.filters.property) ? state.filters.property : []);
+            setSortKey(state.sort ?? "updated-desc");
           }}
-          searchPlaceholder="메모 제목, 요약, 카테고리 검색"
+          initialSort={getSavedViewSortKey(activeView)}
+          rightSlot={
+            <>
+              {activeViewIsPersisted ? (
+                <button
+                  className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+                  onClick={() => void updateActiveView()}
+                  type="button"
+                >
+                  <Save className="h-4 w-4" />
+                  Update View
+                </button>
+              ) : null}
+              <button
+                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+                onClick={() => void saveCurrentView()}
+                type="button"
+              >
+                <Save className="h-4 w-4" />
+                Save View
+              </button>
+              {activeViewIsPersisted ? (
+                <button
+                  aria-label="Delete saved view"
+                  className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+                  onClick={() => void deleteActiveView()}
+                  type="button"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              ) : null}
+            </>
+          }
+          searchPlaceholder="제목, 본문, 태그, 속성 검색"
+          sortOptions={[
+            { value: "updated-desc", label: "Recently Updated" },
+            { value: "created-desc", label: "Recently Created" },
+            { value: "title-asc", label: "Title A-Z" },
+            { value: "kind-asc", label: "Kind" },
+          ]}
         />
       </PageToolbar>
 
       <PageBody
         aside={
-          selected ? (
+          selected && !isCreating ? (
             <div className="space-y-4">
-              <ZettelLinkComposer candidates={linkCandidates} currentZettelId={selected.id} disabled={isPending} onAddLink={addLink} semanticResults={semanticResults} />
-              <BacklinkPanel
-                isPending={isPending}
-                onRemoveLink={removeLink}
-                onSelectSemantic={openZettel}
-                semanticResults={semanticResults}
-                zettel={selected}
-              />
               <ContextBundlePanel
                 density="drawer"
-                enableAttach
                 entityId={selected.id}
                 entityType="zettel"
                 mainSlot={(bundle) => <ContextMapMini bundle={bundle} />}
                 railDefaultLens="zettels"
-                refreshKey={selected.id}
+                refreshKey={`${selected.id}:${contextRefreshKey}`}
               />
             </div>
           ) : null
@@ -253,7 +311,34 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
         className="zettels-read-body"
       >
         <div className="grid gap-4 xl:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
-          <GlassCard className="max-h-none xl:max-h-[calc(100vh-220px)] xl:overflow-y-auto" priority="secondary">
+          {selected || isCreating ? (
+            <div className="order-1 xl:order-2">
+              <ZettelReaderPane
+                categoryOptions={categoryOptions}
+                contextRefreshKey={contextRefreshKey}
+                isPending={isPending}
+                mode={isCreating ? "new" : "existing"}
+                onCancelNew={() => {
+                  setCreatingDraftOpen(false);
+                  router.push("/vault/zettels");
+                }}
+                onDelete={selected ? deleteSelected : undefined}
+                onRelationsChanged={() => setContextRefreshKey((value) => value + 1)}
+                onSaved={(zettelId) => {
+                  setCreatingDraftOpen(false);
+                  selectZettel(zettelId);
+                  router.push(`/vault/zettels/${zettelId}`);
+                }}
+                zettel={selected}
+              />
+            </div>
+          ) : (
+            <div className="order-1 xl:order-2">
+              <EmptyState description="목록에서 메모를 선택하거나 새 메모를 만듭니다." illustration="zettel" title="메모를 선택해 주세요" />
+            </div>
+          )}
+
+          <GlassCard className="order-2 max-h-none xl:order-1 xl:max-h-[calc(100vh-220px)] xl:overflow-y-auto" priority="secondary">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-primary">Notes</p>
@@ -287,12 +372,6 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
               </button>
             ) : null}
           </GlassCard>
-
-          {selected ? (
-            <ZettelReaderPane isPending={isPending} onDelete={deleteSelected} zettel={selected} />
-          ) : (
-            <EmptyState description="왼쪽 목록에서 메모를 선택해 읽기 화면을 엽니다." illustration="zettel" title="읽을 메모를 선택해 주세요" />
-          )}
         </div>
       </PageBody>
     </PageLayout>
@@ -308,14 +387,86 @@ function normalizeFilterValue(value: string) {
   return value.toLowerCase().replaceAll("_", " ").trim();
 }
 
-function zettelMatchesSavedView(item: ZettelMock, view: SavedView) {
-  const kinds = asStringArray(view.filterState.kind).map(normalizeFilterValue);
-  const statuses = asStringArray(view.filterState.status).map(normalizeFilterValue);
-  const itemKind = normalizeFilterValue(item.documentKind ?? "");
-  const itemStatus = normalizeFilterValue(item.status ?? "");
-  const haystack = normalizeFilterValue(`${item.documentKind ?? ""} ${item.category} ${item.title} ${item.summary}`);
+function getSavedViewKey(view: SavedView | null | undefined) {
+  return view?.viewKey ?? view?.id ?? null;
+}
 
+function getSavedViewSortKey(view: SavedView | null | undefined) {
+  const key = view?.sortState.key;
+  return typeof key === "string" ? key : undefined;
+}
+
+function slugifyViewKey(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 48) || "zettel-view";
+}
+
+function getCategorySearchText(item: ZettelMock) {
+  return [item.category, item.tags.join(" ")].join(" ").toLowerCase();
+}
+
+function getSourcePropertySearchText(item: ZettelMock) {
+  return [
+    item.source ?? "",
+    item.sourceUrl ?? "",
+    item.originalCreatedAt ?? "",
+    item.sourceDocument?.sourceDatabase ?? "",
+    item.sourceDocument?.documentRole ?? "",
+    item.sourceDocument?.status ?? "",
+    item.sourceDocument?.properties.flatMap((property) => [property.name, property.value, property.type ?? ""]).join(" ") ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function sortZettels(items: ZettelMock[], sortKey: string) {
+  const sorted = [...items];
+  if (sortKey === "title-asc") return sorted.sort((left, right) => left.title.localeCompare(right.title, "ko-KR"));
+  if (sortKey === "kind-asc") {
+    return sorted.sort((left, right) => normalizeZettelDocumentKind(left.documentKind).localeCompare(normalizeZettelDocumentKind(right.documentKind)));
+  }
+  if (sortKey === "created-desc") {
+    return sorted.sort((left, right) => getTimeValue(right.createdAt) - getTimeValue(left.createdAt));
+  }
+  return sorted.sort((left, right) => Number(right.pinned ?? false) - Number(left.pinned ?? false) || getTimeValue(right.updatedAt ?? right.createdAt) - getTimeValue(left.updatedAt ?? left.createdAt));
+}
+
+function getTimeValue(value: string | null | undefined) {
+  return value ? new Date(value).getTime() || 0 : 0;
+}
+
+function zettelMatchesSavedView(item: ZettelMock, view: SavedView) {
+  const kinds = asStringArray(view.filterState.kind).map(normalizeZettelDocumentKind).filter(Boolean);
+  const documentKinds = asStringArray(view.filterState.documentKind).map(normalizeZettelDocumentKind).filter(Boolean);
+  const statuses = asStringArray(view.filterState.status).map(normalizeFilterValue);
+  const types = asStringArray(view.filterState.type).map(normalizeFilterValue);
+  const categories = asStringArray(view.filterState.category).map(normalizeFilterValue);
+  const tags = asStringArray(view.filterState.tags).map(normalizeFilterValue);
+  const propertyTerms = [...asStringArray(view.filterState.property), ...asStringArray(view.filterState.sourceProperty)].map(normalizeFilterValue);
+  const itemKind = normalizeZettelDocumentKind(item.documentKind);
+  const itemStatus = normalizeFilterValue(item.status ?? "");
+  const itemType = normalizeFilterValue(item.type);
+  const haystack = getZettelSearchText(item);
+  const categoryHaystack = getCategorySearchText(item);
+  const propertyHaystack = getSourcePropertySearchText(item);
+  const viewSearch = normalizeFilterValue(view.searchQuery);
+
+  if (viewSearch && !haystack.includes(viewSearch)) return false;
+  if (types.length && !types.includes(itemType)) return false;
   if (kinds.length && !kinds.some((kind) => itemKind === kind || haystack.includes(kind))) return false;
+  if (documentKinds.length && !documentKinds.some((kind) => itemKind === kind || haystack.includes(kind))) return false;
   if (statuses.length && !statuses.includes(itemStatus)) return false;
+  if (categories.length && !categories.some((category) => categoryHaystack.includes(category))) return false;
+  if (tags.length && !tags.every((tag) => item.tags.some((itemTag) => normalizeFilterValue(itemTag).includes(tag)))) return false;
+  if (propertyTerms.length && !propertyTerms.every((term) => propertyHaystack.includes(term))) return false;
+  if (view.filterState.hasSourceDocument === true && !item.sourceDocument) return false;
+  if (view.filterState.hasSourceDocument === false && item.sourceDocument) return false;
+  if (view.filterState.hasBacklinks === true && !item.backlinks.length) return false;
+  if (view.filterState.hasOutgoingLinks === true && !item.outgoingLinks.length) return false;
   return true;
 }

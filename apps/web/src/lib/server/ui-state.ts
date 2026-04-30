@@ -309,6 +309,67 @@ export async function createSavedView(input: SavedViewInput) {
   return listSavedViews({ domain: input.domain, scope: input.scope });
 }
 
+export async function updateSavedView(viewId: string, input: Partial<SavedViewInput>) {
+  const user = await resolveCurrentUser();
+  const current = await queryD1<SavedViewRow>(
+    `select
+       id,
+       domain,
+       scope,
+       name,
+       icon,
+       search_query as searchQuery,
+       filter_state as filterState,
+       sort_state as sortState,
+       view_key as viewKey,
+       is_default as isDefault,
+       display_order as displayOrder
+     from saved_views
+     where id = ? and user_id = ? and deleted_at is null
+     limit 1`,
+    [viewId, user.id],
+  );
+  const existing = current.rows[0];
+  if (!existing) throw new Error("Saved view를 찾지 못했습니다.");
+
+  if (input.isDefault) {
+    await executeD1(
+      `update saved_views
+       set is_default = 0, updated_at = datetime('now')
+       where user_id = ? and domain = ? and scope = ? and id <> ? and deleted_at is null`,
+      [user.id, existing.domain, existing.scope, viewId],
+    );
+  }
+
+  await executeD1(
+    `update saved_views
+     set name = coalesce(?, name),
+         icon = ?,
+         search_query = ?,
+         filter_state = ?,
+         sort_state = ?,
+         view_key = coalesce(?, view_key),
+         is_default = ?,
+         display_order = coalesce(?, display_order),
+         updated_at = datetime('now')
+     where id = ? and user_id = ? and deleted_at is null`,
+    [
+      input.name?.trim() || existing.name,
+      input.icon === undefined ? existing.icon : input.icon,
+      input.searchQuery === undefined ? existing.searchQuery ?? "" : input.searchQuery.trim(),
+      input.filterState === undefined ? existing.filterState ?? "{}" : serializeJson(input.filterState),
+      input.sortState === undefined ? existing.sortState ?? "{}" : serializeJson(input.sortState),
+      input.viewKey ?? null,
+      input.isDefault === undefined ? (toBool(existing.isDefault) ? 1 : 0) : input.isDefault ? 1 : 0,
+      input.displayOrder ?? existing.displayOrder ?? null,
+      viewId,
+      user.id,
+    ],
+  );
+
+  return listSavedViews({ domain: existing.domain, scope: existing.scope });
+}
+
 export async function deleteSavedView(viewId: string) {
   const user = await resolveCurrentUser();
   await executeD1(

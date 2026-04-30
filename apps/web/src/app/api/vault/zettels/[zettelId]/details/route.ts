@@ -6,6 +6,7 @@ import { updateVaultZettelDetails } from "@/lib/server/vault";
 type Body = {
   title?: string;
   content?: string;
+  tags?: string[];
   type?: string;
   category?: string;
   status?: string;
@@ -27,6 +28,7 @@ export async function POST(request: Request, context: { params: Promise<{ zettel
       snapshot: await updateVaultZettelDetails(zettelId, {
         title: body.title ?? "",
         content: body.content ?? "",
+        tags: body.tags,
         type: body.type,
         category: body.category,
         status: body.status,

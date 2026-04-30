@@ -24,6 +24,7 @@ type FilterBarProps = {
   onChange: (state: { q: string; filters: FilterState; sort?: string; view?: string }) => void;
   rightSlot?: React.ReactNode;
   className?: string;
+  initialSort?: string;
   syncUrl?: boolean;
 };
 
@@ -35,6 +36,7 @@ export function FilterBar({
   onChange,
   rightSlot,
   className,
+  initialSort,
   syncUrl = true,
 }: FilterBarProps) {
   const router = useRouter();
@@ -42,7 +44,7 @@ export function FilterBar({
   const searchParams = useSearchParams();
   const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
-  const [sort, setSort] = useState(() => searchParams.get("sort") ?? sortOptions?.[0]?.value ?? "");
+  const [sort, setSort] = useState(() => searchParams.get("sort") ?? initialSort ?? sortOptions?.[0]?.value ?? "");
   const [selectedView, setSelectedView] = useState(() => searchParams.get("view") ?? savedViews?.find((view) => view.isDefault)?.id ?? "");
   const [filterState, setFilterState] = useState<FilterState>(() => buildInitialFilters(filters, searchParams));
 
@@ -153,6 +155,7 @@ export function FilterBar({
             const values = Array.isArray(filterState[filter.key]) ? (filterState[filter.key] as string[]) : [];
             return (
               <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-full border border-white/10 bg-black/10 px-2 py-1.5" key={filter.key}>
+                <span className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{filter.label}</span>
                 {values.map((value) => (
                   <button
                     aria-label={`${value} 제거`}
