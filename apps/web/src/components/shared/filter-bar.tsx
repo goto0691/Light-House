@@ -14,7 +14,7 @@ export type FilterConfig =
   | { kind: "select"; key: string; label: string; options: { value: string; label: string; icon?: string }[] }
   | { kind: "multi"; key: string; label: string; options: { value: string; label: string; icon?: string }[] }
   | { kind: "date-range"; key: string; label: string }
-  | { kind: "tag"; key: string; label: string };
+  | { kind: "tag"; key: string; label: string; suggestions?: string[] };
 
 type FilterBarProps = {
   searchPlaceholder?: string;
@@ -174,6 +174,7 @@ export function FilterBar({
                 ))}
                 <input
                   className="min-h-7 w-28 bg-transparent px-1 text-xs text-foreground outline-none placeholder:text-muted-foreground"
+                  list={filter.suggestions?.length ? `filter-${filter.key}-suggestions` : undefined}
                   onKeyDown={(event) => {
                     if (event.key !== "Enter" && event.key !== ",") return;
                     event.preventDefault();
@@ -188,6 +189,13 @@ export function FilterBar({
                   placeholder={filter.label}
                   value={tagDrafts[filter.key] ?? ""}
                 />
+                {filter.suggestions?.length ? (
+                  <datalist id={`filter-${filter.key}-suggestions`}>
+                    {filter.suggestions.map((suggestion) => (
+                      <option key={suggestion} value={suggestion} />
+                    ))}
+                  </datalist>
+                ) : null}
               </div>
             );
           })}

@@ -4,6 +4,7 @@ export type SourceDocumentInfo = {
   sourceId: string;
   documentRole: string | null;
   status: string;
+  url?: string | null;
   preview: string | null;
   properties: Array<{ name: string; value: string; type?: string | null }>;
 };

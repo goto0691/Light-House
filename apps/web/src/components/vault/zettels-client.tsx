@@ -69,6 +69,8 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   const selected = isCreating ? null : zettels.find((item) => item.id === resolvedSelectedId) ?? visibleZettels[0] ?? zettels[0];
   const listedZettels = visibleZettels.slice(0, visibleLimit);
   const categoryOptions = useMemo(() => Array.from(new Set(zettels.map((zettel) => zettel.category).filter(Boolean))).sort(), [zettels]);
+  const categorySuggestions = useMemo(() => buildCategorySuggestions(zettels), [zettels]);
+  const sourcePropertySuggestions = useMemo(() => buildSourcePropertySuggestions(zettels), [zettels]);
 
   useEffect(() => {
     if (!selected?.id) return;
@@ -236,8 +238,8 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             { kind: "select", key: "type", label: "Type", options: ZETTEL_TYPE_OPTIONS },
             { kind: "select", key: "documentKind", label: "Kind", options: DOCUMENT_KIND_OPTIONS },
             { kind: "select", key: "status", label: "Status", options: ZETTEL_STATUS_OPTIONS },
-            { kind: "tag", key: "category", label: "Category tag" },
-            { kind: "tag", key: "property", label: "Property search" },
+            { kind: "tag", key: "category", label: "Category tag", suggestions: categorySuggestions },
+            { kind: "tag", key: "property", label: "Property search", suggestions: sourcePropertySuggestions },
           ]}
           onChange={(state) => {
             setQuery(state.q);
@@ -416,12 +418,51 @@ function getSourcePropertySearchText(item: ZettelMock) {
     item.sourceUrl ?? "",
     item.originalCreatedAt ?? "",
     item.sourceDocument?.sourceDatabase ?? "",
+    item.sourceDocument?.url ?? "",
     item.sourceDocument?.documentRole ?? "",
     item.sourceDocument?.status ?? "",
     item.sourceDocument?.properties.flatMap((property) => [property.name, property.value, property.type ?? ""]).join(" ") ?? "",
   ]
     .join(" ")
     .toLowerCase();
+}
+
+function buildCategorySuggestions(items: ZettelMock[]) {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    [item.category, ...item.tags].forEach((value) => addSuggestion(counts, value));
+  }
+  return sortSuggestions(counts, 24);
+}
+
+function buildSourcePropertySuggestions(items: ZettelMock[]) {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (item.source) addSuggestion(counts, item.source);
+    if (item.sourceDocument?.sourceDatabase) addSuggestion(counts, item.sourceDocument.sourceDatabase);
+    for (const property of item.sourceDocument?.properties ?? []) {
+      addSuggestion(counts, property.name);
+      addSuggestion(counts, compactSuggestion(property.value));
+    }
+  }
+  return sortSuggestions(counts, 32);
+}
+
+function addSuggestion(counts: Map<string, number>, value: string | null | undefined) {
+  const suggestion = compactSuggestion(value ?? "");
+  if (!suggestion || suggestion.length < 2) return;
+  counts.set(suggestion, (counts.get(suggestion) ?? 0) + 1);
+}
+
+function compactSuggestion(value: string) {
+  return value.replace(/\s+/g, " ").trim().slice(0, 80);
+}
+
+function sortSuggestions(counts: Map<string, number>, limit: number) {
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "ko-KR"))
+    .slice(0, limit)
+    .map(([value]) => value);
 }
 
 function sortZettels(items: ZettelMock[], sortKey: string) {

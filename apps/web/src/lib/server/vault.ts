@@ -75,6 +75,7 @@ type SourceDocumentRow = {
   sourceId: string;
   documentRole: string | null;
   status: string;
+  url: string | null;
   preview: string | null;
 };
 type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null; type: string | null };
@@ -301,6 +302,7 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
          source_id as sourceId,
          document_role as documentRole,
          status,
+         url,
          raw_content_preview as preview
        from source_documents
        where user_id = ?
@@ -361,6 +363,7 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
       sourceId: row.sourceId,
       documentRole: row.documentRole,
       status: row.status,
+      url: row.url,
       preview: row.preview,
       properties: sourceProperties.get(row.id) ?? [],
     });

@@ -91,6 +91,7 @@ export function getZettelSearchText(zettel: ZettelMock) {
     zettel.source ?? "",
     zettel.sourceUrl ?? "",
     zettel.originalCreatedAt ?? "",
+    zettel.sourceDocument?.url ?? "",
     zettel.outgoingLinks.map((link) => link.title).join(" "),
     zettel.backlinks.join(" "),
     sourceProperties ?? "",

@@ -10,6 +10,7 @@ import { Tag } from "@/components/shared/tag";
 import { buildZettelForm, type ZettelFormState, zettelFormPayload } from "@/components/vault/zettel-form";
 import { ZettelPropertiesPanel } from "@/components/vault/zettel-properties-panel";
 import { ZettelRelationsPanel } from "@/components/vault/zettel-relations-panel";
+import { ZettelSourcePropertiesPanel } from "@/components/vault/zettel-source-properties-panel";
 import type { ZettelMock } from "@/lib/mock/vault";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { getZettelDocumentKindLabel } from "@/lib/vault/zettel-properties";
@@ -179,40 +180,9 @@ export function ZettelReaderPane({
 
       <ZettelPropertiesPanel categoryOptions={categoryOptions} form={form} onChange={patchForm} />
 
-      {mode === "existing" && zettel ? <ZettelRelationsPanel onChanged={onRelationsChanged} refreshKey={contextRefreshKey} zettelId={zettel.id} /> : null}
+      {mode === "existing" && zettel ? <ZettelSourcePropertiesPanel form={form} onChange={patchForm} sourceDocument={zettel.sourceDocument} /> : null}
 
-      {zettel?.sourceDocument ? (
-        <GlassCard priority="secondary">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-primary">Imported Properties</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {zettel.sourceDocument.sourceDatabase ?? "source"} · {zettel.sourceDocument.status}
-              </p>
-            </div>
-            <span className="rounded-md border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              {zettel.sourceDocument.properties.length} properties
-            </span>
-          </div>
-          {zettel.sourceDocument.properties.length ? (
-            <div className="mt-4 grid gap-2 md:grid-cols-2">
-              {zettel.sourceDocument.properties.map((property) => (
-                <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2" key={`${property.name}:${property.value}`}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{property.name}</p>
-                    {property.type ? <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{property.type}</span> : null}
-                  </div>
-                  <p className="mt-1 break-words text-sm text-foreground">{property.value}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 rounded-md border border-dashed border-white/15 bg-black/10 p-3 text-sm text-muted-foreground">
-              가져온 원본 문서는 있지만 노출된 속성은 없습니다.
-            </p>
-          )}
-        </GlassCard>
-      ) : null}
+      {mode === "existing" && zettel ? <ZettelRelationsPanel onChanged={onRelationsChanged} refreshKey={contextRefreshKey} zettelId={zettel.id} /> : null}
     </div>
   );
 }
