@@ -16,6 +16,10 @@ type SourcePropertyTarget =
   | "category"
   | "documentKind"
   | "status"
+  | "aliases"
+  | "sourceReliability"
+  | "reviewCadence"
+  | "reviewDueAt"
   | "source"
   | "sourceUrl"
   | "originalCreatedAt"
@@ -35,6 +39,10 @@ const TARGET_OPTIONS: Array<{ value: SourcePropertyTarget; label: string }> = [
   { value: "documentKind", label: "Kind" },
   { value: "status", label: "Status" },
   { value: "tags", label: "Tags" },
+  { value: "aliases", label: "Aliases" },
+  { value: "sourceReliability", label: "Reliability" },
+  { value: "reviewCadence", label: "Review Cadence" },
+  { value: "reviewDueAt", label: "Review Due" },
   { value: "source", label: "Source" },
   { value: "sourceUrl", label: "Source URL" },
   { value: "originalCreatedAt", label: "Original Date" },
@@ -151,6 +159,10 @@ function guessTarget(property: SourceDocumentInfo["properties"][number], sourceD
   if (name.includes("제목") || name === "title") return "title";
   if (name.includes("요약") || name.includes("summary") || name.includes("description")) return "summary";
   if (name.includes("상태") || name.includes("status")) return "status";
+  if (name.includes("별칭") || name.includes("alias")) return "aliases";
+  if (name.includes("신뢰") || name.includes("reliability")) return "sourceReliability";
+  if (name.includes("복습 주기") || name.includes("검토 주기") || name.includes("review cadence")) return "reviewCadence";
+  if (name.includes("복습일") || name.includes("검토일") || name.includes("review due")) return "reviewDueAt";
   if (name.includes("날짜") || name.includes("일시") || name.includes("created") || type.includes("date")) return "originalCreatedAt";
   if (name.includes("태그") || name.includes("키워드") || name.includes("topic") || name.includes("tag") || type.includes("multi")) return "tags";
   if (name.includes("카테고리") || name.includes("category")) return "category";
@@ -165,6 +177,10 @@ function propertyPatch(target: SourcePropertyTarget, value: string, form: Zettel
   if (target === "category") return { category: compactSingleLine(value, 80) };
   if (target === "documentKind") return { documentKind: normalizeZettelDocumentKind(value) };
   if (target === "status") return { status: normalizeStatus(value) || form.status };
+  if (target === "aliases") return { aliases: mergeAliases(form.aliases, value) };
+  if (target === "sourceReliability") return { sourceReliability: normalizeSourceReliability(value) };
+  if (target === "reviewCadence") return { reviewCadence: normalizeReviewCadence(value) };
+  if (target === "reviewDueAt") return { reviewDueAt: normalizeDate(value) || form.reviewDueAt };
   if (target === "source") return { source: sourceDocument.sourceDatabase ?? compactSingleLine(value, 80) };
   if (target === "sourceUrl") return { sourceUrl: firstUrl(value) ?? sourceDocument.url ?? form.sourceUrl };
   if (target === "originalCreatedAt") return { originalCreatedAt: normalizeDate(value) || form.originalCreatedAt };
@@ -205,6 +221,26 @@ function normalizeStatus(value: string) {
   return "";
 }
 
+function normalizeSourceReliability(value: string) {
+  const text = normalize(value);
+  if (text.includes("primary") || text.includes("1차") || text.includes("원문") || text.includes("직접")) return "primary";
+  if (text.includes("secondary") || text.includes("2차") || text.includes("해설")) return "secondary";
+  if (text.includes("tertiary") || text.includes("3차") || text.includes("요약")) return "tertiary";
+  if (text.includes("personal") || text.includes("개인")) return "personal";
+  if (text.includes("import") || text.includes("notion") || text.includes("legacy") || text.includes("가져")) return "imported";
+  if (text.includes("mixed") || text.includes("혼합")) return "mixed";
+  return "unknown";
+}
+
+function normalizeReviewCadence(value: string) {
+  const text = normalize(value);
+  if (text.includes("week") || text.includes("주")) return "weekly";
+  if (text.includes("month") || text.includes("월")) return "monthly";
+  if (text.includes("quarter") || text.includes("분기")) return "quarterly";
+  if (text.includes("year") || text.includes("년")) return "yearly";
+  return "none";
+}
+
 function mergeTags(currentTags: string[], value: string) {
   const next = value
     .split(/[,;/\n|]+/)
@@ -213,5 +249,15 @@ function mergeTags(currentTags: string[], value: string) {
     .map((item) => compactSingleLine(item, 40));
   const unique = new Map(currentTags.map((tag) => [tag.toLowerCase(), tag]));
   next.forEach((tag) => unique.set(tag.toLowerCase(), tag));
+  return [...unique.values()];
+}
+
+function mergeAliases(currentAliases: string[], value: string) {
+  const next = value
+    .split(/[,;/\n|]+/)
+    .map((item) => compactSingleLine(item, 80))
+    .filter(Boolean);
+  const unique = new Map(currentAliases.map((alias) => [alias.toLowerCase(), alias]));
+  next.forEach((alias) => unique.set(alias.toLowerCase(), alias));
   return [...unique.values()];
 }

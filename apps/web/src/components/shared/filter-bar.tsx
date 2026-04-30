@@ -24,6 +24,8 @@ type FilterBarProps = {
   onChange: (state: { q: string; filters: FilterState; sort?: string; view?: string }) => void;
   rightSlot?: React.ReactNode;
   className?: string;
+  initialFilters?: FilterState;
+  initialQuery?: string;
   initialSort?: string;
   syncUrl?: boolean;
 };
@@ -36,6 +38,8 @@ export function FilterBar({
   onChange,
   rightSlot,
   className,
+  initialFilters,
+  initialQuery,
   initialSort,
   syncUrl = true,
 }: FilterBarProps) {
@@ -43,10 +47,10 @@ export function FilterBar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
-  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? initialQuery ?? "");
   const [sort, setSort] = useState(() => searchParams.get("sort") ?? initialSort ?? sortOptions?.[0]?.value ?? "");
   const [selectedView, setSelectedView] = useState(() => searchParams.get("view") ?? savedViews?.find((view) => view.isDefault)?.id ?? "");
-  const [filterState, setFilterState] = useState<FilterState>(() => buildInitialFilters(filters, searchParams));
+  const [filterState, setFilterState] = useState<FilterState>(() => buildInitialFilters(filters, searchParams, initialFilters));
 
   function emit(next: { q?: string; filters?: FilterState; sort?: string; view?: string }) {
     const payload = {
@@ -247,12 +251,12 @@ export function FilterBar({
   );
 }
 
-function buildInitialFilters(filters: FilterConfig[], searchParams: URLSearchParams): FilterState {
+function buildInitialFilters(filters: FilterConfig[], searchParams: URLSearchParams, initialFilters?: FilterState): FilterState {
   const encodedFilter = searchParams.get("filter");
   const parsed = encodedFilter ? parseFilterParam(encodedFilter) : {};
 
   return filters.reduce<FilterState>((accumulator, filter) => {
-    const urlValue = searchParams.get(filter.key) ?? parsed[filter.key];
+    const urlValue = searchParams.get(filter.key) ?? parsed[filter.key] ?? initialFilters?.[filter.key];
     if (filter.kind === "multi" || filter.kind === "tag") {
       accumulator[filter.key] = Array.isArray(urlValue) ? urlValue : typeof urlValue === "string" && urlValue ? urlValue.split(",").filter(Boolean) : [];
     } else {

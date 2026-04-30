@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 
-import { DOCUMENT_KIND_OPTIONS, type ZettelFormState, ZETTEL_STATUS_OPTIONS, ZETTEL_TYPE_OPTIONS } from "@/components/vault/zettel-form";
+import {
+  DOCUMENT_KIND_OPTIONS,
+  type ZettelFormState,
+  ZETTEL_REVIEW_CADENCE_OPTIONS,
+  ZETTEL_SOURCE_RELIABILITY_OPTIONS,
+  ZETTEL_STATUS_OPTIONS,
+  ZETTEL_TYPE_OPTIONS,
+} from "@/components/vault/zettel-form";
 import { GlassCard } from "@/components/shared/glass-card";
 import { cn } from "@/lib/utils/cn";
 
@@ -55,10 +62,37 @@ export function ZettelPropertiesPanel({ form, onChange, categoryOptions = [], cl
           ) : null}
         </Field>
         <Field label="Tags">
-          <TagInput onChange={(tags) => onChange({ tags })} value={form.tags} />
+          <ChipInput onChange={(tags) => onChange({ tags })} placeholder="태그" prefix="#" stripHash value={form.tags} />
+        </Field>
+        <Field label="Aliases">
+          <ChipInput onChange={(aliases) => onChange({ aliases })} placeholder="별칭" value={form.aliases} />
         </Field>
         <Field label="Status">
           <SegmentedButtons options={ZETTEL_STATUS_OPTIONS} value={form.status} onChange={(value) => onChange({ status: value })} />
+        </Field>
+      </PropertySection>
+
+      <PropertySection title="회수와 검토">
+        <Field label="Source Reliability">
+          <select className="input-base" onChange={(event) => onChange({ sourceReliability: event.target.value })} value={form.sourceReliability}>
+            {ZETTEL_SOURCE_RELIABILITY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Review Cadence">
+          <select className="input-base" onChange={(event) => onChange({ reviewCadence: event.target.value })} value={form.reviewCadence}>
+            {ZETTEL_REVIEW_CADENCE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Review Due At">
+          <input className="input-base" onChange={(event) => onChange({ reviewDueAt: event.target.value })} type="date" value={getDateInputValue(form.reviewDueAt)} />
         </Field>
       </PropertySection>
 
@@ -113,17 +147,32 @@ function SegmentedButtons({
   );
 }
 
-function TagInput({ onChange, value }: { onChange: (value: string[]) => void; value: string[] }) {
+function ChipInput({
+  onChange,
+  placeholder,
+  prefix = "",
+  stripHash = false,
+  value,
+}: {
+  onChange: (value: string[]) => void;
+  placeholder: string;
+  prefix?: string;
+  stripHash?: boolean;
+  value: string[];
+}) {
   const [draft, setDraft] = useState("");
 
-  function addTags(input: string) {
-    const nextTags = input
+  function addValues(input: string) {
+    const nextValues = input
       .split(/[,\n]/)
-      .map((item) => item.trim().replace(/^#/, ""))
+      .map((item) => {
+        const next = item.trim().replace(/\s+/g, " ");
+        return stripHash ? next.replace(/^#/, "") : next;
+      })
       .filter(Boolean);
-    if (!nextTags.length) return;
-    const unique = new Map(value.map((tag) => [tag.toLowerCase(), tag]));
-    nextTags.forEach((tag) => unique.set(tag.toLowerCase(), tag));
+    if (!nextValues.length) return;
+    const unique = new Map(value.map((item) => [item.toLowerCase(), item]));
+    nextValues.forEach((item) => unique.set(item.toLowerCase(), item.slice(0, 80)));
     onChange([...unique.values()]);
     setDraft("");
   }
@@ -131,26 +180,27 @@ function TagInput({ onChange, value }: { onChange: (value: string[]) => void; va
   return (
     <div className="min-h-11 rounded-md border border-white/10 bg-black/10 px-2 py-2">
       <div className="flex flex-wrap gap-1.5">
-        {value.map((tag) => (
+        {value.map((item) => (
           <button
             className="focus-ring rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] text-primary"
-            key={tag}
-            onClick={() => onChange(value.filter((item) => item !== tag))}
+            key={item}
+            onClick={() => onChange(value.filter((valueItem) => valueItem !== item))}
             type="button"
           >
-            #{tag}
+            {prefix}
+            {item}
           </button>
         ))}
         <input
           className="min-h-7 min-w-28 flex-1 bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-          onBlur={() => addTags(draft)}
+          onBlur={() => addValues(draft)}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== "Enter" && event.key !== ",") return;
             event.preventDefault();
-            addTags(draft);
+            addValues(draft);
           }}
-          placeholder="태그"
+          placeholder={placeholder}
           value={draft}
         />
       </div>

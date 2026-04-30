@@ -9,13 +9,19 @@ import { toast } from "sonner";
 import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { ContextMapMini } from "@/components/shared/context/context-map-mini";
 import { EmptyState } from "@/components/shared/empty-state";
-import { FilterBar } from "@/components/shared/filter-bar";
+import { FilterBar, type FilterState } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
 import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shared/page-layout";
 import { SavedViewTabs } from "@/components/shared/saved-view-tabs";
 import { ZettelCard } from "@/components/vault/zettel-card";
 import { ZettelReaderPane } from "@/components/vault/zettel-reader-pane";
-import { DOCUMENT_KIND_OPTIONS, ZETTEL_STATUS_OPTIONS, ZETTEL_TYPE_OPTIONS } from "@/components/vault/zettel-form";
+import {
+  DOCUMENT_KIND_OPTIONS,
+  ZETTEL_REVIEW_CADENCE_OPTIONS,
+  ZETTEL_SOURCE_RELIABILITY_OPTIONS,
+  ZETTEL_STATUS_OPTIONS,
+  ZETTEL_TYPE_OPTIONS,
+} from "@/components/vault/zettel-form";
 import type { ZettelMock } from "@/lib/mock/vault";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import type { SavedView } from "@/lib/server/ui-state";
@@ -28,6 +34,18 @@ type ZettelsClientProps = {
 };
 
 const LIST_PAGE_SIZE = 40;
+const ZETTEL_VIEW_FILTER_KEYS = [
+  "kind",
+  "documentKind",
+  "type",
+  "status",
+  "sourceReliability",
+  "reviewCadence",
+  "category",
+  "tags",
+  "property",
+  "sourceProperty",
+];
 
 export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientProps) {
   const router = useRouter();
@@ -42,6 +60,8 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   const [typeFilter, setTypeFilter] = useState("");
   const [documentKindFilter, setDocumentKindFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [sourceReliabilityFilter, setSourceReliabilityFilter] = useState("");
+  const [reviewCadenceFilter, setReviewCadenceFilter] = useState("");
   const [categoryTags, setCategoryTags] = useState<string[]>([]);
   const [propertyTags, setPropertyTags] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState("updated-desc");
@@ -52,7 +72,18 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   const activeView = localSavedViews.find((view) => getSavedViewKey(view) === activeViewKey) ?? localSavedViews.find((view) => view.isDefault) ?? localSavedViews[0];
   const activeViewIsPersisted = Boolean(activeView && !activeView.id.startsWith("default-"));
   const resolvedSelectedId = selectedZettelId ?? storeSelectedZettelId;
-  const filterKey = [activeViewKey, query, typeFilter, documentKindFilter, statusFilter, categoryTags.join("|"), propertyTags.join("|"), sortKey].join("\u0000");
+  const filterKey = [
+    activeViewKey,
+    query,
+    typeFilter,
+    documentKindFilter,
+    statusFilter,
+    sourceReliabilityFilter,
+    reviewCadenceFilter,
+    categoryTags.join("|"),
+    propertyTags.join("|"),
+    sortKey,
+  ].join("\u0000");
   const [visiblePage, setVisiblePage] = useState({ key: filterKey, limit: LIST_PAGE_SIZE });
   const visibleLimit = visiblePage.key === filterKey ? visiblePage.limit : LIST_PAGE_SIZE;
 
@@ -61,6 +92,8 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
     if (typeFilter && item.type !== typeFilter) return false;
     if (documentKindFilter && normalizeZettelDocumentKind(item.documentKind) !== documentKindFilter) return false;
     if (statusFilter && item.status !== statusFilter) return false;
+    if (sourceReliabilityFilter && getSourceReliabilityValue(item) !== sourceReliabilityFilter) return false;
+    if (reviewCadenceFilter && getReviewCadenceValue(item) !== reviewCadenceFilter) return false;
     if (categoryTags.length && !categoryTags.some((tag) => getCategorySearchText(item).includes(tag.toLowerCase()))) return false;
     if (propertyTags.length && !propertyTags.every((tag) => getSourcePropertySearchText(item).includes(tag.toLowerCase()))) return false;
     if (query && !getZettelSearchText(item).includes(query.toLowerCase())) return false;
@@ -71,6 +104,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   const categoryOptions = useMemo(() => Array.from(new Set(zettels.map((zettel) => zettel.category).filter(Boolean))).sort(), [zettels]);
   const categorySuggestions = useMemo(() => buildCategorySuggestions(zettels), [zettels]);
   const sourcePropertySuggestions = useMemo(() => buildSourcePropertySuggestions(zettels), [zettels]);
+  const filterBarInitialFilters = useMemo(() => getFilterBarInitialFilters(activeView), [activeView]);
 
   useEffect(() => {
     if (!selected?.id) return;
@@ -92,9 +126,12 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
     const filterState: Record<string, unknown> = {
       ...(activeView?.filterState ?? {}),
     };
+    ZETTEL_VIEW_FILTER_KEYS.forEach((key) => delete filterState[key]);
     if (typeFilter) filterState.type = [typeFilter];
     if (documentKindFilter) filterState.documentKind = [documentKindFilter];
     if (statusFilter) filterState.status = [statusFilter];
+    if (sourceReliabilityFilter) filterState.sourceReliability = [sourceReliabilityFilter];
+    if (reviewCadenceFilter) filterState.reviewCadence = [reviewCadenceFilter];
     if (categoryTags.length) filterState.category = categoryTags;
     if (propertyTags.length) filterState.property = propertyTags;
 
@@ -103,7 +140,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
       scope: "knowledge",
       name: name ?? activeView?.name ?? "Zettel View",
       icon: activeView?.icon ?? "library",
-      searchQuery: query.trim() || activeView?.searchQuery || "",
+      searchQuery: query.trim(),
       filterState,
       sortState: { key: sortKey || getSavedViewSortKey(activeView) || "updated-desc" },
     };
@@ -238,6 +275,8 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             { kind: "select", key: "type", label: "Type", options: ZETTEL_TYPE_OPTIONS },
             { kind: "select", key: "documentKind", label: "Kind", options: DOCUMENT_KIND_OPTIONS },
             { kind: "select", key: "status", label: "Status", options: ZETTEL_STATUS_OPTIONS },
+            { kind: "select", key: "sourceReliability", label: "Reliability", options: ZETTEL_SOURCE_RELIABILITY_OPTIONS },
+            { kind: "select", key: "reviewCadence", label: "Review", options: ZETTEL_REVIEW_CADENCE_OPTIONS },
             { kind: "tag", key: "category", label: "Category tag", suggestions: categorySuggestions },
             { kind: "tag", key: "property", label: "Property search", suggestions: sourcePropertySuggestions },
           ]}
@@ -246,10 +285,14 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             setTypeFilter(typeof state.filters.type === "string" ? state.filters.type : "");
             setDocumentKindFilter(typeof state.filters.documentKind === "string" ? state.filters.documentKind : "");
             setStatusFilter(typeof state.filters.status === "string" ? state.filters.status : "");
+            setSourceReliabilityFilter(typeof state.filters.sourceReliability === "string" ? state.filters.sourceReliability : "");
+            setReviewCadenceFilter(typeof state.filters.reviewCadence === "string" ? state.filters.reviewCadence : "");
             setCategoryTags(Array.isArray(state.filters.category) ? state.filters.category : []);
             setPropertyTags(Array.isArray(state.filters.property) ? state.filters.property : []);
             setSortKey(state.sort ?? "updated-desc");
           }}
+          initialFilters={filterBarInitialFilters}
+          initialQuery={activeView?.searchQuery}
           initialSort={getSavedViewSortKey(activeView)}
           rightSlot={
             <>
@@ -414,6 +457,10 @@ function getCategorySearchText(item: ZettelMock) {
 
 function getSourcePropertySearchText(item: ZettelMock) {
   return [
+    (item.aliases ?? []).join(" "),
+    item.sourceReliability ?? "",
+    item.reviewCadence ?? "",
+    item.reviewDueAt ?? "",
     item.source ?? "",
     item.sourceUrl ?? "",
     item.originalCreatedAt ?? "",
@@ -438,6 +485,10 @@ function buildCategorySuggestions(items: ZettelMock[]) {
 function buildSourcePropertySuggestions(items: ZettelMock[]) {
   const counts = new Map<string, number>();
   for (const item of items) {
+    (item.aliases ?? []).forEach((alias) => addSuggestion(counts, alias));
+    if (item.sourceReliability) addSuggestion(counts, item.sourceReliability);
+    if (item.reviewCadence) addSuggestion(counts, item.reviewCadence);
+    if (item.reviewDueAt) addSuggestion(counts, item.reviewDueAt);
     if (item.source) addSuggestion(counts, item.source);
     if (item.sourceDocument?.sourceDatabase) addSuggestion(counts, item.sourceDocument.sourceDatabase);
     for (const property of item.sourceDocument?.properties ?? []) {
@@ -481,17 +532,47 @@ function getTimeValue(value: string | null | undefined) {
   return value ? new Date(value).getTime() || 0 : 0;
 }
 
+function getSourceReliabilityValue(item: ZettelMock) {
+  return item.sourceReliability ?? "unknown";
+}
+
+function getReviewCadenceValue(item: ZettelMock) {
+  return item.reviewCadence ?? "none";
+}
+
+function getFilterBarInitialFilters(view: SavedView | null | undefined): FilterState {
+  const filterState = view?.filterState ?? {};
+  return {
+    type: oneSelectValue(filterState.type),
+    documentKind: oneSelectValue(filterState.documentKind) || oneSelectValue(filterState.kind),
+    status: oneSelectValue(filterState.status),
+    sourceReliability: oneSelectValue(filterState.sourceReliability),
+    reviewCadence: oneSelectValue(filterState.reviewCadence),
+    category: asStringArray(filterState.category),
+    property: [...asStringArray(filterState.property), ...asStringArray(filterState.sourceProperty)],
+  };
+}
+
+function oneSelectValue(value: unknown) {
+  const values = asStringArray(value);
+  return values.length === 1 ? values[0] : null;
+}
+
 function zettelMatchesSavedView(item: ZettelMock, view: SavedView) {
   const kinds = asStringArray(view.filterState.kind).map(normalizeZettelDocumentKind).filter(Boolean);
   const documentKinds = asStringArray(view.filterState.documentKind).map(normalizeZettelDocumentKind).filter(Boolean);
   const statuses = asStringArray(view.filterState.status).map(normalizeFilterValue);
   const types = asStringArray(view.filterState.type).map(normalizeFilterValue);
+  const sourceReliabilities = asStringArray(view.filterState.sourceReliability).map(normalizeFilterValue);
+  const reviewCadences = asStringArray(view.filterState.reviewCadence).map(normalizeFilterValue);
   const categories = asStringArray(view.filterState.category).map(normalizeFilterValue);
   const tags = asStringArray(view.filterState.tags).map(normalizeFilterValue);
   const propertyTerms = [...asStringArray(view.filterState.property), ...asStringArray(view.filterState.sourceProperty)].map(normalizeFilterValue);
   const itemKind = normalizeZettelDocumentKind(item.documentKind);
   const itemStatus = normalizeFilterValue(item.status ?? "");
   const itemType = normalizeFilterValue(item.type);
+  const itemSourceReliability = normalizeFilterValue(getSourceReliabilityValue(item));
+  const itemReviewCadence = normalizeFilterValue(getReviewCadenceValue(item));
   const haystack = getZettelSearchText(item);
   const categoryHaystack = getCategorySearchText(item);
   const propertyHaystack = getSourcePropertySearchText(item);
@@ -502,6 +583,8 @@ function zettelMatchesSavedView(item: ZettelMock, view: SavedView) {
   if (kinds.length && !kinds.some((kind) => itemKind === kind || haystack.includes(kind))) return false;
   if (documentKinds.length && !documentKinds.some((kind) => itemKind === kind || haystack.includes(kind))) return false;
   if (statuses.length && !statuses.includes(itemStatus)) return false;
+  if (sourceReliabilities.length && !sourceReliabilities.includes(itemSourceReliability)) return false;
+  if (reviewCadences.length && !reviewCadences.includes(itemReviewCadence)) return false;
   if (categories.length && !categories.some((category) => categoryHaystack.includes(category))) return false;
   if (tags.length && !tags.every((tag) => item.tags.some((itemTag) => normalizeFilterValue(itemTag).includes(tag)))) return false;
   if (propertyTerms.length && !propertyTerms.every((term) => propertyHaystack.includes(term))) return false;

@@ -20,11 +20,15 @@ export type ZettelMock = {
   backlinks: string[];
   related: string[];
   tags: string[];
+  aliases: string[];
   pinned?: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
   status?: string | null;
   documentKind?: string | null;
+  sourceReliability?: string | null;
+  reviewCadence?: string | null;
+  reviewDueAt?: string | null;
   originalCreatedAt?: string | null;
   source?: string | null;
   sourceUrl?: string | null;
@@ -88,6 +92,7 @@ export const ZETTELS_MOCK: ZettelMock[] = [
     backlinks: ["기도와 불안의 언어", "호떡집 브랜딩과 진정성"],
     related: ["사르트르 입문 메모", "듄: 파트 2 감상"],
     tags: ["실존주의"],
+    aliases: ["실존적 불안"],
   },
   {
     id: "zettel-prayer",
@@ -100,6 +105,7 @@ export const ZETTELS_MOCK: ZettelMock[] = [
     backlinks: ["존재의 불안과 실존주의"],
     related: ["시편 23편 메모"],
     tags: ["묵상"],
+    aliases: [],
   },
   {
     id: "zettel-hotteok",
@@ -112,6 +118,7 @@ export const ZETTELS_MOCK: ZettelMock[] = [
     backlinks: ["존재의 불안과 실존주의"],
     related: ["호떡집 본점"],
     tags: ["비즈니스"],
+    aliases: [],
   },
 ];
 

@@ -132,11 +132,11 @@ export const DEFAULT_DASHBOARD_LAYOUTS: WidgetLayoutInput[] = [
 
 export const DEFAULT_SAVED_VIEWS: SavedViewInput[] = [
   { domain: "library", scope: "knowledge", name: "All Documents", icon: "library", viewKey: "all", isDefault: true, displayOrder: 0 },
-  { domain: "library", scope: "knowledge", name: "Sermons", icon: "book-open", filterState: { kind: ["sermon", "sermon_note"] }, viewKey: "sermons", displayOrder: 1 },
-  { domain: "library", scope: "knowledge", name: "Bible Study", icon: "sparkles", filterState: { kind: ["bible_study", "meditation"] }, viewKey: "bible-study", displayOrder: 2 },
-  { domain: "library", scope: "knowledge", name: "Essays", icon: "file-text", filterState: { kind: ["essay", "reflection"] }, viewKey: "essays", displayOrder: 3 },
-  { domain: "library", scope: "knowledge", name: "Prompts", icon: "terminal", filterState: { kind: ["prompt"] }, viewKey: "prompts", displayOrder: 4 },
-  { domain: "library", scope: "knowledge", name: "Fiction Ideas", icon: "wand", filterState: { kind: ["fiction", "story_idea"] }, viewKey: "fiction-ideas", displayOrder: 5 },
+  { domain: "library", scope: "knowledge", name: "Sermons", icon: "book-open", filterState: { documentKind: ["sermon", "sermon_note"] }, viewKey: "sermons", displayOrder: 1 },
+  { domain: "library", scope: "knowledge", name: "Bible Study", icon: "sparkles", filterState: { documentKind: ["bible_study", "meditation"] }, viewKey: "bible-study", displayOrder: 2 },
+  { domain: "library", scope: "knowledge", name: "Essays", icon: "file-text", filterState: { documentKind: ["essay", "reflection"] }, viewKey: "essays", displayOrder: 3 },
+  { domain: "library", scope: "knowledge", name: "Prompts", icon: "terminal", filterState: { documentKind: ["prompt"] }, viewKey: "prompts", displayOrder: 4 },
+  { domain: "library", scope: "knowledge", name: "Fiction Ideas", icon: "wand", filterState: { documentKind: ["fiction", "story_idea"] }, viewKey: "fiction-ideas", displayOrder: 5 },
   { domain: "library", scope: "knowledge", name: "Needs Review", icon: "alert-circle", filterState: { status: ["needs_review"] }, viewKey: "needs-review", displayOrder: 6 },
 
   { domain: "daily", scope: "entries", name: "Calendar", icon: "calendar", viewKey: "calendar", isDefault: true, displayOrder: 0 },

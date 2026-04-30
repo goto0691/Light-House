@@ -26,6 +26,10 @@ type ZettelRow = {
   category: string | null;
   status: string | null;
   documentKind: string | null;
+  aliases: string | null;
+  sourceReliability: string | null;
+  reviewCadence: string | null;
+  reviewDueAt: string | null;
   originalCreatedAt: string | null;
   source: string | null;
   sourceUrl: string | null;
@@ -81,6 +85,8 @@ type SourceDocumentRow = {
 type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null; type: string | null };
 
 const ZETTEL_TYPES = ["fleeting", "literature", "permanent", "moc", "reference"] as const;
+const SOURCE_RELIABILITY_VALUES = new Set(["unknown", "primary", "secondary", "tertiary", "personal", "imported", "mixed"]);
+const REVIEW_CADENCE_VALUES = new Set(["weekly", "monthly", "quarterly", "yearly"]);
 
 type ZettelDetailsInput = {
   title: string;
@@ -90,6 +96,10 @@ type ZettelDetailsInput = {
   category?: string | null;
   status?: string | null;
   documentKind?: string | null;
+  aliases?: string[] | null;
+  sourceReliability?: string | null;
+  reviewCadence?: string | null;
+  reviewDueAt?: string | null;
   originalCreatedAt?: string | null;
   source?: string | null;
   sourceUrl?: string | null;
@@ -120,6 +130,11 @@ function optionalText(value: string | null | undefined) {
   return next || null;
 }
 
+function optionalDate(value: string | null | undefined) {
+  const next = value?.trim();
+  return next ? next.slice(0, 10) : null;
+}
+
 function normalizeTagValues(values: string[] | null | undefined) {
   const unique = new Map<string, string>();
   for (const value of values ?? []) {
@@ -128,6 +143,47 @@ function normalizeTagValues(values: string[] | null | undefined) {
     unique.set(name.toLowerCase(), name.slice(0, 40));
   }
   return [...unique.values()];
+}
+
+function normalizeAliasValues(values: string[] | null | undefined) {
+  const unique = new Map<string, string>();
+  for (const value of values ?? []) {
+    const alias = value.trim().replace(/\s+/g, " ");
+    if (!alias) continue;
+    unique.set(alias.toLowerCase(), alias.slice(0, 80));
+  }
+  return [...unique.values()];
+}
+
+function parseAliases(value: string | null | undefined) {
+  const text = value?.trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (Array.isArray(parsed)) {
+      return normalizeAliasValues(parsed.filter((item): item is string => typeof item === "string"));
+    }
+  } catch {
+    // Legacy imports sometimes stored aliases as plain delimited text.
+  }
+  return normalizeAliasValues(text.split(/[,;\n|]+/));
+}
+
+function stringifyAliases(values: string[] | null | undefined) {
+  const aliases = normalizeAliasValues(values);
+  return aliases.length ? JSON.stringify(aliases) : null;
+}
+
+function normalizeSourceReliability(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase().replaceAll(" ", "_") ?? "";
+  if (!normalized || normalized === "unknown") return null;
+  return SOURCE_RELIABILITY_VALUES.has(normalized) ? normalized : null;
+}
+
+function normalizeReviewCadence(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase().replaceAll(" ", "_") ?? "";
+  if (!normalized || normalized === "none") return null;
+  return REVIEW_CADENCE_VALUES.has(normalized) ? normalized : null;
 }
 
 function getTagSyncText(content: string, tags: string[] | null | undefined) {
@@ -210,6 +266,10 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
          category,
          status,
          document_kind as documentKind,
+         aliases,
+         source_reliability as sourceReliability,
+         review_cadence as reviewCadence,
+         review_due_at as reviewDueAt,
          original_created_at as originalCreatedAt,
          source,
          source_url as sourceUrl,
@@ -382,11 +442,15 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
       backlinks: backlinks.get(row.id) ?? [],
       related: links.map((link) => link.title),
       tags: zettelTags.get(row.id) ?? [],
+      aliases: parseAliases(row.aliases),
       pinned: Boolean(row.pinned),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       status: row.status,
       documentKind: row.documentKind,
+      sourceReliability: row.sourceReliability,
+      reviewCadence: row.reviewCadence,
+      reviewDueAt: row.reviewDueAt,
       originalCreatedAt: row.originalCreatedAt,
       source: row.source,
       sourceUrl: row.sourceUrl,
@@ -628,8 +692,8 @@ export async function createVaultZettel(input: ZettelDetailsInput) {
   const id = ulid();
   await executeD1(
     `insert into zettels
-      (id, user_id, title, slug, content, content_text, summary, type, category, status, document_kind, original_created_at, source, source_url, pinned, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'), datetime('now'))`,
+      (id, user_id, title, slug, content, content_text, summary, type, category, status, document_kind, aliases, source_reliability, review_cadence, review_due_at, original_created_at, source, source_url, pinned, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'), datetime('now'))`,
     [
       id,
       userId,
@@ -642,7 +706,11 @@ export async function createVaultZettel(input: ZettelDetailsInput) {
       optionalText(input.category) ?? "미분류",
       optionalText(input.status) ?? "draft",
       optionalText(normalizeZettelDocumentKind(input.documentKind)),
-      optionalText(input.originalCreatedAt),
+      stringifyAliases(input.aliases),
+      normalizeSourceReliability(input.sourceReliability),
+      normalizeReviewCadence(input.reviewCadence),
+      optionalDate(input.reviewDueAt),
+      optionalDate(input.originalCreatedAt),
       optionalText(input.source),
       optionalText(input.sourceUrl),
     ],
@@ -683,6 +751,10 @@ export async function updateVaultZettelDetails(zettelId: string, input: ZettelDe
          category = ?,
          status = ?,
          document_kind = ?,
+         aliases = ?,
+         source_reliability = ?,
+         review_cadence = ?,
+         review_due_at = ?,
          original_created_at = ?,
          source = ?,
          source_url = ?,
@@ -697,7 +769,11 @@ export async function updateVaultZettelDetails(zettelId: string, input: ZettelDe
       optionalText(input.category) ?? "미분류",
       optionalText(input.status),
       optionalText(normalizeZettelDocumentKind(input.documentKind)),
-      optionalText(input.originalCreatedAt),
+      stringifyAliases(input.aliases),
+      normalizeSourceReliability(input.sourceReliability),
+      normalizeReviewCadence(input.reviewCadence),
+      optionalDate(input.reviewDueAt),
+      optionalDate(input.originalCreatedAt),
       optionalText(input.source),
       optionalText(input.sourceUrl),
       zettelId,

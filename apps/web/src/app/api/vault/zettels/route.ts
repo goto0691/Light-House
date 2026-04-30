@@ -15,6 +15,10 @@ export async function POST(request: Request) {
     tags?: string[];
     status?: string;
     documentKind?: string;
+    aliases?: string[];
+    sourceReliability?: string;
+    reviewCadence?: string;
+    reviewDueAt?: string;
     originalCreatedAt?: string;
     source?: string;
     sourceUrl?: string;
@@ -29,6 +33,10 @@ export async function POST(request: Request) {
     tags: body.tags,
     status: body.status,
     documentKind: body.documentKind,
+    aliases: body.aliases,
+    sourceReliability: body.sourceReliability,
+    reviewCadence: body.reviewCadence,
+    reviewDueAt: body.reviewDueAt,
     originalCreatedAt: body.originalCreatedAt,
     source: body.source,
     sourceUrl: body.sourceUrl,

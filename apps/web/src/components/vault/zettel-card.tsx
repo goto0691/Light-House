@@ -35,6 +35,15 @@ export function ZettelCard({ zettel, selected, onSelect, actions }: ZettelCardPr
           {zettel.tags.slice(0, 3).map((tag) => (
             <Tag key={tag} value={`#${tag}`} variant="neutral" />
           ))}
+          {(zettel.aliases ?? []).slice(0, 2).map((alias) => (
+            <Tag key={alias} value={alias} variant="neutral" />
+          ))}
+          {zettel.sourceReliability && zettel.sourceReliability !== "unknown" ? <Tag value={zettel.sourceReliability} variant="neutral" /> : null}
+          {zettel.reviewDueAt ? (
+            <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              review {zettel.reviewDueAt.slice(0, 10)}
+            </span>
+          ) : null}
           <span className="tabular-nums rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             {zettel.backlinks.length} backlinks
           </span>

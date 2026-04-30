@@ -21,6 +21,10 @@ export const zettels = sqliteTable(
     category: text("category"),
     status: text("status"),
     documentKind: text("document_kind"),
+    aliases: text("aliases"),
+    sourceReliability: text("source_reliability"),
+    reviewCadence: text("review_cadence"),
+    reviewDueAt: text("review_due_at"),
     originalCreatedAt: text("original_created_at"),
     source: text("source"),
     sourceUrl: text("source_url"),
@@ -34,6 +38,8 @@ export const zettels = sqliteTable(
     slugUnique: index("idx_zettel_slug").on(table.userId, table.slug),
     notionSourceIndex: index("idx_zettel_notion_source").on(table.userId, table.notionSourceId),
     sourceDocumentIndex: index("idx_zettel_source_document").on(table.sourceDocumentId),
+    sourceReliabilityIndex: index("idx_zettel_source_reliability").on(table.userId, table.sourceReliability),
+    reviewDueIndex: index("idx_zettel_review_due").on(table.userId, table.reviewDueAt),
   }),
 );
 
