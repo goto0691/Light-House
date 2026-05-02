@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ContextNodeCard } from "@/components/shared/context/context-node-card";
 import { RelationEvidenceCard } from "@/components/shared/context/relation-evidence-card";
@@ -66,22 +66,7 @@ export function ContextRail({
     setPagination(bundle.pagination ?? {});
   }, [bundle]);
 
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel || !currentPage?.hasMore || isLoadingMore || (isAccordion && !isOpen)) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          void loadMore();
-        }
-      },
-      { rootMargin: "160px" },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [currentPage?.hasMore, currentPage?.nextCursor, isAccordion, isLoadingMore, isOpen, lens]);
-
-  async function loadMore() {
+  const loadMore = useCallback(async () => {
     const page = pagination[lens];
     if (!page?.hasMore || isLoadingMore) return;
     setIsLoadingMore(true);
@@ -103,7 +88,22 @@ export function ContextRail({
     } finally {
       setIsLoadingMore(false);
     }
-  }
+  }, [bundle, isLoadingMore, lens, pagination]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !currentPage?.hasMore || isLoadingMore || (isAccordion && !isOpen)) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadMore();
+        }
+      },
+      { rootMargin: "160px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [currentPage?.hasMore, currentPage?.nextCursor, isAccordion, isLoadingMore, isOpen, loadMore]);
 
   return (
     <aside className={cn("grid gap-3", className)}>
