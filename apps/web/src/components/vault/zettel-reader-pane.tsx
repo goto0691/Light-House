@@ -113,85 +113,107 @@ export function ZettelReaderPane({
     }
   }
 
+  const titleSummaryCard = (
+    <GlassCard priority="secondary">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Tag value={typeLabel} variant="neutral" />
+            {documentKindLabel ? <Tag value={documentKindLabel} variant="neutral" /> : null}
+            {form.status ? <Tag value={statusLabel} variant="status" /> : null}
+            <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              {dirty ? "unsaved" : mode === "new" ? "new" : "saved"}
+            </span>
+          </div>
+          <input
+            className="mt-4 w-full border-0 bg-transparent font-display text-3xl leading-tight text-foreground outline-none placeholder:text-muted-foreground"
+            onChange={(event) => patchForm({ title: event.target.value })}
+            placeholder="메모 제목"
+            value={form.title}
+          />
+          <ZettelRecallStrip form={form} zettel={zettel} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {mode === "new" && onCancelNew ? (
+            <button
+              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8"
+              onClick={onCancelNew}
+              type="button"
+            >
+              <X className="h-4 w-4" />
+              취소
+            </button>
+          ) : null}
+          <button
+            className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!dirty || isSaving}
+            onClick={resetDraft}
+            type="button"
+          >
+            <RotateCcw className="h-4 w-4" />
+            되돌리기
+          </button>
+          <button
+            className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSaving || isPending || (!dirty && mode !== "new")}
+            onClick={() => void save()}
+            type="button"
+          >
+            <Save className="h-4 w-4" />
+            {isSaving ? "저장 중" : "저장"}
+          </button>
+          {onDelete && mode !== "new" ? (
+            <button
+              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isPending || isSaving}
+              onClick={onDelete}
+              type="button"
+            >
+              <Trash2 className="h-4 w-4" />
+              삭제
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <label className="mt-5 block">
+        <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">Summary</span>
+        <textarea
+          className="input-base min-h-32 resize-y leading-6"
+          onChange={(event) => patchForm({ summary: event.target.value })}
+          placeholder="짧은 요약"
+          style={{ minHeight: "8rem" }}
+          value={form.summary}
+        />
+      </label>
+    </GlassCard>
+  );
+
+  const propertiesPanel = (
+    <ZettelPropertiesPanel
+      categoryOptions={categoryOptions}
+      form={form}
+      onChange={patchForm}
+    />
+  );
+
   return (
     <div className="space-y-4">
-      <GlassCard priority="secondary">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <Tag value={typeLabel} variant="neutral" />
-              {documentKindLabel ? <Tag value={documentKindLabel} variant="neutral" /> : null}
-              {form.status ? <Tag value={statusLabel} variant="status" /> : null}
-              <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                {dirty ? "unsaved" : mode === "new" ? "new" : "saved"}
-              </span>
-            </div>
-            <input
-              className="mt-4 w-full border-0 bg-transparent font-display text-3xl leading-tight text-foreground outline-none placeholder:text-muted-foreground"
-              onChange={(event) => patchForm({ title: event.target.value })}
-              placeholder="메모 제목"
-              value={form.title}
-            />
-            <ZettelRecallStrip form={form} zettel={zettel} />
+      {mode === "new" ? (
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+          <div className="min-w-0 space-y-4">
+            {titleSummaryCard}
+            <MarkdownEditor onChange={(content) => patchForm({ content })} value={form.content} />
           </div>
-          <div className="flex flex-wrap gap-2">
-            {mode === "new" && onCancelNew ? (
-              <button
-                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8"
-                onClick={onCancelNew}
-                type="button"
-              >
-                <X className="h-4 w-4" />
-                취소
-              </button>
-            ) : null}
-            <button
-              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!dirty || isSaving}
-              onClick={resetDraft}
-              type="button"
-            >
-              <RotateCcw className="h-4 w-4" />
-              되돌리기
-            </button>
-            <button
-              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isSaving || isPending || (!dirty && mode !== "new")}
-              onClick={() => void save()}
-              type="button"
-            >
-              <Save className="h-4 w-4" />
-              {isSaving ? "저장 중" : "저장"}
-            </button>
-            {onDelete && mode !== "new" ? (
-              <button
-                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isPending || isSaving}
-                onClick={onDelete}
-                type="button"
-              >
-                <Trash2 className="h-4 w-4" />
-                삭제
-              </button>
-            ) : null}
-          </div>
+          {propertiesPanel}
         </div>
-
-        <label className="mt-5 block">
-          <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">Summary</span>
-          <textarea
-            className="input-base min-h-32 resize-y leading-6"
-            onChange={(event) => patchForm({ summary: event.target.value })}
-            placeholder="짧은 요약"
-            style={{ minHeight: "8rem" }}
-            value={form.summary}
-          />
-        </label>
-      </GlassCard>
-
-      <MarkdownEditor onChange={(content) => patchForm({ content })} value={form.content} />
-
-      <ZettelPropertiesPanel categoryOptions={categoryOptions} form={form} onChange={patchForm} />
+      ) : (
+        <>
+          {titleSummaryCard}
+          <MarkdownEditor onChange={(content) => patchForm({ content })} value={form.content} />
+          {propertiesPanel}
+        </>
+      )}
 
       {mode === "existing" && zettel ? <ZettelSourcePropertiesPanel form={form} onChange={patchForm} sourceDocument={zettel.sourceDocument} /> : null}
 

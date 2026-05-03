@@ -255,16 +255,21 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
         refreshKey={`${selected.id}:${contextRefreshKey}`}
       />
     ) : null;
+  const bodyGridClassName = isCreating
+    ? "grid gap-4"
+    : "grid gap-4 xl:grid-cols-[minmax(260px,340px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]";
 
   return (
     <PageLayout>
       <PageHeader
         actions={
           <div className="flex flex-wrap gap-2">
-            <button className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={openNewZettel} type="button">
-              <Plus className="h-4 w-4" />
-              새 메모
-            </button>
+            {!isCreating ? (
+              <button className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={openNewZettel} type="button">
+                <Plus className="h-4 w-4" />
+                새 메모
+              </button>
+            ) : null}
             <Link className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8" href="/vault/zettels/graph">
               <Workflow className="h-4 w-4" />
               Graph
@@ -279,77 +284,79 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
         title="Zettelkasten"
       />
 
-      <PageToolbar>
-        <SavedViewTabs activeViewKey={getSavedViewKey(activeView) ?? activeViewKey} basePath="/vault/zettels" views={localSavedViews} />
-        <FilterBar
-          key={activeViewKey}
-          filters={[
-            { kind: "select", key: "type", label: "Type", options: ZETTEL_TYPE_OPTIONS },
-            { kind: "select", key: "documentKind", label: "Kind", options: DOCUMENT_KIND_OPTIONS },
-            { kind: "select", key: "status", label: "Status", options: ZETTEL_STATUS_OPTIONS },
-            { kind: "select", key: "sourceReliability", label: "Reliability", options: ZETTEL_SOURCE_RELIABILITY_OPTIONS },
-            { kind: "select", key: "reviewCadence", label: "Review", options: ZETTEL_REVIEW_CADENCE_OPTIONS },
-            { kind: "tag", key: "category", label: "Category tag", suggestions: categorySuggestions },
-            { kind: "tag", key: "property", label: "Property search", suggestions: sourcePropertySuggestions },
-          ]}
-          onChange={(state) => {
-            setQuery(state.q);
-            setTypeFilter(typeof state.filters.type === "string" ? state.filters.type : "");
-            setDocumentKindFilter(typeof state.filters.documentKind === "string" ? state.filters.documentKind : "");
-            setStatusFilter(typeof state.filters.status === "string" ? state.filters.status : "");
-            setSourceReliabilityFilter(typeof state.filters.sourceReliability === "string" ? state.filters.sourceReliability : "");
-            setReviewCadenceFilter(typeof state.filters.reviewCadence === "string" ? state.filters.reviewCadence : "");
-            setCategoryTags(Array.isArray(state.filters.category) ? state.filters.category : []);
-            setPropertyTags(Array.isArray(state.filters.property) ? state.filters.property : []);
-            setSortKey(state.sort ?? "updated-desc");
-          }}
-          initialFilters={filterBarInitialFilters}
-          initialQuery={activeView?.searchQuery}
-          initialSort={getSavedViewSortKey(activeView)}
-          rightSlot={
-            <>
-              {activeViewIsPersisted ? (
+      {!isCreating ? (
+        <PageToolbar>
+          <SavedViewTabs activeViewKey={getSavedViewKey(activeView) ?? activeViewKey} basePath="/vault/zettels" views={localSavedViews} />
+          <FilterBar
+            key={activeViewKey}
+            filters={[
+              { kind: "select", key: "type", label: "Type", options: ZETTEL_TYPE_OPTIONS },
+              { kind: "select", key: "documentKind", label: "Kind", options: DOCUMENT_KIND_OPTIONS },
+              { kind: "select", key: "status", label: "Status", options: ZETTEL_STATUS_OPTIONS },
+              { kind: "select", key: "sourceReliability", label: "Reliability", options: ZETTEL_SOURCE_RELIABILITY_OPTIONS },
+              { kind: "select", key: "reviewCadence", label: "Review", options: ZETTEL_REVIEW_CADENCE_OPTIONS },
+              { kind: "tag", key: "category", label: "Category tag", suggestions: categorySuggestions },
+              { kind: "tag", key: "property", label: "Property search", suggestions: sourcePropertySuggestions },
+            ]}
+            onChange={(state) => {
+              setQuery(state.q);
+              setTypeFilter(typeof state.filters.type === "string" ? state.filters.type : "");
+              setDocumentKindFilter(typeof state.filters.documentKind === "string" ? state.filters.documentKind : "");
+              setStatusFilter(typeof state.filters.status === "string" ? state.filters.status : "");
+              setSourceReliabilityFilter(typeof state.filters.sourceReliability === "string" ? state.filters.sourceReliability : "");
+              setReviewCadenceFilter(typeof state.filters.reviewCadence === "string" ? state.filters.reviewCadence : "");
+              setCategoryTags(Array.isArray(state.filters.category) ? state.filters.category : []);
+              setPropertyTags(Array.isArray(state.filters.property) ? state.filters.property : []);
+              setSortKey(state.sort ?? "updated-desc");
+            }}
+            initialFilters={filterBarInitialFilters}
+            initialQuery={activeView?.searchQuery}
+            initialSort={getSavedViewSortKey(activeView)}
+            rightSlot={
+              <>
+                {activeViewIsPersisted ? (
+                  <button
+                    className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+                    onClick={() => void updateActiveView()}
+                    type="button"
+                  >
+                    <Save className="h-4 w-4" />
+                    Update View
+                  </button>
+                ) : null}
                 <button
                   className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
-                  onClick={() => void updateActiveView()}
+                  onClick={() => void saveCurrentView()}
                   type="button"
                 >
                   <Save className="h-4 w-4" />
-                  Update View
+                  Save View
                 </button>
-              ) : null}
-              <button
-                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
-                onClick={() => void saveCurrentView()}
-                type="button"
-              >
-                <Save className="h-4 w-4" />
-                Save View
-              </button>
-              {activeViewIsPersisted ? (
-                <button
-                  aria-label="Delete saved view"
-                  className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
-                  onClick={() => void deleteActiveView()}
-                  type="button"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              ) : null}
-            </>
-          }
-          searchPlaceholder="제목, 본문, 태그, 속성 검색"
-          sortOptions={[
-            { value: "updated-desc", label: "Recently Updated" },
-            { value: "created-desc", label: "Recently Created" },
-            { value: "title-asc", label: "Title A-Z" },
-            { value: "kind-asc", label: "Kind" },
-          ]}
-        />
-      </PageToolbar>
+                {activeViewIsPersisted ? (
+                  <button
+                    aria-label="Delete saved view"
+                    className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+                    onClick={() => void deleteActiveView()}
+                    type="button"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </>
+            }
+            searchPlaceholder="제목, 본문, 태그, 속성 검색"
+            sortOptions={[
+              { value: "updated-desc", label: "Recently Updated" },
+              { value: "created-desc", label: "Recently Created" },
+              { value: "title-asc", label: "Title A-Z" },
+              { value: "kind-asc", label: "Kind" },
+            ]}
+          />
+        </PageToolbar>
+      ) : null}
 
       <PageBody className="zettels-read-body">
-        <div className="grid gap-4 xl:grid-cols-[minmax(260px,340px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
+        <div className={bodyGridClassName}>
           {selected || isCreating ? (
             <div className="order-1 min-w-0 xl:order-2">
               <ZettelReaderPane
@@ -378,40 +385,42 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             </div>
           )}
 
-          <GlassCard className="order-2 max-h-none xl:order-1 xl:max-h-[calc(100vh-220px)] xl:overflow-y-auto" priority="secondary">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-primary">Notes</p>
-                <p className="mt-1 text-xs text-muted-foreground">목록은 읽기와 선택만 담당합니다.</p>
+          {!isCreating ? (
+            <GlassCard className="order-2 max-h-none xl:order-1 xl:max-h-[calc(100vh-220px)] xl:overflow-y-auto" priority="secondary">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-primary">Notes</p>
+                  <p className="mt-1 text-xs text-muted-foreground">목록은 읽기와 선택만 담당합니다.</p>
+                </div>
+                <span className="rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                  {listedZettels.length}/{visibleZettels.length}
+                </span>
               </div>
-              <span className="rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                {listedZettels.length}/{visibleZettels.length}
-              </span>
-            </div>
-            <div className="mt-4 space-y-2">
-              {listedZettels.length ? (
-                listedZettels.map((zettel) => (
-                  <ZettelCard key={zettel.id} onSelect={() => openZettel(zettel.id)} selected={selected?.id === zettel.id} zettel={zettel} />
-                ))
-              ) : (
-                <EmptyState description="검색어나 필터를 바꾸면 다른 메모들이 다시 나타납니다." illustration="zettel" title="이 조건에 맞는 메모가 없습니다" />
-              )}
-            </div>
-            {visibleLimit < visibleZettels.length ? (
-              <button
-                className="focus-ring mt-4 w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground transition hover:bg-white/8"
-                onClick={() =>
-                  setVisiblePage((current) => ({
-                    key: filterKey,
-                    limit: (current.key === filterKey ? current.limit : LIST_PAGE_SIZE) + LIST_PAGE_SIZE,
-                  }))
-                }
-                type="button"
-              >
-                더 보기
-              </button>
-            ) : null}
-          </GlassCard>
+              <div className="mt-4 space-y-2">
+                {listedZettels.length ? (
+                  listedZettels.map((zettel) => (
+                    <ZettelCard key={zettel.id} onSelect={() => openZettel(zettel.id)} selected={selected?.id === zettel.id} zettel={zettel} />
+                  ))
+                ) : (
+                  <EmptyState description="검색어나 필터를 바꾸면 다른 메모들이 다시 나타납니다." illustration="zettel" title="이 조건에 맞는 메모가 없습니다" />
+                )}
+              </div>
+              {visibleLimit < visibleZettels.length ? (
+                <button
+                  className="focus-ring mt-4 w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground transition hover:bg-white/8"
+                  onClick={() =>
+                    setVisiblePage((current) => ({
+                      key: filterKey,
+                      limit: (current.key === filterKey ? current.limit : LIST_PAGE_SIZE) + LIST_PAGE_SIZE,
+                    }))
+                  }
+                  type="button"
+                >
+                  더 보기
+                </button>
+              ) : null}
+            </GlassCard>
+          ) : null}
         </div>
       </PageBody>
     </PageLayout>
