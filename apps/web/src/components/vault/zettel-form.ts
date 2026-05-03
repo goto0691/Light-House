@@ -20,39 +20,44 @@ export type ZettelFormState = {
 };
 
 export const ZETTEL_TYPE_OPTIONS: Array<{ value: ZettelMock["type"]; label: string }> = [
-  { value: "fleeting", label: "Fleeting" },
-  { value: "literature", label: "Literature" },
-  { value: "permanent", label: "Permanent" },
+  { value: "fleeting", label: "임시" },
+  { value: "literature", label: "문헌" },
+  { value: "permanent", label: "영구" },
   { value: "moc", label: "MOC" },
-  { value: "reference", label: "Reference" },
+  { value: "reference", label: "참고" },
 ];
 
 export const ZETTEL_STATUS_OPTIONS = [
-  { value: "draft", label: "Draft" },
-  { value: "active", label: "Active" },
-  { value: "needs_review", label: "Needs Review" },
-  { value: "archived", label: "Archived" },
+  { value: "draft", label: "초안" },
+  { value: "active", label: "활성" },
+  { value: "needs_review", label: "검토 필요" },
+  { value: "archived", label: "보관" },
 ];
 
 export const DOCUMENT_KIND_OPTIONS = ZETTEL_DOCUMENT_KIND_OPTIONS;
 
 export const ZETTEL_SOURCE_RELIABILITY_OPTIONS = [
-  { value: "unknown", label: "Unknown" },
-  { value: "primary", label: "Primary" },
-  { value: "secondary", label: "Secondary" },
-  { value: "tertiary", label: "Tertiary" },
-  { value: "personal", label: "Personal" },
-  { value: "imported", label: "Imported" },
-  { value: "mixed", label: "Mixed" },
+  { value: "unknown", label: "미상" },
+  { value: "primary", label: "1차 출처" },
+  { value: "secondary", label: "2차 출처" },
+  { value: "tertiary", label: "3차 출처" },
+  { value: "personal", label: "개인 기록" },
+  { value: "imported", label: "가져옴" },
+  { value: "mixed", label: "혼합" },
 ];
 
 export const ZETTEL_REVIEW_CADENCE_OPTIONS = [
-  { value: "none", label: "None" },
-  { value: "weekly", label: "Weekly" },
-  { value: "monthly", label: "Monthly" },
-  { value: "quarterly", label: "Quarterly" },
-  { value: "yearly", label: "Yearly" },
+  { value: "none", label: "없음" },
+  { value: "weekly", label: "매주" },
+  { value: "monthly", label: "매월" },
+  { value: "quarterly", label: "분기" },
+  { value: "yearly", label: "매년" },
 ];
+
+export function getZettelOptionLabel(options: Array<{ value: string; label: string }>, value: string | null | undefined, fallback = "") {
+  if (!value) return fallback;
+  return options.find((option) => option.value === value)?.label ?? fallback;
+}
 
 export function buildZettelForm(zettel?: ZettelMock | null): ZettelFormState {
   return {

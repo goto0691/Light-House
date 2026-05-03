@@ -7,7 +7,16 @@ import { toast } from "sonner";
 import { GlassCard } from "@/components/shared/glass-card";
 import { MarkdownEditor } from "@/components/shared/markdown-editor";
 import { Tag } from "@/components/shared/tag";
-import { buildZettelForm, type ZettelFormState, zettelFormPayload } from "@/components/vault/zettel-form";
+import {
+  buildZettelForm,
+  getZettelOptionLabel,
+  type ZettelFormState,
+  zettelFormPayload,
+  ZETTEL_REVIEW_CADENCE_OPTIONS,
+  ZETTEL_SOURCE_RELIABILITY_OPTIONS,
+  ZETTEL_STATUS_OPTIONS,
+  ZETTEL_TYPE_OPTIONS,
+} from "@/components/vault/zettel-form";
 import { ZettelPropertiesPanel } from "@/components/vault/zettel-properties-panel";
 import { ZettelRelationsPanel } from "@/components/vault/zettel-relations-panel";
 import { ZettelSourcePropertiesPanel } from "@/components/vault/zettel-source-properties-panel";
@@ -57,6 +66,8 @@ export function ZettelReaderPane({
   const signature = JSON.stringify(form);
   const dirty = signature !== activeDraft.savedSignature;
   const documentKindLabel = getZettelDocumentKindLabel(form.documentKind);
+  const statusLabel = getZettelOptionLabel(ZETTEL_STATUS_OPTIONS, form.status, form.status);
+  const typeLabel = getZettelOptionLabel(ZETTEL_TYPE_OPTIONS, form.type, form.type);
 
   function patchForm(patch: Partial<ZettelFormState>) {
     setDraft((current) => {
@@ -108,9 +119,9 @@ export function ZettelReaderPane({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <Tag value={form.type} variant="neutral" />
+              <Tag value={typeLabel} variant="neutral" />
               {documentKindLabel ? <Tag value={documentKindLabel} variant="neutral" /> : null}
-              {form.status ? <Tag value={form.status} variant="status" /> : null}
+              {form.status ? <Tag value={statusLabel} variant="status" /> : null}
               <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 {dirty ? "unsaved" : mode === "new" ? "new" : "saved"}
               </span>
@@ -121,6 +132,7 @@ export function ZettelReaderPane({
               placeholder="메모 제목"
               value={form.title}
             />
+            <ZettelRecallStrip form={form} zettel={zettel} />
           </div>
           <div className="flex flex-wrap gap-2">
             {mode === "new" && onCancelNew ? (
@@ -185,4 +197,54 @@ export function ZettelReaderPane({
       {mode === "existing" && zettel ? <ZettelRelationsPanel onChanged={onRelationsChanged} refreshKey={contextRefreshKey} zettelId={zettel.id} /> : null}
     </div>
   );
+}
+
+function ZettelRecallStrip({ form, zettel }: { form: ZettelFormState; zettel?: ZettelMock | null }) {
+  const reliabilityLabel =
+    form.sourceReliability && form.sourceReliability !== "unknown"
+      ? getZettelOptionLabel(ZETTEL_SOURCE_RELIABILITY_OPTIONS, form.sourceReliability, form.sourceReliability)
+      : "";
+  const cadenceLabel =
+    form.reviewCadence && form.reviewCadence !== "none" ? getZettelOptionLabel(ZETTEL_REVIEW_CADENCE_OPTIONS, form.reviewCadence, form.reviewCadence) : "";
+  const pills = [
+    { label: "카테고리", value: form.category },
+    { label: "출처", value: form.source },
+    { label: "신뢰도", value: reliabilityLabel },
+    { label: "주기", value: cadenceLabel },
+    { label: "다음 검토", value: formatDateForDisplay(form.reviewDueAt) },
+    { label: "원본일", value: formatDateForDisplay(form.originalCreatedAt) },
+    { label: "Backlinks", value: zettel?.backlinks.length ? String(zettel.backlinks.length) : "" },
+    { label: "Outgoing", value: zettel?.outgoingLinks.length ? String(zettel.outgoingLinks.length) : "" },
+  ].filter((pill) => pill.value);
+  const tags = form.tags.filter(Boolean).slice(0, 6);
+  const aliases = form.aliases.filter(Boolean).slice(0, 4);
+
+  if (!pills.length && !tags.length && !aliases.length) return null;
+
+  return (
+    <div className="mt-4 flex flex-wrap gap-1.5">
+      {pills.map((pill) => (
+        <RecallPill key={`${pill.label}:${pill.value}`} label={pill.label} value={pill.value} />
+      ))}
+      {tags.map((tag) => (
+        <RecallPill key={`tag:${tag}`} label="#" value={tag} />
+      ))}
+      {aliases.map((alias) => (
+        <RecallPill key={`alias:${alias}`} label="별칭" value={alias} />
+      ))}
+    </div>
+  );
+}
+
+function RecallPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex min-h-7 items-center gap-1 rounded-md border border-white/10 bg-black/10 px-2.5 py-1 text-[11px] text-muted-foreground">
+      <span className="uppercase tracking-[0.12em] text-muted-foreground/80">{label}</span>
+      <span className="text-foreground">{value}</span>
+    </span>
+  );
+}
+
+function formatDateForDisplay(value: string) {
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : "";
 }

@@ -27,17 +27,17 @@ export function ZettelPropertiesPanel({ form, onChange, categoryOptions = [], cl
         <p className="text-xs uppercase tracking-[0.2em] text-primary">Properties</p>
       </div>
 
-      <PropertySection title="기본 정보">
-        <Field label="Type">
+      <PropertySection title="분류">
+        <Field label="메모 타입">
           <SegmentedButtons
             options={ZETTEL_TYPE_OPTIONS}
             value={form.type}
             onChange={(value) => onChange({ type: value as ZettelFormState["type"] })}
           />
         </Field>
-        <Field label="Document Kind">
+        <Field label="문서 종류">
           <select className="input-base" onChange={(event) => onChange({ documentKind: event.target.value })} value={form.documentKind}>
-            <option value="">Not set</option>
+            <option value="">미지정</option>
             {DOCUMENT_KIND_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -45,7 +45,13 @@ export function ZettelPropertiesPanel({ form, onChange, categoryOptions = [], cl
             ))}
           </select>
         </Field>
-        <Field label="Category">
+        <Field label="상태">
+          <SegmentedButtons options={ZETTEL_STATUS_OPTIONS} value={form.status} onChange={(value) => onChange({ status: value })} />
+        </Field>
+      </PropertySection>
+
+      <PropertySection title="회수 단서">
+        <Field label="카테고리">
           <input
             className="input-base"
             list={categoryOptions.length ? "zettel-category-options" : undefined}
@@ -61,19 +67,16 @@ export function ZettelPropertiesPanel({ form, onChange, categoryOptions = [], cl
             </datalist>
           ) : null}
         </Field>
-        <Field label="Tags">
+        <Field label="태그">
           <ChipInput onChange={(tags) => onChange({ tags })} placeholder="태그" prefix="#" stripHash value={form.tags} />
         </Field>
-        <Field label="Aliases">
+        <Field label="별칭">
           <ChipInput onChange={(aliases) => onChange({ aliases })} placeholder="별칭" value={form.aliases} />
-        </Field>
-        <Field label="Status">
-          <SegmentedButtons options={ZETTEL_STATUS_OPTIONS} value={form.status} onChange={(value) => onChange({ status: value })} />
         </Field>
       </PropertySection>
 
-      <PropertySection title="회수와 검토">
-        <Field label="Source Reliability">
+      <PropertySection title="검토">
+        <Field label="출처 신뢰도">
           <select className="input-base" onChange={(event) => onChange({ sourceReliability: event.target.value })} value={form.sourceReliability}>
             {ZETTEL_SOURCE_RELIABILITY_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -82,7 +85,7 @@ export function ZettelPropertiesPanel({ form, onChange, categoryOptions = [], cl
             ))}
           </select>
         </Field>
-        <Field label="Review Cadence">
+        <Field label="검토 주기">
           <select className="input-base" onChange={(event) => onChange({ reviewCadence: event.target.value })} value={form.reviewCadence}>
             {ZETTEL_REVIEW_CADENCE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -91,7 +94,7 @@ export function ZettelPropertiesPanel({ form, onChange, categoryOptions = [], cl
             ))}
           </select>
         </Field>
-        <Field label="Review Due At">
+        <Field label="다음 검토일">
           <input className="input-base" onChange={(event) => onChange({ reviewDueAt: event.target.value })} type="date" value={getDateInputValue(form.reviewDueAt)} />
         </Field>
       </PropertySection>
@@ -99,13 +102,13 @@ export function ZettelPropertiesPanel({ form, onChange, categoryOptions = [], cl
       <details className="rounded-lg border border-white/10 bg-black/10 p-4">
         <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-muted-foreground">출처</summary>
         <div className="mt-3 space-y-3">
-          <Field label="Source">
+          <Field label="출처">
             <input className="input-base" onChange={(event) => onChange({ source: event.target.value })} placeholder="Notion, 설교 노트, 개인 기록..." value={form.source} />
           </Field>
-          <Field label="Source URL">
+          <Field label="출처 URL">
             <input className="input-base" inputMode="url" onChange={(event) => onChange({ sourceUrl: event.target.value })} placeholder="https://..." type="url" value={form.sourceUrl} />
           </Field>
-          <Field label="Original Created At">
+          <Field label="원본 생성일">
             <input
               className="input-base"
               onChange={(event) => onChange({ originalCreatedAt: event.target.value })}
