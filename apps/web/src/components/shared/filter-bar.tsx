@@ -72,8 +72,8 @@ export function FilterBar({
   }, []);
 
   return (
-    <div className={cn("flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-3 md:flex-row md:items-start", className)}>
-      <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2">
+    <div className={cn("flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-3", className)}>
+      <div className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2">
         <Search className="h-4 w-4 text-muted-foreground" />
         <input
           className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
@@ -89,7 +89,7 @@ export function FilterBar({
         <KeyHint keys="Cmd+K" />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         {filters
           .filter((filter) => filter.kind === "select")
           .map((filter) => (
@@ -158,7 +158,7 @@ export function FilterBar({
           .map((filter) => {
             const values = Array.isArray(filterState[filter.key]) ? (filterState[filter.key] as string[]) : [];
             return (
-              <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-full border border-white/10 bg-black/10 px-2 py-1.5" key={filter.key}>
+              <div className="flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-md border border-white/10 bg-black/10 px-2 py-1.5 sm:w-auto sm:min-w-72" key={filter.key}>
                 <span className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{filter.label}</span>
                 {values.map((value) => (
                   <button
@@ -177,7 +177,7 @@ export function FilterBar({
                   </button>
                 ))}
                 <input
-                  className="min-h-7 w-28 bg-transparent px-1 text-xs text-foreground outline-none placeholder:text-muted-foreground"
+                  className="min-h-7 min-w-32 flex-1 bg-transparent px-1 text-xs text-foreground outline-none placeholder:text-muted-foreground"
                   list={filter.suggestions?.length ? `filter-${filter.key}-suggestions` : undefined}
                   onKeyDown={(event) => {
                     if (event.key !== "Enter" && event.key !== ",") return;

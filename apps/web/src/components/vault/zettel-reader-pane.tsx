@@ -127,7 +127,7 @@ export function ZettelReaderPane({
               </span>
             </div>
             <input
-              className="mt-4 w-full border-0 bg-transparent font-display text-4xl leading-tight text-foreground outline-none placeholder:text-muted-foreground"
+              className="mt-4 w-full border-0 bg-transparent font-display text-3xl leading-tight text-foreground outline-none placeholder:text-muted-foreground"
               onChange={(event) => patchForm({ title: event.target.value })}
               placeholder="메모 제목"
               value={form.title}
@@ -180,9 +180,10 @@ export function ZettelReaderPane({
         <label className="mt-5 block">
           <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">Summary</span>
           <textarea
-            className="input-base min-h-24 resize-y leading-6"
+            className="input-base min-h-32 resize-y leading-6"
             onChange={(event) => patchForm({ summary: event.target.value })}
             placeholder="짧은 요약"
+            style={{ minHeight: "8rem" }}
             value={form.summary}
           />
         </label>
@@ -238,9 +239,9 @@ function ZettelRecallStrip({ form, zettel }: { form: ZettelFormState; zettel?: Z
 
 function RecallPill({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex min-h-7 items-center gap-1 rounded-md border border-white/10 bg-black/10 px-2.5 py-1 text-[11px] text-muted-foreground">
-      <span className="uppercase tracking-[0.12em] text-muted-foreground/80">{label}</span>
-      <span className="text-foreground">{value}</span>
+    <span className="inline-flex min-h-7 max-w-full items-center gap-1 rounded-md border border-white/10 bg-black/10 px-2.5 py-1 text-[11px] text-muted-foreground">
+      <span className="shrink-0 uppercase tracking-[0.12em] text-muted-foreground/80">{label}</span>
+      <span className="min-w-0 truncate text-foreground">{value}</span>
     </span>
   );
 }

@@ -293,9 +293,7 @@ button {
   min-width: 0;
 }
 
-[data-app-shell] input,
-[data-app-shell] select,
-[data-app-shell] textarea {
+:where([data-app-shell] input, [data-app-shell] select, [data-app-shell] textarea) {
   min-height: 2.5rem;
 }
 

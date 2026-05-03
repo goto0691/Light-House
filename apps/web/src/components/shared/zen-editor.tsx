@@ -121,6 +121,7 @@ export function ZenEditor({
           }
         }}
         placeholder={placeholder}
+        style={{ minHeight: "32.5rem" }}
         value={currentValue}
       />
       {suggestions.length ? (

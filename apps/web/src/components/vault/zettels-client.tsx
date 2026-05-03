@@ -233,7 +233,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
     });
   }
 
-  if (!zettels.length) {
+  if (!zettels.length && !isCreating) {
     return (
       <EmptyState
         cta={{ label: "첫 Zettel 쓰기", hotkey: "Cmd+N", onClick: () => router.push("/vault/zettels?new=1") }}
@@ -243,6 +243,18 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
       />
     );
   }
+
+  const contextPanel =
+    selected && !isCreating ? (
+      <ContextBundlePanel
+        density="drawer"
+        entityId={selected.id}
+        entityType="zettel"
+        mainSlot={(bundle) => <ContextMapMini bundle={bundle} />}
+        railDefaultLens="zettels"
+        refreshKey={`${selected.id}:${contextRefreshKey}`}
+      />
+    ) : null;
 
   return (
     <PageLayout>
@@ -336,28 +348,10 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
         />
       </PageToolbar>
 
-      <PageBody
-        aside={
-          selected && !isCreating ? (
-            <div className="space-y-4">
-              <ContextBundlePanel
-                density="drawer"
-                entityId={selected.id}
-                entityType="zettel"
-                mainSlot={(bundle) => <ContextMapMini bundle={bundle} />}
-                railDefaultLens="zettels"
-                refreshKey={`${selected.id}:${contextRefreshKey}`}
-              />
-            </div>
-          ) : null
-        }
-        asidePosition="right"
-        asideWidth="lg"
-        className="zettels-read-body"
-      >
-        <div className="grid gap-4 xl:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
+      <PageBody className="zettels-read-body">
+        <div className="grid gap-4 xl:grid-cols-[minmax(260px,340px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
           {selected || isCreating ? (
-            <div className="order-1 xl:order-2">
+            <div className="order-1 min-w-0 xl:order-2">
               <ZettelReaderPane
                 categoryOptions={categoryOptions}
                 contextRefreshKey={contextRefreshKey}
@@ -376,9 +370,10 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
                 }}
                 zettel={selected}
               />
+              {contextPanel ? <div className="mt-4">{contextPanel}</div> : null}
             </div>
           ) : (
-            <div className="order-1 xl:order-2">
+            <div className="order-1 min-w-0 xl:order-2">
               <EmptyState description="목록에서 메모를 선택하거나 새 메모를 만듭니다." illustration="zettel" title="메모를 선택해 주세요" />
             </div>
           )}
