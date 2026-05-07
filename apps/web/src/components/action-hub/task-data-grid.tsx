@@ -16,19 +16,19 @@ export function TaskDataGrid({ projectId, tasks }: TaskDataGridProps) {
         <table className="min-w-[760px] w-full border-collapse text-left text-sm">
           <thead className="bg-white/5 text-muted-foreground">
             <tr>
-              <th className="px-4 py-3">Title</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Priority</th>
-              <th className="px-4 py-3">Energy</th>
-              <th className="px-4 py-3">Due</th>
-              <th className="px-4 py-3">Checklist</th>
+              <th className="px-4 py-3">제목</th>
+              <th className="px-4 py-3">상태</th>
+              <th className="px-4 py-3">우선순위</th>
+              <th className="px-4 py-3">에너지</th>
+              <th className="px-4 py-3">마감일</th>
+              <th className="px-4 py-3">체크리스트</th>
             </tr>
           </thead>
           <tbody>
             {tasks.map((task) => (
               <tr className="border-t border-white/10" key={task.id}>
                 <td className="px-4 py-3">
-                  <Link className="text-foreground transition hover:text-primary" href={`/action-hub/${projectId}/tasks/${task.id}`}>
+                  <Link className="text-foreground transition hover:text-primary" href={`/action-hub/${projectId}/tasks/${task.id}`} scroll={false}>
                     {task.title}
                   </Link>
                 </td>

@@ -17,10 +17,10 @@ type BacklinkPanelProps = {
 export function BacklinkPanel({ zettel, semanticResults, onSelectSemantic, onRemoveLink, isPending }: BacklinkPanelProps) {
   return (
     <GlassCard className="p-5">
-      <p className="text-xs uppercase tracking-[0.24em] text-primary">Backlinks & Context</p>
+      <p className="text-xs tracking-[0.08em] text-primary">연결과 문맥</p>
 
       <div className="mt-5">
-        <SourceDocumentPanel sourceDocument={zettel.sourceDocument} />
+        <SourceDocumentPanel canonicalEntityType="zettel" sourceDocument={zettel.sourceDocument} />
       </div>
 
       <div className="mt-5">

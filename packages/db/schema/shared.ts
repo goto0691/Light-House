@@ -312,6 +312,34 @@ export const sourceDocumentRelations = sqliteTable(
   }),
 );
 
+export const sourcePropertyMappings = sqliteTable(
+  "source_property_mappings",
+  {
+    id: id(),
+    userId: userId(),
+    sourceDatabase: text("source_database").notNull().default("*"),
+    canonicalEntityType: text("canonical_entity_type").notNull().default("*"),
+    propertyName: text("property_name").notNull(),
+    propertyType: text("property_type").notNull().default("*"),
+    status: text("status").notNull().default("mapped"),
+    targetField: text("target_field"),
+    displayLabel: text("display_label"),
+    reason: text("reason"),
+    confidence: real("confidence"),
+    ...timestamps,
+  },
+  (table) => ({
+    lookupIndex: index("idx_source_property_mapping_lookup").on(
+      table.userId,
+      table.sourceDatabase,
+      table.canonicalEntityType,
+      table.propertyName,
+      table.propertyType,
+    ),
+    statusIndex: index("idx_source_property_mapping_status").on(table.userId, table.status),
+  }),
+);
+
 export const migrationReviewItems = sqliteTable(
   "migration_review_items",
   {

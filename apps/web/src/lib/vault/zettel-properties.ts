@@ -6,27 +6,27 @@ export type ZettelPropertyOption = {
 };
 
 export const ZETTEL_DOCUMENT_KIND_OPTIONS: ZettelPropertyOption[] = [
-  { value: "reference", label: "Reference" },
-  { value: "sermon", label: "Sermon" },
-  { value: "sermon_note", label: "Sermon Note" },
-  { value: "bible_study", label: "Bible Study" },
-  { value: "meditation", label: "Meditation" },
-  { value: "essay", label: "Essay" },
-  { value: "reflection", label: "Reflection" },
-  { value: "letter", label: "Letter / Message" },
-  { value: "poem", label: "Poem" },
-  { value: "journal", label: "Journal" },
-  { value: "prompt", label: "Prompt" },
-  { value: "fiction", label: "Fiction" },
-  { value: "story_idea", label: "Story Idea" },
-  { value: "worldbuilding", label: "Worldbuilding" },
-  { value: "game_note", label: "Game Note" },
-  { value: "personality_note", label: "Personality Note" },
-  { value: "psychology_note", label: "Psychology Note" },
-  { value: "insight", label: "Insight" },
-  { value: "scrap", label: "Scrap" },
-  { value: "personal_note", label: "Personal Note" },
-  { value: "archive", label: "Archive" },
+  { value: "reference", label: "참고 자료" },
+  { value: "sermon", label: "설교" },
+  { value: "sermon_note", label: "설교 노트" },
+  { value: "bible_study", label: "성경 공부" },
+  { value: "meditation", label: "묵상" },
+  { value: "essay", label: "에세이" },
+  { value: "reflection", label: "성찰" },
+  { value: "letter", label: "편지 / 메시지" },
+  { value: "poem", label: "시" },
+  { value: "journal", label: "저널" },
+  { value: "prompt", label: "프롬프트" },
+  { value: "fiction", label: "소설" },
+  { value: "story_idea", label: "이야기 아이디어" },
+  { value: "worldbuilding", label: "세계관" },
+  { value: "game_note", label: "게임 노트" },
+  { value: "personality_note", label: "성격 노트" },
+  { value: "psychology_note", label: "심리 노트" },
+  { value: "insight", label: "인사이트" },
+  { value: "scrap", label: "스크랩" },
+  { value: "personal_note", label: "개인 노트" },
+  { value: "archive", label: "아카이브" },
 ];
 
 const DOCUMENT_KIND_VALUES = new Set(ZETTEL_DOCUMENT_KIND_OPTIONS.map((option) => option.value));
@@ -68,7 +68,7 @@ export function normalizeZettelDocumentKind(value: string | null | undefined) {
 export function getZettelDocumentKindLabel(value: string | null | undefined) {
   const normalized = normalizeZettelDocumentKind(value);
   if (!normalized) return "";
-  return ZETTEL_DOCUMENT_KIND_OPTIONS.find((option) => option.value === normalized)?.label ?? "Archive";
+  return ZETTEL_DOCUMENT_KIND_OPTIONS.find((option) => option.value === normalized)?.label ?? "아카이브";
 }
 
 export function getZettelSearchText(zettel: ZettelMock) {

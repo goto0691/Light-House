@@ -5,13 +5,12 @@ import { GlassCard } from "@/components/shared/glass-card";
 import type { TaskMock } from "@/lib/mock/action-hub";
 
 type KanbanColumnProps = {
-  status: string;
   title: string;
   tasks: TaskMock[];
   children: React.ReactNode;
 };
 
-export function KanbanColumn({ status, title, tasks, children }: KanbanColumnProps) {
+export function KanbanColumn({ title, tasks, children }: KanbanColumnProps) {
   return (
     <GlassCard className="min-h-[420px]" interactive>
       <div className="flex items-center justify-between gap-3">
@@ -24,9 +23,8 @@ export function KanbanColumn({ status, title, tasks, children }: KanbanColumnPro
         </button>
       </div>
       <div className="mt-4 space-y-3">
-        {tasks.length ? children : <EmptyState className="min-h-[180px]" description={`${title} 컬럼은 비어 있습니다.`} icon="·" title={`${status} empty`} />}
+        {tasks.length ? children : <EmptyState className="min-h-[180px]" description={`${title} 컬럼은 비어 있습니다.`} icon="·" title={`${title} 비어 있음`} />}
       </div>
     </GlassCard>
   );
 }
-

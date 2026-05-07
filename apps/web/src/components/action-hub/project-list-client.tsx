@@ -3,10 +3,12 @@
 import { useState } from "react";
 
 import { ProjectHeader } from "@/components/action-hub/project-header";
+import { ProjectPropertiesPanel } from "@/components/action-hub/project-properties-panel";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TaskDataGrid } from "@/components/action-hub/task-data-grid";
 import { FilterBar } from "@/components/shared/filter-bar";
 import type { ProjectMock, TaskMock } from "@/lib/mock/action-hub";
+import { TASK_STATUS_OPTIONS } from "@/lib/properties/task";
 
 type ProjectListClientProps = {
   project: ProjectMock;
@@ -26,19 +28,14 @@ export function ProjectListClient({ project, tasks }: ProjectListClientProps) {
   return (
     <section className="space-y-4">
       <ProjectHeader currentView="list" project={project} />
+      <ProjectPropertiesPanel project={project} />
       <FilterBar
         filters={[
           {
             kind: "select",
             key: "status",
-            label: "Status",
-            options: [
-              { value: "todo", label: "Backlog" },
-              { value: "in_progress", label: "In Progress" },
-              { value: "review", label: "Review" },
-              { value: "done", label: "Done" },
-              { value: "blocked", label: "Blocked" },
-            ],
+            label: "상태",
+            options: TASK_STATUS_OPTIONS,
           },
         ]}
         onChange={(state) => {
@@ -46,8 +43,8 @@ export function ProjectListClient({ project, tasks }: ProjectListClientProps) {
           setStatusFilter(typeof state.filters.status === "string" ? state.filters.status : "");
         }}
         rightSlot={
-          <span className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            {visibleTasks.length} rows
+          <span className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs tracking-[0.08em] text-muted-foreground">
+            {visibleTasks.length}개 행
           </span>
         }
         searchPlaceholder="리스트에서 태스크 검색"

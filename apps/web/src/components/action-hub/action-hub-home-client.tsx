@@ -7,6 +7,7 @@ import { ProjectCard } from "@/components/action-hub/project-card";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
 import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shared/page-layout";
+import { PROJECT_KIND_OPTIONS } from "@/lib/properties/project";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { useActionHubStore } from "@/stores/use-action-hub-store";
 
@@ -37,13 +38,13 @@ export function ActionHubHomeClient() {
         actions={
           <div className="flex flex-wrap gap-2">
               {([
-                ["all", "All"],
-                ["project", "Project"],
-                ["area", "Area"],
-                ["archived", "Archived"],
+                ["all", "전체"],
+                ["project", "프로젝트"],
+                ["area", "영역"],
+                ["archived", "보관"],
               ] as const).map(([key, label]) => (
                 <button
-                  className={`rounded-full px-3 py-2 text-xs uppercase tracking-[0.18em] transition ${
+                  className={`rounded-full px-3 py-2 text-xs tracking-[0.08em] transition ${
                     filter === key ? "border border-primary/20 bg-primary/10 text-primary" : "border border-white/10 bg-white/5 text-muted-foreground hover:bg-white/8 hover:text-foreground"
                   }`}
                   key={key}
@@ -60,13 +61,16 @@ export function ActionHubHomeClient() {
       <PageBody
         aside={
           <GlassCard priority="secondary">
-            <p className="text-xs uppercase tracking-[0.2em] text-primary">새 프로젝트</p>
+            <p className="text-xs tracking-[0.08em] text-primary">새 프로젝트</p>
             <div className="mt-3 space-y-3">
               <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setTitle(event.target.value)} placeholder="프로젝트 이름" value={title} />
               <div className="grid gap-3 md:grid-cols-2">
                 <select className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setKind(event.target.value as "project" | "area")} value={kind}>
-                  <option value="project">Project</option>
-                  <option value="area">Area</option>
+                  {PROJECT_KIND_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
                 <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setCategory(event.target.value)} placeholder="카테고리" value={category} />
               </div>
@@ -106,17 +110,16 @@ export function ActionHubHomeClient() {
               {
                 kind: "select",
                 key: "kind",
-                label: "Kind",
-                options: [
-                  { value: "project", label: "Project" },
-                  { value: "area", label: "Area" },
-                ],
+                label: "종류",
+                options: PROJECT_KIND_OPTIONS,
               },
             ]}
             onChange={(state) => {
               setQuery(state.q);
+              const nextKind = typeof state.filters.kind === "string" ? state.filters.kind : "";
+              setFilter(nextKind === "project" || nextKind === "area" ? nextKind : "all");
             }}
-            rightSlot={<span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{visibleProjects.length} items</span>}
+            rightSlot={<span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs tracking-[0.08em] text-muted-foreground">{visibleProjects.length}개</span>}
             searchPlaceholder="프로젝트, 영역, 카테고리 검색"
           />
         </PageToolbar>

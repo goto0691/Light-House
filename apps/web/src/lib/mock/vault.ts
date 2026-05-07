@@ -70,6 +70,12 @@ export type AssetMock = {
   name: string;
   brand: string;
   condition: string;
+  modelName?: string | null;
+  acquiredDate?: string | null;
+  acquiredPrice?: number | null;
+  notes?: string | null;
+  coverImageUrl?: string | null;
+  sourceDocument?: SourceDocumentInfo | null;
 };
 
 export type PlaceMock = {
@@ -78,6 +84,12 @@ export type PlaceMock = {
   name: string;
   address: string;
   review: string;
+  mapUrl?: string | null;
+  firstVisitedAt?: string | null;
+  lastVisitedAt?: string | null;
+  visitCount?: number | null;
+  averageRating?: number | null;
+  sourceDocument?: SourceDocumentInfo | null;
 };
 
 export const ZETTELS_MOCK: ZettelMock[] = [

@@ -21,10 +21,13 @@ export type ProjectMock = {
   id: string;
   title: string;
   kind: "project" | "area";
+  status: "active" | "paused" | "archived";
   category: string;
+  description?: string | null;
   icon: string;
   color: string;
   progress: number;
+  targetDate?: string | null;
   dueLabel: string;
   recentActivity: string;
 };
@@ -46,10 +49,13 @@ export const PROJECTS_MOCK: ProjectMock[] = [
     id: "project-modu-works",
     title: "MODU WORKS",
     kind: "project",
+    status: "active",
     category: "개발",
+    description: "프로젝트 라이트 하우스 구현 트랙.",
     icon: "🛟",
     color: "gold",
     progress: 62,
+    targetDate: "2026-04-25",
     dueLabel: "D-9",
     recentActivity: "P1 Shared Layer 마감",
   },
@@ -57,10 +63,13 @@ export const PROJECTS_MOCK: ProjectMock[] = [
     id: "project-trauma-repair",
     title: "트라우마 수리공방",
     kind: "project",
+    status: "active",
     category: "집필",
+    description: "장문 집필 프로젝트.",
     icon: "✍️",
     color: "sky",
     progress: 41,
+    targetDate: "2026-04-28",
     dueLabel: "D-18",
     recentActivity: "25화 초안 수정 중",
   },
@@ -68,10 +77,13 @@ export const PROJECTS_MOCK: ProjectMock[] = [
     id: "area-hotteok-business",
     title: "호떡집 컨시어지",
     kind: "area",
+    status: "active",
     category: "비즈니스",
+    description: "비즈니스 운영 영역.",
     icon: "🥞",
     color: "orange",
     progress: 55,
+    targetDate: null,
     dueLabel: "상시",
     recentActivity: "겨울 메뉴 리서치",
   },

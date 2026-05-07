@@ -81,11 +81,11 @@ export function PRMGraphClient() {
       <GlassCard className="p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-primary">PRM Graph</p>
+            <p className="text-xs tracking-[0.08em] text-primary">관계 그래프</p>
             <h1 className="mt-3 font-display text-4xl text-foreground">관계선 관리</h1>
             <p className="mt-3 max-w-2xl text-sm text-muted-foreground">사람 간 연결을 빠르게 만들고 지우면서, 레이어와 그룹을 함께 훑을 수 있는 그래프 진입점입니다.</p>
           </div>
-          <span className="rounded-full border border-white/10 bg-black/10 px-4 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{networkEdges.length} edges</span>
+          <span className="rounded-full border border-white/10 bg-black/10 px-4 py-2 text-xs tracking-[0.08em] text-muted-foreground">{networkEdges.length}개 관계선</span>
         </div>
       </GlassCard>
 
@@ -93,7 +93,7 @@ export function PRMGraphClient() {
 
       <section className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <div className="glass rounded-[20px] p-5">
-        <p className="text-xs uppercase tracking-[0.24em] text-primary">PRM Graph</p>
+        <p className="text-xs tracking-[0.08em] text-primary">관계 그래프</p>
         <h1 className="mt-3 font-display text-3xl text-foreground">관계선 추가</h1>
         <div className="mt-5 space-y-3">
           <select className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setSourcePersonId(event.target.value)} value={sourcePersonId}>
@@ -111,7 +111,7 @@ export function PRMGraphClient() {
             ))}
           </select>
           {hasDuplicateEdge ? <p className="text-xs text-destructive">이미 같은 두 사람 사이의 관계선이 있습니다.</p> : null}
-          <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setRelationType(event.target.value)} placeholder="예: church, business, creative" value={relationType} />
+          <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setRelationType(event.target.value)} placeholder="예: 교회, 업무, 창작" value={relationType} />
           <input className="w-full" max={5} min={1} onChange={(event) => setStrength(Number(event.target.value))} type="range" value={strength} />
           <p className="text-xs text-muted-foreground">강도 {strength}/5</p>
           <button className="rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={isPending || isInvalidEdge} onClick={submit} type="button">

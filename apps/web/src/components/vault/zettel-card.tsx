@@ -44,16 +44,16 @@ export function ZettelCard({ zettel, selected, onSelect, actions }: ZettelCardPr
           ))}
           {sourceReliabilityLabel && zettel.sourceReliability !== "unknown" ? <Tag value={sourceReliabilityLabel} variant="neutral" /> : null}
           {zettel.reviewDueAt ? (
-            <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              review {zettel.reviewDueAt.slice(0, 10)}
+            <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] tracking-[0.08em] text-muted-foreground">
+              검토 {zettel.reviewDueAt.slice(0, 10)}
             </span>
           ) : null}
-          <span className="tabular-nums rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            {zettel.backlinks.length} backlinks
+          <span className="tabular-nums rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] tracking-[0.08em] text-muted-foreground">
+            역링크 {zettel.backlinks.length}
           </span>
           {zettel.outgoingLinks.length ? (
-            <span className="tabular-nums rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              {zettel.outgoingLinks.length} outgoing
+            <span className="tabular-nums rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] tracking-[0.08em] text-muted-foreground">
+              연결 {zettel.outgoingLinks.length}
             </span>
           ) : null}
         </div>

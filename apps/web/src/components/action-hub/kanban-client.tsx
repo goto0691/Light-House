@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { KanbanBoard } from "@/components/action-hub/kanban-board";
 import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { ProjectHeader } from "@/components/action-hub/project-header";
+import { ProjectPropertiesPanel } from "@/components/action-hub/project-properties-panel";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { TaskCard } from "@/components/action-hub/task-card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -13,6 +14,7 @@ import { FilterBar } from "@/components/shared/filter-bar";
 import { PageLayout, PageToolbar } from "@/components/shared/page-layout";
 import { useActionHubStore } from "@/stores/use-action-hub-store";
 import type { ProjectMock, TaskMock } from "@/lib/mock/action-hub";
+import { TASK_BRAIN_ENERGY_OPTIONS, TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/properties/task";
 
 export function KanbanClient({ project }: { project: ProjectMock }) {
   const [isPending, startTransition] = useTransition();
@@ -38,7 +40,7 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
         <TaskCard projectId={project.id} task={task} />
         <div className="mt-2 flex justify-end">
           <button
-            className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+            className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] tracking-[0.08em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
             disabled={isPending}
             onClick={() => {
               startTransition(async () => {
@@ -68,40 +70,27 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
   return (
     <PageLayout>
       <ProjectHeader currentView="kanban" project={project} />
+      <ProjectPropertiesPanel project={project} />
       <PageToolbar>
         <FilterBar
           filters={[
             {
               kind: "select",
               key: "status",
-              label: "Status",
-              options: [
-                { value: "todo", label: "Backlog" },
-                { value: "in_progress", label: "In Progress" },
-                { value: "review", label: "Review" },
-                { value: "done", label: "Done" },
-                { value: "blocked", label: "Blocked" },
-              ],
+              label: "상태",
+              options: TASK_STATUS_OPTIONS,
             },
             {
               kind: "multi",
               key: "priority",
-              label: "Priority",
-              options: [
-                { value: "P1", label: "P1" },
-                { value: "P2", label: "P2" },
-                { value: "P3", label: "P3" },
-              ],
+              label: "우선순위",
+              options: TASK_PRIORITY_OPTIONS,
             },
             {
               kind: "multi",
               key: "energy",
-              label: "Energy",
-              options: [
-                { value: "hyper_focus", label: "Hyper Focus" },
-                { value: "normal", label: "Normal" },
-                { value: "routine", label: "Routine" },
-              ],
+              label: "에너지",
+              options: TASK_BRAIN_ENERGY_OPTIONS,
             },
           ]}
           onChange={(state) => {
@@ -111,16 +100,16 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
             setEnergyFilter(Array.isArray(state.filters.energy) ? state.filters.energy : []);
           }}
           rightSlot={
-            <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              {visibleTasks.length} tasks
+            <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs tracking-[0.08em] text-muted-foreground">
+              {visibleTasks.length}개 작업
             </span>
           }
           searchPlaceholder="태스크 제목, 메모, 연결 키워드 검색"
         />
       </PageToolbar>
       <KanbanBoard
-        tasks={visibleTasks}
         renderTask={renderTask}
+        tasks={visibleTasks}
       />
       <div className="mt-4">
         <ContextBundlePanel

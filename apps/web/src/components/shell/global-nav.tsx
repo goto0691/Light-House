@@ -47,7 +47,7 @@ export function GlobalNav() {
       <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-full lg:flex-none lg:flex-col lg:items-center lg:gap-3">
         <Link
           aria-label="Go to dashboard"
-          className="focus-ring group relative hidden h-11 w-11 items-center justify-center rounded-lg border border-primary/35 bg-primary/12 text-sm font-semibold text-primary shadow-[0_0_28px_rgba(251,191,36,0.16)] transition hover:-translate-y-0.5 hover:bg-primary/18 lg:flex"
+          className="focus-ring group relative hidden h-11 w-11 items-center justify-center rounded-lg border border-primary/35 bg-primary/12 text-sm font-semibold text-primary shadow-[0_0_28px_rgba(251,191,36,0.16)] transition hover:bg-primary/18 lg:flex"
           href="/dashboard"
         >
           <span className="font-display text-base tracking-[0.08em]">LH</span>

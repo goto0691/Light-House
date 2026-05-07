@@ -24,6 +24,7 @@ export function JournalingTabs({ journal, meditation, gratitude, meditationVerse
   const [tab, setTab] = useState<TabKey>("journal");
   const value = tab === "journal" ? journal : tab === "meditation" ? meditation : gratitude;
   const onChange = tab === "journal" ? onJournalChange : tab === "meditation" ? onMeditationChange : onGratitudeChange;
+  const saveLabel = tab === "journal" ? "일기 저장" : tab === "meditation" ? "묵상 저장" : "감사 저장";
 
   return (
     <div className="space-y-3">
@@ -35,7 +36,7 @@ export function JournalingTabs({ journal, meditation, gratitude, meditationVerse
             ["gratitude", "감사"],
           ] as const).map(([key, label]) => (
             <button
-              className={cn("rounded-full px-3 py-2 text-xs uppercase tracking-[0.16em] transition", tab === key ? "bg-primary/15 text-primary" : "bg-white/6 text-muted-foreground hover:bg-white/8 hover:text-foreground")}
+              className={cn("rounded-full px-3 py-2 text-xs transition", tab === key ? "bg-primary/15 text-primary" : "bg-white/6 text-muted-foreground hover:bg-white/8 hover:text-foreground")}
               key={key}
               onClick={() => setTab(key)}
               type="button"
@@ -48,7 +49,7 @@ export function JournalingTabs({ journal, meditation, gratitude, meditationVerse
       </GlassCard>
       <ZenEditor onChange={onChange} value={value} />
       <button className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground" disabled={disabled} onClick={() => onSave(tab, value)} type="button">
-        {tab === "journal" ? "Journal 저장" : tab === "meditation" ? "Meditation 저장" : "Gratitude 저장"}
+        {saveLabel}
       </button>
     </div>
   );

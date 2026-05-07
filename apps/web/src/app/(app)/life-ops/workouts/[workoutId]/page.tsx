@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { WorkoutPropertiesPanel } from "@/components/life-ops/workout-properties-panel";
 import { EntityContextShell } from "@/components/shared/context/entity-context-shell";
 import { GlassCard } from "@/components/shared/glass-card";
 import { Tag } from "@/components/shared/tag";
@@ -22,20 +23,23 @@ export default async function WorkoutDetailPage({
     <EntityContextShell
       bundle={bundle}
       mainSlot={
-        <GlassCard className="p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-primary">Workout Detail</p>
-              <h1 className="mt-3 font-display text-4xl text-foreground">{workout.categories}</h1>
-              <p className="mt-2 text-sm text-muted-foreground">{workout.date}</p>
+        <div className="space-y-4">
+          <GlassCard className="p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs text-primary">운동 상세</p>
+                <h1 className="mt-3 font-display text-4xl text-foreground">{workout.categories}</h1>
+                <p className="mt-2 text-sm text-muted-foreground">{workout.date}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Tag value={`${workout.duration}분`} variant="neutral" />
+                <Tag value={`강도 ${workout.intensity}`} variant="custom" />
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Tag value={`${workout.duration} min`} variant="neutral" />
-              <Tag value={`intensity ${workout.intensity}`} variant="custom" />
-            </div>
-          </div>
-          <p className="mt-5 rounded-lg border border-white/10 bg-white/5 p-4 text-sm leading-6 text-muted-foreground">{workout.notes || "운동 메모가 아직 없습니다."}</p>
-        </GlassCard>
+            <p className="mt-5 rounded-lg border border-white/10 bg-white/5 p-4 text-sm leading-6 text-muted-foreground">{workout.notes || "운동 메모가 아직 없습니다."}</p>
+          </GlassCard>
+          <WorkoutPropertiesPanel workout={workout} />
+        </div>
       }
       railDefaultLens="dates"
     />

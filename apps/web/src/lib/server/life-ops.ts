@@ -447,6 +447,8 @@ export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?
       organization: row.organization,
       role: row.role,
       category: row.category,
+      startDate: row.startDate,
+      endDate: row.endDate ?? undefined,
       period: row.endDate ? `${row.startDate.slice(0, 4)} - ${row.endDate.slice(0, 4)}` : `${row.startDate.slice(0, 4)} - 현재`,
       description: row.description ?? "",
     })),
@@ -627,6 +629,17 @@ async function ensureDailyLog(userId: string, date: string) {
   return id;
 }
 
+function clampScale(value: number | undefined, fallback: number) {
+  const next = Number(value ?? fallback);
+  if (!Number.isFinite(next)) return fallback;
+  return Math.min(5, Math.max(1, Math.round(next)));
+}
+
+function safeNumber(value: number | undefined, fallback = 0) {
+  const next = Number(value ?? fallback);
+  return Number.isFinite(next) ? next : fallback;
+}
+
 export async function updateLifeOpsMood(date: string, mood: number) {
   const { id: userId } = await resolveUser();
   await ensureDailyLog(userId, date);
@@ -638,6 +651,94 @@ export async function updateLifeOpsEnergy(date: string, energy: number) {
   const { id: userId } = await resolveUser();
   await ensureDailyLog(userId, date);
   await executeD1(`update daily_logs set energy_level = ?, updated_at = datetime('now') where user_id = ? and date = ?`, [energy, userId, date]);
+  return getLifeOpsSnapshot([date]);
+}
+
+export async function updateLifeOpsDailyProperties(
+  date: string,
+  input: {
+    mood?: number;
+    energy?: number;
+    emotions?: string[];
+    sleepHours?: number;
+    deepWorkMinutes?: number;
+    gratitude?: string;
+    journal?: string;
+    meditation?: string;
+    meditationVerse?: string;
+  },
+) {
+  const { id: userId } = await resolveUser();
+  const dailyLogId = await ensureDailyLog(userId, date);
+  const [currentLog, currentMetric] = await Promise.all([
+    queryD1<DailyLogRow>(
+      `select id, date, mood, energy_level as energyLevel, emotions, gratitude, journal, meditation, meditation_verse as meditationVerse
+       from daily_logs
+       where user_id = ? and date = ?
+       limit 1`,
+      [userId, date],
+    ),
+    queryD1<HealthMetricRow>(
+      `select id, date, sleep_hours as sleepHours, deep_work_minutes as deepWorkMinutes, weight, steps_count as stepsCount
+       from health_metrics
+       where user_id = ? and date = ?
+       limit 1`,
+      [userId, date],
+    ),
+  ]);
+  const current = currentLog.rows[0];
+  const metric = currentMetric.rows[0];
+  const mood = input.mood === undefined ? current?.mood ?? 3 : clampScale(input.mood, 3);
+  const energy = input.energy === undefined ? current?.energyLevel ?? 3 : clampScale(input.energy, 3);
+  const emotions = Array.isArray(input.emotions)
+    ? input.emotions.map((emotion) => emotion.trim()).filter(Boolean).slice(0, 12)
+    : parseJsonArray(current?.emotions ?? null);
+  const gratitude = input.gratitude === undefined ? current?.gratitude ?? "" : input.gratitude.trim();
+  const journal = input.journal === undefined ? current?.journal ?? "" : input.journal.trim();
+  const meditation = input.meditation === undefined ? current?.meditation ?? "" : input.meditation.trim();
+  const meditationVerse = input.meditationVerse === undefined ? current?.meditationVerse ?? "" : input.meditationVerse.trim();
+  const sleepHours = input.sleepHours === undefined ? Number(metric?.sleepHours ?? 0) : Math.max(0, safeNumber(input.sleepHours, 0));
+  const deepWorkMinutes = input.deepWorkMinutes === undefined
+    ? Number(metric?.deepWorkMinutes ?? 0)
+    : Math.max(0, Math.round(safeNumber(input.deepWorkMinutes, 0)));
+
+  await executeD1(
+    `update daily_logs
+     set mood = ?,
+         energy_level = ?,
+         emotions = ?,
+         gratitude = ?,
+         journal = ?,
+         meditation = ?,
+         meditation_verse = ?,
+         updated_at = datetime('now')
+     where user_id = ? and date = ?`,
+    [mood, energy, JSON.stringify(emotions), gratitude, journal, meditation, meditationVerse, userId, date],
+  );
+
+  if (metric?.id) {
+    await executeD1(
+      `update health_metrics
+       set sleep_hours = ?,
+           deep_work_minutes = ?,
+           updated_at = datetime('now')
+       where id = ? and user_id = ?`,
+      [sleepHours, deepWorkMinutes, metric.id, userId],
+    );
+  } else {
+    await executeD1(
+      `insert into health_metrics (id, user_id, date, sleep_hours, deep_work_minutes, weight, steps_count, created_at, updated_at)
+       values (?, ?, ?, ?, ?, null, null, datetime('now'), datetime('now'))`,
+      [ulid(), userId, date, sleepHours, deepWorkMinutes],
+    );
+  }
+
+  await syncTagsForEntity({
+    userId,
+    taggableType: "daily_log",
+    taggableId: dailyLogId,
+    content: [journal, meditation, gratitude, meditationVerse, ...emotions].join("\n"),
+  });
   return getLifeOpsSnapshot([date]);
 }
 
@@ -753,6 +854,43 @@ export async function createLifeOpsHabit(input: { title: string; description?: s
   return getLifeOpsSnapshot();
 }
 
+export async function updateLifeOpsHabitProperties(
+  habitId: string,
+  input: { title?: string; description?: string; icon?: string; schedule?: string; isActive?: boolean },
+) {
+  const { id: userId } = await resolveUser();
+  const current = await queryD1<HabitDefinitionRow>(
+    `select id, title, description, icon, schedule, is_active as isActive, display_order as displayOrder
+     from habits
+     where id = ? and user_id = ?
+     limit 1`,
+    [habitId, userId],
+  );
+  const row = current.rows[0];
+  if (!row) throw new Error("습관을 찾지 못했습니다.");
+
+  const title = input.title === undefined ? row.title : input.title.trim();
+  if (!title) throw new Error("습관 이름은 비워둘 수 없습니다.");
+  const description = input.description === undefined ? row.description : input.description.trim() || null;
+  const icon = input.icon === undefined ? row.icon ?? "•" : input.icon.trim() || "•";
+  const schedule = input.schedule === undefined ? row.schedule ?? "daily" : input.schedule.trim() || "daily";
+  const isActive = input.isActive === undefined ? Number(row.isActive ?? 1) : input.isActive ? 1 : 0;
+
+  await executeD1(
+    `update habits
+     set title = ?,
+         description = ?,
+         icon = ?,
+         schedule = ?,
+         is_active = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [title, description, icon, schedule, isActive, habitId, userId],
+  );
+
+  return getLifeOpsSnapshot();
+}
+
 export async function toggleHabitActive(habitId: string) {
   const { id: userId } = await resolveUser();
   const current = await queryD1<{ isActive: number | null }>(`select is_active as isActive from habits where id = ? and user_id = ? limit 1`, [habitId, userId]);
@@ -771,6 +909,43 @@ export async function createWorkout(input: { date: string; categories: string; d
      values (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
     [ulid(), userId, input.date, categories, input.duration, input.intensity, input.notes?.trim() || null],
   );
+  return getLifeOpsSnapshot();
+}
+
+export async function updateWorkoutProperties(
+  workoutId: string,
+  input: { date?: string; categories?: string; duration?: number; intensity?: number; notes?: string },
+) {
+  const { id: userId } = await resolveUser();
+  const current = await queryD1<WorkoutRow>(
+    `select id, title, date, categories, duration_minutes as durationMinutes, intensity, notes
+     from workouts
+     where id = ? and user_id = ? and deleted_at is null
+     limit 1`,
+    [workoutId, userId],
+  );
+  const row = current.rows[0];
+  if (!row) throw new Error("운동 로그를 찾지 못했습니다.");
+
+  const categories = input.categories === undefined ? row.title ?? row.categories : input.categories.trim();
+  if (!categories) throw new Error("운동 카테고리는 비워둘 수 없습니다.");
+  const duration = input.duration === undefined ? Number(row.durationMinutes ?? 0) : Math.max(0, Math.round(safeNumber(input.duration, 0)));
+  const intensity = input.intensity === undefined ? clampScale(row.intensity ?? 3, 3) : clampScale(input.intensity, 3);
+  const notes = input.notes === undefined ? row.notes : input.notes.trim() || null;
+
+  await executeD1(
+    `update workouts
+     set title = ?,
+         date = ?,
+         categories = ?,
+         duration_minutes = ?,
+         intensity = ?,
+         notes = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [categories, input.date ?? row.date, categories, duration, intensity, notes, workoutId, userId],
+  );
+
   return getLifeOpsSnapshot();
 }
 
@@ -814,8 +989,51 @@ export async function createCareerEntry(input: { organization: string; role: str
   return getLifeOpsSnapshot();
 }
 
+export async function updateCareerEntryProperties(
+  careerId: string,
+  input: { organization?: string; role?: string; category?: string; startDate?: string; endDate?: string | null; description?: string },
+) {
+  const { id: userId } = await resolveUser();
+  const current = await queryD1<CareerRow>(
+    `select id, source_document_id as sourceDocumentId, organization, role, category, start_date as startDate, end_date as endDate, description
+     from career_history
+     where id = ? and user_id = ? and deleted_at is null
+     limit 1`,
+    [careerId, userId],
+  );
+  const row = current.rows[0];
+  if (!row) throw new Error("커리어 이력을 찾지 못했습니다.");
+
+  const organization = input.organization === undefined ? row.organization : input.organization.trim();
+  const role = input.role === undefined ? row.role : input.role.trim();
+  if (!organization || !role) throw new Error("조직명과 역할은 비워둘 수 없습니다.");
+  const category = normalizeCareerCategory(input.category, row.category);
+  const endDate = input.endDate === undefined ? row.endDate : input.endDate?.trim() || null;
+  const description = input.description === undefined ? row.description : input.description.trim() || null;
+
+  await executeD1(
+    `update career_history
+     set organization = ?,
+         role = ?,
+         category = ?,
+         start_date = ?,
+         end_date = ?,
+         description = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [organization, role, category, input.startDate ?? row.startDate, endDate, description, careerId, userId],
+  );
+
+  return getLifeOpsSnapshot();
+}
+
 export async function deleteCareerEntry(careerId: string) {
   const { id: userId } = await resolveUser();
   await executeD1(`update career_history set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [careerId, userId]);
   return getLifeOpsSnapshot();
+}
+
+function normalizeCareerCategory(value: string | undefined, fallback: string) {
+  const next = value?.trim() || fallback;
+  return ["work", "study", "service"].includes(next) ? next : "work";
 }

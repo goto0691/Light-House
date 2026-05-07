@@ -15,7 +15,7 @@ export function EnergyButtonGroup({ value, options, onChange, disabled }: Energy
       {options.map((energy, index) => (
         <button
           className={cn(
-            "rounded-full px-3 py-1 text-xs uppercase tracking-[0.16em] transition",
+            "rounded-full px-3 py-1 text-xs transition",
             index + 1 === value ? "bg-primary/20 text-primary" : "bg-white/6 text-muted-foreground hover:bg-white/8 hover:text-foreground",
             disabled && "opacity-60",
           )}

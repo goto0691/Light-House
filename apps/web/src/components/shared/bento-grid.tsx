@@ -26,7 +26,7 @@ export function BentoCard({ children, className, colSpan = 12, rowSpan = 1, prio
   return (
     <div
       className={cn(
-        "min-h-[160px] min-w-0 motion-safe:animate-[bento-fade-up_220ms_ease-out_both]",
+        "min-h-[160px] min-w-0",
         colSpan === 12 && "md:col-span-6 xl:col-span-12",
         colSpan === 8 && "md:col-span-6 xl:col-span-8",
         colSpan === 6 && "md:col-span-6 xl:col-span-6",

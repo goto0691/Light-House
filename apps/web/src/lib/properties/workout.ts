@@ -1,0 +1,83 @@
+import type { PropertyDefinition, PropertyGroupDefinition, PropertyOption } from "./types";
+
+export const WORKOUT_INTENSITY_OPTIONS: PropertyOption[] = [
+  { value: "1", label: "1 · 회복" },
+  { value: "2", label: "2 · 가벼움" },
+  { value: "3", label: "3 · 보통" },
+  { value: "4", label: "4 · 강함" },
+  { value: "5", label: "5 · 최고 강도" },
+];
+
+export const WORKOUT_PROPERTY_GROUPS: PropertyGroupDefinition[] = [
+  { key: "dates", label: "날짜", defaultOpen: true },
+  { key: "classification", label: "운동 분류", defaultOpen: true },
+  { key: "status", label: "강도와 시간", defaultOpen: true },
+  { key: "review", label: "메모", defaultOpen: false },
+];
+
+export const WORKOUT_PROPERTY_DEFINITIONS: PropertyDefinition[] = [
+  {
+    key: "workout.date",
+    entityType: "workout",
+    field: "date",
+    label: "운동일",
+    group: "dates",
+    valueType: "date",
+    display: "date",
+    defaultVisibleInList: true,
+    defaultVisibleInDetail: true,
+    sourceAliases: ["date", "workout date", "운동일", "날짜", "일자"],
+  },
+  {
+    key: "workout.categories",
+    entityType: "workout",
+    field: "categories",
+    label: "운동 부위/분류",
+    group: "classification",
+    valueType: "text",
+    display: "text",
+    placeholder: "예: 하체 · 유산소",
+    defaultVisibleInList: true,
+    defaultVisibleInDetail: true,
+    sourceAliases: ["category", "categories", "type", "part", "운동", "부위", "분류", "카테고리"],
+  },
+  {
+    key: "workout.duration",
+    entityType: "workout",
+    field: "duration",
+    label: "운동 시간",
+    description: "분 단위로 기록합니다.",
+    group: "status",
+    valueType: "number",
+    display: "number",
+    placeholder: "60",
+    defaultVisibleInList: true,
+    defaultVisibleInDetail: true,
+    sourceAliases: ["duration", "minutes", "time", "운동 시간", "시간", "분"],
+  },
+  {
+    key: "workout.intensity",
+    entityType: "workout",
+    field: "intensity",
+    label: "강도",
+    group: "status",
+    valueType: "select",
+    display: "segmented",
+    options: WORKOUT_INTENSITY_OPTIONS,
+    defaultVisibleInList: true,
+    defaultVisibleInDetail: true,
+    sourceAliases: ["intensity", "effort", "rpe", "강도", "난이도"],
+  },
+  {
+    key: "workout.notes",
+    entityType: "workout",
+    field: "notes",
+    label: "메모",
+    group: "review",
+    valueType: "longText",
+    display: "textarea",
+    placeholder: "세트 구성, 컨디션, 다음 운동에 남길 단서를 적습니다.",
+    defaultVisibleInDetail: true,
+    sourceAliases: ["notes", "memo", "description", "메모", "노트", "설명"],
+  },
+];

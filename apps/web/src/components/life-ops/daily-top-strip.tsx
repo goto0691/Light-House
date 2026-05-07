@@ -29,7 +29,7 @@ export function DailyTopStrip({ date, mood, energy, emotions, moodOptions, energ
       actions={
         <div className="grid gap-3">
           <MoodButtonGroup disabled={disabled} onChange={onMoodChange} options={moodOptions} value={mood} />
-        <EnergyButtonGroup disabled={disabled} onChange={onEnergyChange} options={energyOptions} value={energy} />
+          <EnergyButtonGroup disabled={disabled} onChange={onEnergyChange} options={energyOptions} value={energy} />
         </div>
       }
     />

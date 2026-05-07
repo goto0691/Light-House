@@ -30,9 +30,9 @@ export function EmptyState({ icon, title, description, cta, illustration = "gene
   return (
     <div className={cn("glass flex min-h-[240px] flex-col items-center justify-center rounded-[32px] px-6 py-10 text-center", className)}>
       {typeof icon === "string" ? (
-        <div className="float-illustration mb-4 text-3xl">{icon}</div>
+        <div className="mb-4 text-3xl">{icon}</div>
       ) : (
-        <div className="float-illustration mb-5 rounded-full border border-primary/15 bg-primary/10 p-4 text-primary shadow-[var(--shadow-glow)]">
+        <div className="mb-5 rounded-full border border-primary/15 bg-primary/10 p-4 text-primary shadow-[var(--shadow-glow)]">
           {Illustration ? <Illustration className="h-7 w-7" /> : <Icon className="h-6 w-6" />}
         </div>
       )}

@@ -131,46 +131,60 @@ export const DEFAULT_DASHBOARD_LAYOUTS: WidgetLayoutInput[] = [
 ];
 
 export const DEFAULT_SAVED_VIEWS: SavedViewInput[] = [
-  { domain: "library", scope: "knowledge", name: "All Documents", icon: "library", viewKey: "all", isDefault: true, displayOrder: 0 },
-  { domain: "library", scope: "knowledge", name: "Sermons", icon: "book-open", filterState: { documentKind: ["sermon", "sermon_note"] }, viewKey: "sermons", displayOrder: 1 },
-  { domain: "library", scope: "knowledge", name: "Bible Study", icon: "sparkles", filterState: { documentKind: ["bible_study", "meditation"] }, viewKey: "bible-study", displayOrder: 2 },
-  { domain: "library", scope: "knowledge", name: "Essays", icon: "file-text", filterState: { documentKind: ["essay", "reflection"] }, viewKey: "essays", displayOrder: 3 },
-  { domain: "library", scope: "knowledge", name: "Prompts", icon: "terminal", filterState: { documentKind: ["prompt"] }, viewKey: "prompts", displayOrder: 4 },
-  { domain: "library", scope: "knowledge", name: "Fiction Ideas", icon: "wand", filterState: { documentKind: ["fiction", "story_idea"] }, viewKey: "fiction-ideas", displayOrder: 5 },
-  { domain: "library", scope: "knowledge", name: "Needs Review", icon: "alert-circle", filterState: { status: ["needs_review"] }, viewKey: "needs-review", displayOrder: 6 },
+  { domain: "library", scope: "knowledge", name: "전체 문서", icon: "library", viewKey: "all", isDefault: true, displayOrder: 0 },
+  { domain: "library", scope: "knowledge", name: "설교", icon: "book-open", filterState: { documentKind: ["sermon", "sermon_note"] }, viewKey: "sermons", displayOrder: 1 },
+  { domain: "library", scope: "knowledge", name: "성경 공부", icon: "sparkles", filterState: { documentKind: ["bible_study", "meditation"] }, viewKey: "bible-study", displayOrder: 2 },
+  { domain: "library", scope: "knowledge", name: "에세이", icon: "file-text", filterState: { documentKind: ["essay", "reflection"] }, viewKey: "essays", displayOrder: 3 },
+  { domain: "library", scope: "knowledge", name: "프롬프트", icon: "terminal", filterState: { documentKind: ["prompt"] }, viewKey: "prompts", displayOrder: 4 },
+  { domain: "library", scope: "knowledge", name: "소설 아이디어", icon: "wand", filterState: { documentKind: ["fiction", "story_idea"] }, viewKey: "fiction-ideas", displayOrder: 5 },
+  { domain: "library", scope: "knowledge", name: "검토 필요", icon: "alert-circle", filterState: { status: ["needs_review"] }, viewKey: "needs-review", displayOrder: 6 },
 
-  { domain: "daily", scope: "entries", name: "Calendar", icon: "calendar", viewKey: "calendar", isDefault: true, displayOrder: 0 },
-  { domain: "daily", scope: "entries", name: "Journal", icon: "notebook", filterState: { kind: ["journal"] }, viewKey: "journal", displayOrder: 1 },
-  { domain: "daily", scope: "entries", name: "Meditation", icon: "sun", filterState: { kind: ["meditation"] }, viewKey: "meditation", displayOrder: 2 },
-  { domain: "daily", scope: "entries", name: "Sermon Notes", icon: "book-open", filterState: { kind: ["sermon_note"] }, viewKey: "sermon-notes", displayOrder: 3 },
-  { domain: "daily", scope: "entries", name: "Emotion Timeline", icon: "activity", sortState: { field: "date", direction: "desc", groupBy: "emotion" }, viewKey: "emotion-timeline", displayOrder: 4 },
-  { domain: "daily", scope: "entries", name: "People Mentions", icon: "users", sortState: { field: "person", direction: "asc" }, viewKey: "people-mentions", displayOrder: 5 },
-  { domain: "daily", scope: "entries", name: "Workouts", icon: "dumbbell", filterState: { kind: ["workout"] }, viewKey: "workouts", displayOrder: 6 },
+  { domain: "daily", scope: "entries", name: "캘린더", icon: "calendar", viewKey: "calendar", isDefault: true, displayOrder: 0 },
+  { domain: "daily", scope: "entries", name: "일기", icon: "notebook", filterState: { kind: ["journal"] }, viewKey: "journal", displayOrder: 1 },
+  { domain: "daily", scope: "entries", name: "묵상", icon: "sun", filterState: { kind: ["meditation"] }, viewKey: "meditation", displayOrder: 2 },
+  { domain: "daily", scope: "entries", name: "설교 노트", icon: "book-open", filterState: { kind: ["sermon_note"] }, viewKey: "sermon-notes", displayOrder: 3 },
+  { domain: "daily", scope: "entries", name: "감정 타임라인", icon: "activity", sortState: { field: "date", direction: "desc", groupBy: "emotion" }, viewKey: "emotion-timeline", displayOrder: 4 },
+  { domain: "daily", scope: "entries", name: "사람 언급", icon: "users", sortState: { field: "person", direction: "asc" }, viewKey: "people-mentions", displayOrder: 5 },
+  { domain: "daily", scope: "entries", name: "운동 기록", icon: "dumbbell", filterState: { kind: ["workout"] }, viewKey: "workouts", displayOrder: 6 },
 
-  { domain: "media", scope: "items", name: "All Media", icon: "clapperboard", viewKey: "all", isDefault: true, displayOrder: 0 },
-  { domain: "media", scope: "items", name: "Games", icon: "gamepad-2", filterState: { mediaType: "game" }, viewKey: "games", displayOrder: 1 },
-  { domain: "media", scope: "items", name: "Screens", icon: "monitor-play", filterState: { mediaType: "screen" }, viewKey: "screens", displayOrder: 2 },
-  { domain: "media", scope: "items", name: "Books", icon: "book", filterState: { mediaType: "book" }, viewKey: "books", displayOrder: 3 },
-  { domain: "media", scope: "items", name: "Completed", icon: "check-circle", filterState: { status: ["completed"] }, viewKey: "completed", displayOrder: 4 },
-  { domain: "media", scope: "items", name: "Backlog", icon: "inbox", filterState: { status: ["backlog"] }, viewKey: "backlog", displayOrder: 5 },
-  { domain: "media", scope: "items", name: "Rewatch", icon: "refresh-ccw", filterState: { rewatchValue: true }, viewKey: "rewatch", displayOrder: 6 },
+  { domain: "media", scope: "items", name: "전체 미디어", icon: "clapperboard", viewKey: "all", isDefault: true, displayOrder: 0 },
+  { domain: "media", scope: "items", name: "게임", icon: "gamepad-2", filterState: { mediaType: "game" }, viewKey: "games", displayOrder: 1 },
+  { domain: "media", scope: "items", name: "영상", icon: "monitor-play", filterState: { mediaType: "screen" }, viewKey: "screens", displayOrder: 2 },
+  { domain: "media", scope: "items", name: "책", icon: "book", filterState: { mediaType: "book" }, viewKey: "books", displayOrder: 3 },
+  { domain: "media", scope: "items", name: "완료", icon: "check-circle", filterState: { status: ["completed"] }, viewKey: "completed", displayOrder: 4 },
+  { domain: "media", scope: "items", name: "대기", icon: "inbox", filterState: { status: ["backlog"] }, viewKey: "backlog", displayOrder: 5 },
+  { domain: "media", scope: "items", name: "다시 볼 것", icon: "refresh-ccw", filterState: { rewatchValue: true }, viewKey: "rewatch", displayOrder: 6 },
 
-  { domain: "people", scope: "relationships", name: "Core", icon: "heart", filterState: { layer: [5, 15] }, viewKey: "core", isDefault: true, displayOrder: 0 },
-  { domain: "people", scope: "relationships", name: "Active", icon: "radio", filterState: { status: ["active"] }, viewKey: "active", displayOrder: 1 },
-  { domain: "people", scope: "relationships", name: "Dormant", icon: "moon", filterState: { status: ["dormant", "observing"] }, viewKey: "dormant", displayOrder: 2 },
-  { domain: "people", scope: "relationships", name: "Birthdays", icon: "cake", sortState: { field: "birthday", direction: "asc" }, viewKey: "birthdays", displayOrder: 3 },
-  { domain: "people", scope: "relationships", name: "Gift History", icon: "gift", filterState: { hasGifts: true }, viewKey: "gift-history", displayOrder: 4 },
-  { domain: "people", scope: "relationships", name: "Appears In Journals", icon: "notebook", filterState: { linkedDailyEntries: true }, viewKey: "appears-in-journals", displayOrder: 5 },
+  { domain: "assets", scope: "inventory", name: "전체 자산", icon: "package", viewKey: "all", isDefault: true, displayOrder: 0 },
+  { domain: "assets", scope: "inventory", name: "장비", icon: "wrench", filterState: { category: "gear" }, viewKey: "gear", displayOrder: 1 },
+  { domain: "assets", scope: "inventory", name: "수집품", icon: "archive", filterState: { category: "collection" }, viewKey: "collection", displayOrder: 2 },
+  { domain: "assets", scope: "inventory", name: "상태 확인", icon: "alert-circle", filterState: { condition: ["fair", "repair"] }, viewKey: "condition-review", displayOrder: 3 },
 
-  { domain: "projects", scope: "work", name: "Active", icon: "rocket", filterState: { status: ["active", "in_progress"] }, viewKey: "active", isDefault: true, displayOrder: 0 },
-  { domain: "projects", scope: "work", name: "Important", icon: "star", sortState: { field: "importance", direction: "desc" }, viewKey: "important", displayOrder: 1 },
-  { domain: "projects", scope: "work", name: "High Energy", icon: "zap", sortState: { field: "brainEnergy", direction: "desc" }, viewKey: "high-energy", displayOrder: 2 },
-  { domain: "projects", scope: "work", name: "Has Artifact", icon: "link", filterState: { hasArtifactUrl: true }, viewKey: "has-artifact", displayOrder: 3 },
+  { domain: "places", scope: "visits", name: "전체 장소", icon: "map-pin", viewKey: "all", isDefault: true, displayOrder: 0 },
+  { domain: "places", scope: "visits", name: "식당", icon: "utensils", filterState: { category: "restaurant" }, viewKey: "restaurants", displayOrder: 1 },
+  { domain: "places", scope: "visits", name: "카페", icon: "coffee", filterState: { category: "cafe" }, viewKey: "cafes", displayOrder: 2 },
+  { domain: "places", scope: "visits", name: "메모 있음", icon: "notebook", filterState: { hasReview: true }, viewKey: "reviewed", displayOrder: 3 },
 
-  { domain: "sources", scope: "qa", name: "Needs Review", icon: "alert-circle", filterState: { status: ["needs_review"] }, viewKey: "needs-review", isDefault: true, displayOrder: 0 },
-  { domain: "sources", scope: "qa", name: "Low Confidence", icon: "gauge", filterState: { confidence: "low" }, viewKey: "low-confidence", displayOrder: 1 },
-  { domain: "sources", scope: "qa", name: "Archived Work", icon: "archive", filterState: { documentRole: ["archive_work"] }, viewKey: "archived-work", displayOrder: 2 },
-  { domain: "sources", scope: "qa", name: "Unmapped", icon: "map", filterState: { canonicalEntityId: null }, viewKey: "unmapped", displayOrder: 3 },
+  { domain: "gifts", scope: "relationships", name: "전체 선물", icon: "gift", viewKey: "all", isDefault: true, displayOrder: 0 },
+  { domain: "gifts", scope: "relationships", name: "준 선물", icon: "send", filterState: { direction: ["given"] }, viewKey: "given", displayOrder: 1 },
+  { domain: "gifts", scope: "relationships", name: "받은 선물", icon: "inbox", filterState: { direction: ["received"] }, viewKey: "received", displayOrder: 2 },
+  { domain: "gifts", scope: "relationships", name: "반응 기록", icon: "sparkles", filterState: { hasSatisfaction: true }, viewKey: "with-reaction", displayOrder: 3 },
+
+  { domain: "people", scope: "relationships", name: "핵심", icon: "heart", filterState: { layer: [5, 15] }, viewKey: "core", isDefault: true, displayOrder: 0 },
+  { domain: "people", scope: "relationships", name: "활성", icon: "radio", filterState: { status: ["active"] }, viewKey: "active", displayOrder: 1 },
+  { domain: "people", scope: "relationships", name: "휴면", icon: "moon", filterState: { status: ["dormant", "observing"] }, viewKey: "dormant", displayOrder: 2 },
+  { domain: "people", scope: "relationships", name: "생일", icon: "cake", sortState: { field: "birthday", direction: "asc" }, viewKey: "birthdays", displayOrder: 3 },
+  { domain: "people", scope: "relationships", name: "선물 기록", icon: "gift", filterState: { hasGifts: true }, viewKey: "gift-history", displayOrder: 4 },
+  { domain: "people", scope: "relationships", name: "일기에 등장", icon: "notebook", filterState: { linkedDailyEntries: true }, viewKey: "appears-in-journals", displayOrder: 5 },
+
+  { domain: "projects", scope: "work", name: "활성", icon: "rocket", filterState: { status: ["active"] }, viewKey: "active", isDefault: true, displayOrder: 0 },
+  { domain: "projects", scope: "work", name: "보류", icon: "pause-circle", filterState: { status: ["paused"] }, viewKey: "paused", displayOrder: 1 },
+  { domain: "projects", scope: "work", name: "보관", icon: "archive", filterState: { status: ["archived"] }, viewKey: "archived", displayOrder: 2 },
+
+  { domain: "sources", scope: "qa", name: "검토 필요", icon: "alert-circle", filterState: { classificationStatus: ["unmapped"] }, viewKey: "needs-review", isDefault: true, displayOrder: 0 },
+  { domain: "sources", scope: "qa", name: "낮은 신뢰도", icon: "gauge", filterState: { confidence: "low" }, viewKey: "low-confidence", displayOrder: 1 },
+  { domain: "sources", scope: "qa", name: "보관 작업", icon: "archive", filterState: { documentRole: ["archive_work"] }, viewKey: "archived-work", displayOrder: 2 },
+  { domain: "sources", scope: "qa", name: "숨김/노이즈", icon: "eye-off", filterState: { classificationStatus: ["hidden"] }, viewKey: "hidden", displayOrder: 3 },
 ];
 
 function parseJsonRecord(value: string | null): JsonRecord {
@@ -330,7 +344,7 @@ export async function updateSavedView(viewId: string, input: Partial<SavedViewIn
     [viewId, user.id],
   );
   const existing = current.rows[0];
-  if (!existing) throw new Error("Saved view를 찾지 못했습니다.");
+  if (!existing) throw new Error("저장된 뷰를 찾지 못했습니다.");
 
   if (input.isDefault) {
     await executeD1(

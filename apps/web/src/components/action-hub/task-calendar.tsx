@@ -19,11 +19,11 @@ export function TaskCalendar({ projectId, tasks }: TaskCalendarProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {tasks.map((task) => (
-        <Link href={`/action-hub/${projectId}/tasks/${task.id}`} key={task.id}>
+        <Link href={`/action-hub/${projectId}/tasks/${task.id}`} key={task.id} scroll={false}>
           <GlassCard className="h-full p-5" interactive>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-primary">{task.dueAt}</p>
+                <p className="text-xs tracking-[0.08em] text-primary">{task.dueAt}</p>
                 <h3 className="mt-2 line-clamp-2 font-display text-2xl text-foreground">{task.title}</h3>
               </div>
               <Tag value={task.priority} variant="priority" />

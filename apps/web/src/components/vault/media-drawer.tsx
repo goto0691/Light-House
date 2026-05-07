@@ -4,9 +4,11 @@ import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
-import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
+import { PropertyPanel } from "@/components/shared/properties/property-panel";
+import { SourcePropertyInspector, type SourcePropertyTarget } from "@/components/shared/properties/source-property-inspector";
 import type { MediaMock } from "@/lib/mock/vault";
+import { MEDIA_PROPERTY_DEFINITIONS, MEDIA_PROPERTY_GROUPS } from "@/lib/properties/media";
+import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 type MediaFormState = {
@@ -34,6 +36,55 @@ type MediaFormState = {
   startedAt: string;
   completedAt: string;
 };
+
+type MediaSourcePropertyTarget =
+  | "skip"
+  | "title"
+  | "originalTitle"
+  | "mediaType"
+  | "status"
+  | "creator"
+  | "author"
+  | "studio"
+  | "platformOrPublisher"
+  | "genre"
+  | "subtype"
+  | "screenKind"
+  | "releaseYear"
+  | "rating"
+  | "review"
+  | "content"
+  | "relationNote"
+  | "playTime"
+  | "pages"
+  | "loggedAt"
+  | "startedAt"
+  | "completedAt";
+
+const MEDIA_SOURCE_TARGETS: Array<SourcePropertyTarget<MediaFormState> & { value: MediaSourcePropertyTarget }> = [
+  { value: "skip", label: "원본 유지" },
+  { value: "title", label: "제목", apply: ({ value }) => ({ title: compactSingleLine(value, 120) }) },
+  { value: "originalTitle", label: "원제", apply: ({ value }) => ({ originalTitle: compactSingleLine(value, 160) }) },
+  { value: "mediaType", label: "미디어 타입", apply: ({ form, value }) => ({ mediaType: normalizeMediaType(value) ?? form.mediaType }) },
+  { value: "status", label: "상태", apply: ({ form, value }) => ({ status: normalizeMediaStatus(value) ?? form.status }) },
+  { value: "creator", label: "창작자", apply: ({ value }) => ({ creator: compactSingleLine(value, 120) }) },
+  { value: "author", label: "저자", apply: ({ value }) => ({ author: compactSingleLine(value, 120) }) },
+  { value: "studio", label: "스튜디오", apply: ({ value }) => ({ studio: compactSingleLine(value, 120) }) },
+  { value: "platformOrPublisher", label: "플랫폼/출판사", apply: ({ value }) => ({ platformOrPublisher: compactSingleLine(value, 120) }) },
+  { value: "genre", label: "장르", apply: ({ value }) => ({ genre: compactSingleLine(value, 120) }) },
+  { value: "subtype", label: "세부 타입", apply: ({ value }) => ({ subtype: compactSingleLine(value, 80) }) },
+  { value: "screenKind", label: "영상 종류", apply: ({ value }) => ({ screenKind: compactSingleLine(value, 80) }) },
+  { value: "releaseYear", label: "출시연도", apply: ({ form, value }) => ({ releaseYear: normalizeYear(value) ?? form.releaseYear }) },
+  { value: "rating", label: "평점", apply: ({ form, value }) => ({ rating: normalizeNumberText(value) ?? form.rating }) },
+  { value: "review", label: "감상", apply: ({ value }) => ({ review: value.trim() }) },
+  { value: "content", label: "내용 메모", apply: ({ value }) => ({ content: value.trim() }) },
+  { value: "relationNote", label: "관계/연결 메모", apply: ({ value }) => ({ relationNote: value.trim() }) },
+  { value: "playTime", label: "플레이타임/분", apply: ({ form, value }) => ({ playTime: normalizeNumberText(value) ?? form.playTime }) },
+  { value: "pages", label: "페이지", apply: ({ form, value }) => ({ pages: normalizeNumberText(value) ?? form.pages }) },
+  { value: "loggedAt", label: "기록일", apply: ({ form, value }) => ({ loggedAt: normalizeDate(value) ?? form.loggedAt }) },
+  { value: "startedAt", label: "시작일", apply: ({ form, value }) => ({ startedAt: normalizeDate(value) ?? form.startedAt }) },
+  { value: "completedAt", label: "완료일", apply: ({ form, value }) => ({ completedAt: normalizeDate(value) ?? form.completedAt }) },
+];
 
 function buildFormState(media: MediaMock): MediaFormState {
   return {
@@ -126,33 +177,33 @@ export function MediaDrawer({ id }: { id: string }) {
               <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">{media.status}</span>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <Detail label="Rating" value={media.rating ? `${media.rating}/5` : null} />
-              <Detail label="Logged" value={media.loggedAt?.slice(0, 10) ?? null} />
-              <Detail label="Started" value={media.startedAt?.slice(0, 10) ?? null} />
-              <Detail label="Completed" value={media.completedAt?.slice(0, 10) ?? null} />
-              <Detail label="Original Title" value={media.originalTitle} />
-              <Detail label="Subtype" value={media.subtype ?? media.screenKind} />
-              <Detail label="Studio" value={media.studio} />
-              <Detail label="Release" value={media.releaseYear ? String(media.releaseYear) : null} />
+              <Detail label="평점" value={media.rating ? `${media.rating}/5` : null} />
+              <Detail label="기록일" value={media.loggedAt?.slice(0, 10) ?? null} />
+              <Detail label="시작일" value={media.startedAt?.slice(0, 10) ?? null} />
+              <Detail label="완료일" value={media.completedAt?.slice(0, 10) ?? null} />
+              <Detail label="원제" value={media.originalTitle} />
+              <Detail label="세부 타입" value={media.subtype ?? media.screenKind} />
+              <Detail label="스튜디오" value={media.studio} />
+              <Detail label="출시" value={media.releaseYear ? String(media.releaseYear) : null} />
             </div>
           </section>
 
           <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-primary">Review</p>
+            <p className="text-xs tracking-[0.08em] text-primary">감상</p>
             <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">{media.review}</p>
             {media.evaluation ? <p className="mt-3 text-sm text-muted-foreground">평가: {media.evaluation}</p> : null}
             {media.relationNote ? <p className="mt-2 text-sm text-muted-foreground">연결 메모: {media.relationNote}</p> : null}
           </section>
 
           {form ? (
-            <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-center justify-between gap-3">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-primary">Edit Canonical Fields</p>
+                  <p className="text-xs tracking-[0.08em] text-primary">Canonical 속성</p>
                   <h4 className="mt-2 text-lg font-semibold text-foreground">미디어 속성 정리</h4>
                 </div>
                 <button
-                  className="rounded-2xl bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                  className="focus-ring rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
                   disabled={isPending}
                   onClick={saveDetails}
                   type="button"
@@ -160,47 +211,25 @@ export function MediaDrawer({ id }: { id: string }) {
                   저장
                 </button>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <Field label="제목" value={form.title} onChange={(title) => setForm({ ...form, title })} />
-                <Field label="원제" value={form.originalTitle} onChange={(originalTitle) => setForm({ ...form, originalTitle })} />
-                <SelectField
-                  label="타입"
-                  onChange={(mediaType) => setForm({ ...form, mediaType: mediaType as MediaMock["mediaType"] })}
-                  options={["game", "book", "screen"]}
-                  value={form.mediaType}
-                />
-                <SelectField
-                  label="상태"
-                  onChange={(status) => setForm({ ...form, status: status as MediaMock["status"] })}
-                  options={["backlog", "consuming", "completed", "dropped"]}
-                  value={form.status}
-                />
-                <Field label="창작자" value={form.creator} onChange={(creator) => setForm({ ...form, creator })} />
-                <Field label="저자" value={form.author} onChange={(author) => setForm({ ...form, author })} />
-                <Field label="스튜디오" value={form.studio} onChange={(studio) => setForm({ ...form, studio })} />
-                <Field label="플랫폼/출판사" value={form.platformOrPublisher} onChange={(platformOrPublisher) => setForm({ ...form, platformOrPublisher })} />
-                <Field label="장르" value={form.genre} onChange={(genre) => setForm({ ...form, genre })} />
-                <Field label="세부 타입" value={form.subtype} onChange={(subtype) => setForm({ ...form, subtype })} />
-                <Field label="출시연도" value={form.releaseYear} onChange={(releaseYear) => setForm({ ...form, releaseYear })} />
-                <Field label="평점" value={form.rating} onChange={(rating) => setForm({ ...form, rating })} />
-                <Field label="플레이타임/분" value={form.playTime} onChange={(playTime) => setForm({ ...form, playTime })} />
-                <Field label="페이지" value={form.pages} onChange={(pages) => setForm({ ...form, pages })} />
-                <Field label="기록일" type="date" value={form.loggedAt} onChange={(loggedAt) => setForm({ ...form, loggedAt })} />
-                <Field label="완료일" type="date" value={form.completedAt} onChange={(completedAt) => setForm({ ...form, completedAt })} />
-              </div>
-              <div className="mt-3 grid gap-3">
-                <TextArea label="감상" value={form.review} onChange={(review) => setForm({ ...form, review })} />
-                <TextArea label="내용 메모" value={form.content} onChange={(content) => setForm({ ...form, content })} />
-                <TextArea label="관계/연결 메모" value={form.relationNote} onChange={(relationNote) => setForm({ ...form, relationNote })} />
-              </div>
-              <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                <input checked={form.rewatchValue} onChange={(event) => setForm({ ...form, rewatchValue: event.target.checked })} type="checkbox" />
-                다시 볼 가치 있음
-              </label>
-            </section>
+              <PropertyPanel
+                definitions={MEDIA_PROPERTY_DEFINITIONS}
+                form={form}
+                groups={MEDIA_PROPERTY_GROUPS}
+                onChange={(patch) => setForm({ ...form, ...patch })}
+              />
+            </div>
           ) : null}
 
-          <SourceDocumentPanel sourceDocument={media.sourceDocument} />
+          {form ? (
+            <SourcePropertyInspector
+              canonicalEntityType="media"
+              definitions={MEDIA_PROPERTY_DEFINITIONS}
+              form={form}
+              onChange={(patch) => setForm({ ...form, ...patch })}
+              sourceDocument={media.sourceDocument}
+              targets={MEDIA_SOURCE_TARGETS}
+            />
+          ) : null}
         </div>
       )}
       railDefaultLens="source"
@@ -212,54 +241,51 @@ function Detail({ label, value }: { label: string; value?: string | number | nul
   if (!value) return null;
   return (
     <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2">
-      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
       <p className="mt-1 text-sm text-foreground">{value}</p>
     </div>
   );
 }
 
-function Field({ label, onChange, type = "text", value }: { label: string; onChange: (value: string) => void; type?: string; value: string }) {
-  return (
-    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
-      {label}
-      <input
-        className="mt-2 w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case tracking-normal text-foreground outline-none"
-        onChange={(event) => onChange(event.target.value)}
-        type={type}
-        value={value}
-      />
-    </label>
-  );
+function normalize(value: string) {
+  return value.toLowerCase().replaceAll("_", " ").replaceAll("-", " ").trim();
 }
 
-function SelectField({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: string[]; value: string }) {
-  return (
-    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
-      {label}
-      <select
-        className="mt-2 w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case tracking-normal text-foreground outline-none"
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+function compactSingleLine(value: string, limit: number) {
+  return value.replace(/\s+/g, " ").trim().slice(0, limit);
 }
 
-function TextArea({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
-  return (
-    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
-      {label}
-      <textarea
-        className="mt-2 min-h-[96px] w-full resize-y rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case leading-6 tracking-normal text-foreground outline-none"
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      />
-    </label>
-  );
+function normalizeMediaType(value: string): MediaMock["mediaType"] | null {
+  const text = normalize(value);
+  if (text.includes("game") || text.includes("게임")) return "game";
+  if (text.includes("book") || text.includes("책") || text.includes("도서")) return "book";
+  if (text.includes("screen") || text.includes("movie") || text.includes("film") || text.includes("video") || text.includes("영상") || text.includes("영화")) return "screen";
+  return null;
+}
+
+function normalizeMediaStatus(value: string): MediaMock["status"] | null {
+  const text = normalize(value);
+  if (text.includes("backlog") || text.includes("대기") || text.includes("예정")) return "backlog";
+  if (text.includes("consuming") || text.includes("watching") || text.includes("reading") || text.includes("진행") || text.includes("보는 중") || text.includes("읽는 중")) return "consuming";
+  if (text.includes("completed") || text.includes("done") || text.includes("완료") || text.includes("끝")) return "completed";
+  if (text.includes("dropped") || text.includes("중단") || text.includes("포기")) return "dropped";
+  return null;
+}
+
+function normalizeNumberText(value: string) {
+  const match = value.replaceAll(",", "").match(/-?\d+(\.\d+)?/);
+  return match ? match[0] : null;
+}
+
+function normalizeYear(value: string) {
+  const match = value.match(/\b(19|20)\d{2}\b/);
+  return match ? match[0] : null;
+}
+
+function normalizeDate(value: string) {
+  const direct = value.match(/\b(\d{4})[-./](\d{1,2})[-./](\d{1,2})\b/);
+  if (direct) return `${direct[1]}-${direct[2].padStart(2, "0")}-${direct[3].padStart(2, "0")}`;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
 }

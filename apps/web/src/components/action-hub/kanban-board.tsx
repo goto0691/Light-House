@@ -2,11 +2,11 @@ import { KanbanColumn } from "@/components/action-hub/kanban-column";
 import type { TaskMock } from "@/lib/mock/action-hub";
 
 const COLUMNS = [
-  { key: "todo", label: "Backlog" },
-  { key: "in_progress", label: "In Progress" },
-  { key: "review", label: "Review" },
-  { key: "done", label: "Done" },
-  { key: "blocked", label: "Blocked" },
+  { key: "todo", label: "예정" },
+  { key: "in_progress", label: "진행 중" },
+  { key: "review", label: "검토" },
+  { key: "done", label: "완료" },
+  { key: "blocked", label: "막힘" },
 ] as const;
 
 type KanbanBoardProps = {
@@ -20,7 +20,7 @@ export function KanbanBoard({ tasks, renderTask }: KanbanBoardProps) {
       {COLUMNS.map((column) => {
         const items = tasks.filter((task) => task.status === column.key);
         return (
-          <KanbanColumn key={column.key} status={column.key} tasks={items} title={column.label}>
+          <KanbanColumn key={column.key} tasks={items} title={column.label}>
             {items.map((task) => (
               <div key={task.id}>{renderTask(task)}</div>
             ))}
@@ -30,4 +30,3 @@ export function KanbanBoard({ tasks, renderTask }: KanbanBoardProps) {
     </div>
   );
 }
-

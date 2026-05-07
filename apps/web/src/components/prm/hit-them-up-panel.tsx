@@ -19,15 +19,15 @@ export function HitThemUpPanel({ people }: HitThemUpPanelProps) {
 
   return (
     <GlassCard className="h-fit p-5">
-      <p className="text-xs uppercase tracking-[0.24em] text-primary">Hit Them Up</p>
+      <p className="text-xs tracking-[0.08em] text-primary">연락 필요</p>
       <h2 className="mt-3 font-display text-3xl text-foreground">연락 시급 인물</h2>
       <div className="mt-4 space-y-3">
         {people.map((person) => (
           <div className="rounded-3xl border border-white/10 bg-white/5 p-4" key={person.id}>
-            <Link className="block" href={`/prm?detail=person:${person.id}`}>
+            <Link className="block" href={`/prm?detail=person:${person.id}`} scroll={false}>
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-foreground">{person.name}</p>
-                <span className="text-xs text-danger">+{person.daysSinceContact - person.cadenceDays}d overdue</span>
+                <span className="text-xs text-danger">{person.daysSinceContact - person.cadenceDays}일 초과</span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">{person.groups.join(" · ")}</p>
             </Link>

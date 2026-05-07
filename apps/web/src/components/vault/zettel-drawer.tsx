@@ -25,11 +25,11 @@ export function ZettelDrawer({ id }: { id: string }) {
         <p className="mt-2 text-sm text-muted-foreground">{zettel.summary}</p>
       </section>
       <section className="rounded-lg border border-white/10 bg-white/5 p-6 md:p-8">
-        <p className="text-xs uppercase tracking-[0.2em] text-primary">Content</p>
+        <p className="text-xs tracking-[0.08em] text-primary">본문</p>
         <MarkdownView className="mt-5" value={zettel.content} />
       </section>
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-primary">Outgoing</p>
+        <p className="text-xs tracking-[0.08em] text-primary">내가 연결한 메모</p>
         <div className="mt-3 space-y-2">
           {zettel.outgoingLinks.length ? (
             zettel.outgoingLinks.map((item) => (
@@ -43,7 +43,7 @@ export function ZettelDrawer({ id }: { id: string }) {
         </div>
       </section>
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-primary">Backlinks</p>
+        <p className="text-xs tracking-[0.08em] text-primary">나를 참조한 메모</p>
         <div className="mt-3 space-y-2">
           {zettel.backlinks.map((item) => (
             <p className="text-sm text-muted-foreground" key={item}>

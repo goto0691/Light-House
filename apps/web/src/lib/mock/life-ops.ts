@@ -31,6 +31,8 @@ export type CareerLog = {
   organization: string;
   role: string;
   period: string;
+  startDate?: string;
+  endDate?: string;
   category: string;
   description: string;
 };

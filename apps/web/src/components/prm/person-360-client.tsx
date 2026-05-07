@@ -13,13 +13,13 @@ import { cn } from "@/lib/utils/cn";
 type Person360Lens = "timeline" | "media" | "projects" | "notes" | "places" | "gifts" | "source";
 
 const LENSES: Array<{ key: Person360Lens; label: string }> = [
-  { key: "timeline", label: "Timeline" },
-  { key: "media", label: "Media" },
-  { key: "projects", label: "Projects" },
-  { key: "notes", label: "Notes" },
-  { key: "places", label: "Places" },
-  { key: "gifts", label: "Gifts" },
-  { key: "source", label: "Records" },
+  { key: "timeline", label: "타임라인" },
+  { key: "media", label: "미디어" },
+  { key: "projects", label: "프로젝트" },
+  { key: "notes", label: "메모" },
+  { key: "places", label: "장소" },
+  { key: "gifts", label: "선물" },
+  { key: "source", label: "원본 기록" },
 ];
 
 function edgeNodes(bundle: ContextBundle, predicate: (node: ContextNode) => boolean) {
@@ -58,10 +58,10 @@ export function Person360Client({ bundle }: { bundle: ContextBundle }) {
   const mainSlot = (
     <div className="space-y-4">
       <section className="grid gap-3 md:grid-cols-4">
-        <Metric label="Edges" value={String(currentBundle.edges.length)} />
-        <Metric label="Media" value={String(lensNodes.media.length)} />
-        <Metric label="Notes" value={String(lensNodes.notes.length)} />
-        <Metric label="Review" value={String(currentBundle.quality.unresolvedCount)} />
+        <Metric label="관계선" value={String(currentBundle.edges.length)} />
+        <Metric label="미디어" value={String(lensNodes.media.length)} />
+        <Metric label="메모" value={String(lensNodes.notes.length)} />
+        <Metric label="검토" value={String(currentBundle.quality.unresolvedCount)} />
       </section>
 
       <ContextMapMini bundle={currentBundle} onOpenNode={openNode} />
@@ -122,7 +122,7 @@ export function Person360Client({ bundle }: { bundle: ContextBundle }) {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+      <p className="text-xs tracking-[0.08em] text-muted-foreground">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-foreground">{value}</p>
     </div>
   );

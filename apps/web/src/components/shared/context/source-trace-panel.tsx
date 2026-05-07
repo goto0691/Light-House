@@ -54,7 +54,7 @@ export function SourceTracePanel({ bundle, onResolved }: { bundle: ContextBundle
   if (!documents.length && !sourceEdges.length && !isLoading) {
     return (
       <section className="rounded-lg border border-white/10 bg-white/5 p-4">
-        <p className="text-xs uppercase tracking-[0.18em] text-primary">Record Trace</p>
+        <p className="text-xs tracking-[0.08em] text-primary">원본 추적</p>
         <p className="mt-3 text-sm text-muted-foreground">연결된 레코드 추적 정보가 아직 없습니다.</p>
       </section>
     );
@@ -64,12 +64,12 @@ export function SourceTracePanel({ bundle, onResolved }: { bundle: ContextBundle
     <section className="rounded-lg border border-white/10 bg-white/5 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-primary">Record Trace</p>
+          <p className="text-xs tracking-[0.08em] text-primary">원본 추적</p>
           <h3 className="mt-2 text-lg font-semibold text-foreground">레코드 변환 감사</h3>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">속성, canonical 변환, 관계 확정 상태를 한곳에서 확인합니다.</p>
         </div>
         <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-muted-foreground">
-          {documents.length} docs · {propertyCount} props · {relationCount} relations · {reviewCount} reviews
+          문서 {documents.length}개 · 속성 {propertyCount}개 · 관계 {relationCount}개 · 리뷰 {reviewCount}개
         </span>
       </div>
 
@@ -141,12 +141,12 @@ function CanonicalMapping({ canonicalText, document }: { canonicalText?: string;
   const previewDuplicatesCanonical = Boolean(document.rawContentPreview && canonicalText && isDuplicateText(document.rawContentPreview, canonicalText));
   return (
     <section className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <SectionTitle label="Canonical Mapping" count={document.canonicalEntityType ? "mapped" : "unmapped"} />
+      <SectionTitle label="표준 매핑" count={document.canonicalEntityType ? "매핑됨" : "미확정"} />
       <div className="mt-3 grid gap-2 text-xs sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-        <MappingBox label="Record" title={document.sourceDatabase ?? document.sourceType} detail={document.documentRole ?? document.sourceId} />
+        <MappingBox label="원본" title={document.sourceDatabase ?? document.sourceType} detail={document.documentRole ?? document.sourceId} />
         <span className="hidden text-muted-foreground sm:block">→</span>
         <MappingBox
-          label="Canonical"
+          label="표준"
           title={document.canonicalEntityType ?? "미확정"}
           detail={document.canonicalEntityId ?? "연결된 현재 엔티티 없음"}
           tone={document.canonicalEntityType ? "success" : "warning"}
@@ -167,7 +167,7 @@ function MappingBox({ label, title, detail, tone }: { label: string; title: stri
   const border = tone === "success" ? "border-[hsl(var(--color-feedback-success)/0.24)]" : tone === "warning" ? "border-[hsl(var(--color-feedback-warning)/0.24)]" : "border-white/10";
   return (
     <div className={`rounded-md border ${border} bg-black/10 p-3`}>
-      <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className="text-[11px] tracking-[0.08em] text-muted-foreground">{label}</p>
       <p className="mt-1 font-medium text-foreground">{title}</p>
       {detail ? <p className="mt-1 break-all text-muted-foreground">{detail}</p> : null}
     </div>
@@ -177,15 +177,15 @@ function MappingBox({ label, title, detail, tone }: { label: string; title: stri
 function RawProperties({ canonicalText, document }: { canonicalText?: string; document: SourceTraceDocument }) {
   return (
     <section className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <SectionTitle label="Raw Properties" count={`${document.properties.length}`} />
+      <SectionTitle label="원본 속성" count={`${document.properties.length}`} />
       {document.properties.length ? (
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[520px] text-left text-xs">
-            <thead className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            <thead className="text-[11px] tracking-[0.08em] text-muted-foreground">
               <tr className="border-b border-white/10">
-                <th className="py-2 pr-3 font-medium">Name</th>
-                <th className="py-2 pr-3 font-medium">Type</th>
-                <th className="py-2 font-medium">Value</th>
+                <th className="py-2 pr-3 font-medium">이름</th>
+                <th className="py-2 pr-3 font-medium">타입</th>
+                <th className="py-2 font-medium">값</th>
               </tr>
             </thead>
             <tbody>
@@ -242,7 +242,7 @@ function SourceRelations({
 }) {
   return (
     <section className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <SectionTitle label="Record Relations" count={`${document.relations.length}`} />
+      <SectionTitle label="원본 관계" count={`${document.relations.length}`} />
       {document.relations.length ? (
         <div className="mt-3 grid gap-2">
           {document.relations.map((relation) => (
@@ -276,7 +276,7 @@ function SourceRelations({
 function ReviewItems({ items }: { items: SourceTraceReviewItem[] }) {
   return (
     <section className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <SectionTitle label="Review Items" count={`${items.length}`} />
+      <SectionTitle label="검토 항목" count={`${items.length}`} />
       {items.length ? (
         <div className="mt-3 grid gap-2">
           {items.map((item) => (
@@ -307,7 +307,7 @@ function ReviewItems({ items }: { items: SourceTraceReviewItem[] }) {
 function SectionTitle({ label, count }: { label: string; count: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</h4>
+      <h4 className="text-xs font-semibold tracking-[0.08em] text-muted-foreground">{label}</h4>
       <span className="rounded-full border border-white/10 bg-black/10 px-2 py-0.5 text-[11px] text-muted-foreground">{count}</span>
     </div>
   );
@@ -424,7 +424,6 @@ function SourceRelationResolver({
       const payload = (await response.json()) as { bundle: ContextBundle };
       onResolved?.(payload.bundle);
       onAfterResolve?.();
-      if (!onResolved) window.location.reload();
     });
   }
 
@@ -448,7 +447,6 @@ function SourceRelationResolver({
       const payload = (await response.json()) as { bundle: ContextBundle };
       onResolved?.(payload.bundle);
       onAfterResolve?.();
-      if (!onResolved) window.location.reload();
     });
   }
 
@@ -482,11 +480,11 @@ function SourceRelationResolver({
             onChange={(event) => setCreateType(event.target.value as EntityType)}
             value={createType}
           >
-            <option value="person">Person</option>
-            <option value="zettel">Zettel</option>
-            <option value="project">Project</option>
-            <option value="media">Media</option>
-            <option value="place">Place</option>
+            <option value="person">사람</option>
+            <option value="zettel">제텔</option>
+            <option value="project">프로젝트</option>
+            <option value="media">미디어</option>
+            <option value="place">장소</option>
           </select>
           <input
             className="rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs text-foreground outline-none"

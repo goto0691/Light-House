@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
+import { Map } from "lucide-react";
 import { toast } from "sonner";
 
 import { BackupHistoryList } from "@/components/settings/backup-history-list";
@@ -49,23 +51,23 @@ type DataSettingsClientProps = {
 };
 
 const ENTITY_LABELS: Array<{ key: keyof DataSettingsClientProps["initial"]["entityCounts"]; label: string }> = [
-  { key: "projects", label: "Projects" },
-  { key: "tasks", label: "Tasks" },
-  { key: "people", label: "People" },
-  { key: "zettels", label: "Zettels" },
-  { key: "media", label: "Media" },
-  { key: "workouts", label: "Workouts" },
-  { key: "dailyLogs", label: "Daily Logs" },
+  { key: "projects", label: "프로젝트" },
+  { key: "tasks", label: "작업" },
+  { key: "people", label: "사람" },
+  { key: "zettels", label: "제텔" },
+  { key: "media", label: "미디어" },
+  { key: "workouts", label: "운동" },
+  { key: "dailyLogs", label: "일일 로그" },
 ];
 
 const RELATION_LABELS: Array<{ key: keyof DataSettingsClientProps["initial"]["relationHealth"]; label: string }> = [
-  { key: "taskProjects", label: "Task -> Project" },
-  { key: "taskPeople", label: "Task -> People" },
-  { key: "taskZettels", label: "Task -> Zettel" },
-  { key: "zettelPeople", label: "Zettel -> People" },
-  { key: "zettelMedia", label: "Zettel -> Media" },
-  { key: "mediaPeople", label: "Media -> People" },
-  { key: "dailyPeople", label: "Daily -> People" },
+  { key: "taskProjects", label: "작업 -> 프로젝트" },
+  { key: "taskPeople", label: "작업 -> 사람" },
+  { key: "taskZettels", label: "작업 -> 제텔" },
+  { key: "zettelPeople", label: "제텔 -> 사람" },
+  { key: "zettelMedia", label: "제텔 -> 미디어" },
+  { key: "mediaPeople", label: "미디어 -> 사람" },
+  { key: "dailyPeople", label: "일일 로그 -> 사람" },
 ];
 
 export function DataSettingsClient({ initial }: DataSettingsClientProps) {
@@ -95,8 +97,8 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
           <GlassCard className="p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-primary">Data Health</p>
-                <h2 className="mt-3 font-display text-4xl text-foreground">현재 적재 상태</h2>
+              <p className="text-xs text-primary">데이터 상태</p>
+              <h2 className="mt-3 font-display text-4xl text-foreground">현재 적재 상태</h2>
               </div>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -110,7 +112,7 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
           </GlassCard>
 
           <GlassCard className="p-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-primary">Relation Health</p>
+            <p className="text-xs text-primary">연결 상태</p>
             <h2 className="mt-3 font-display text-3xl text-foreground">연결 상태</h2>
             <div className="mt-5 flex flex-wrap gap-2">
               {RELATION_LABELS.map(({ key, label }) => (
@@ -154,8 +156,15 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <GlassCard className="p-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-primary">Saved Views</p>
+          <p className="text-xs text-primary">저장된 뷰</p>
           <h2 className="mt-3 font-display text-3xl text-foreground">저장된 뷰</h2>
+          <Link
+            className="focus-ring mt-4 inline-flex min-h-10 items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary transition hover:bg-primary/15"
+            href="/settings/data/source-mapping"
+          >
+            <Map className="h-4 w-4" />
+            원본 컬럼 정리
+          </Link>
           <div className="mt-5 space-y-3">
             {initial.savedViews.length ? (
               initial.savedViews.map((view) => (
@@ -174,8 +183,8 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
         </GlassCard>
 
         <GlassCard className="p-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-primary">Duplicate Media</p>
-          <h2 className="mt-3 font-display text-3xl text-foreground">Merge candidates</h2>
+          <p className="text-xs text-primary">중복 미디어</p>
+          <h2 className="mt-3 font-display text-3xl text-foreground">병합 후보</h2>
           <div className="mt-5 space-y-3">
             {initial.duplicateMedia.length ? (
               initial.duplicateMedia.map((item) => (
@@ -184,11 +193,11 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
                     <h3 className="truncate text-sm font-medium text-foreground">{item.title}</h3>
                     <p className="mt-1 text-xs text-muted-foreground">{item.mediaType}</p>
                   </div>
-                  <Tag value={`${item.count} copies`} variant="neutral" />
+                  <Tag value={`${item.count}개`} variant="neutral" />
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">No duplicate media titles detected.</p>
+              <p className="text-sm text-muted-foreground">감지된 중복 미디어 제목이 없습니다.</p>
             )}
           </div>
         </GlassCard>

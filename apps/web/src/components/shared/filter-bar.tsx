@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, Search, X } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { KeyHint } from "@/components/shared/key-hint";
@@ -43,7 +43,6 @@ export function FilterBar({
   initialSort,
   syncUrl = true,
 }: FilterBarProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
@@ -61,7 +60,7 @@ export function FilterBar({
     };
     onChange(payload);
     if (syncUrl) {
-      syncUrlState({ currentParams: searchParams, filters, pathname, router, state: payload });
+      syncUrlState({ currentParams: searchParams, filters, pathname, state: payload });
     }
   }
 
@@ -93,7 +92,7 @@ export function FilterBar({
         {filters
           .filter((filter) => filter.kind === "select")
           .map((filter) => (
-            <label className="flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground" key={filter.key}>
+            <label className="flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground" key={filter.key}>
               <span>{filter.label}</span>
               <select
                 className="bg-transparent text-[11px] text-foreground outline-none"
@@ -104,7 +103,7 @@ export function FilterBar({
                 }}
                 value={(filterState[filter.key] as string | null) ?? ""}
               >
-                <option value="">All</option>
+                <option value="">전체</option>
                 {filter.options.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -120,7 +119,7 @@ export function FilterBar({
             const values = Array.isArray(filterState[filter.key]) ? (filterState[filter.key] as string[]) : [];
             return (
               <details className="group relative" key={filter.key}>
-                <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/6 hover:text-foreground">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/6 hover:text-foreground">
                   <span>{filter.label}</span>
                   {values.length ? <span className="text-primary">{values.length}</span> : null}
                   <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
@@ -159,7 +158,7 @@ export function FilterBar({
             const values = Array.isArray(filterState[filter.key]) ? (filterState[filter.key] as string[]) : [];
             return (
               <div className="flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-md border border-white/10 bg-black/10 px-2 py-1.5 sm:w-auto sm:min-w-72" key={filter.key}>
-                <span className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{filter.label}</span>
+                <span className="px-1 text-[11px] text-muted-foreground">{filter.label}</span>
                 {values.map((value) => (
                   <button
                     aria-label={`${value} 제거`}
@@ -205,8 +204,8 @@ export function FilterBar({
           })}
 
         {sortOptions?.length ? (
-          <label className="flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            <span>Sort</span>
+          <label className="flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground">
+            <span>정렬</span>
             <select
               className="bg-transparent text-[11px] text-foreground outline-none"
               onChange={(event) => {
@@ -225,8 +224,8 @@ export function FilterBar({
         ) : null}
 
         {savedViews?.length ? (
-          <label className="flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            <span>View</span>
+          <label className="flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground">
+            <span>뷰</span>
             <select
               className="bg-transparent text-[11px] text-foreground outline-none"
               onChange={(event) => {
@@ -235,7 +234,7 @@ export function FilterBar({
               }}
               value={selectedView}
             >
-              <option value="">Default</option>
+              <option value="">기본</option>
               {savedViews.map((view) => (
                 <option key={view.id} value={view.id}>
                   {view.name}
@@ -281,13 +280,11 @@ function syncUrlState({
   pathname,
   currentParams,
   filters,
-  router,
   state,
 }: {
   pathname: string;
   currentParams: URLSearchParams;
   filters: FilterConfig[];
-  router: ReturnType<typeof useRouter>;
   state: { q: string; filters: FilterState; sort?: string; view?: string };
 }) {
   const params = new URLSearchParams(currentParams.toString());
@@ -309,5 +306,5 @@ function syncUrlState({
   }
 
   const query = params.toString();
-  router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
 }

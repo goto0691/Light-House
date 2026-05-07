@@ -69,8 +69,30 @@ type MediaRow = {
   startedAt: string | null;
   completedAt: string | null;
 };
-type AssetRow = { id: string; category: AssetMock["category"]; name: string; brand: string | null; currentCondition: string | null };
-type PlaceRow = { id: string; category: PlaceMock["category"]; name: string; address: string | null; notes: string | null };
+type AssetRow = {
+  id: string;
+  category: AssetMock["category"];
+  name: string;
+  brand: string | null;
+  modelName: string | null;
+  acquiredDate: string | null;
+  acquiredPrice: number | null;
+  currentCondition: string | null;
+  notes: string | null;
+  coverImageUrl: string | null;
+};
+type PlaceRow = {
+  id: string;
+  category: PlaceMock["category"];
+  name: string;
+  address: string | null;
+  mapUrl: string | null;
+  firstVisitedAt: string | null;
+  lastVisitedAt: string | null;
+  visitCount: number | null;
+  averageRating: number | null;
+  notes: string | null;
+};
 type SourceDocumentRow = {
   id: string;
   canonicalEntityType: string;
@@ -133,6 +155,12 @@ function optionalText(value: string | null | undefined) {
 function optionalDate(value: string | null | undefined) {
   const next = value?.trim();
   return next ? next.slice(0, 10) : null;
+}
+
+function optionalNumber(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function normalizeTagValues(values: string[] | null | undefined) {
@@ -351,8 +379,22 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
        order by updated_at desc`,
       [userId],
     ),
-    queryD1<AssetRow>(`select id, category, name, brand, current_condition as currentCondition from assets where user_id = ? and deleted_at is null order by created_at asc`, [userId]),
-    queryD1<PlaceRow>(`select id, category, name, address, notes from places where user_id = ? and deleted_at is null order by updated_at desc`, [userId]),
+    queryD1<AssetRow>(
+      `select id, category, name, brand, model_name as modelName, acquired_date as acquiredDate,
+              acquired_price as acquiredPrice, current_condition as currentCondition, notes, cover_image_url as coverImageUrl
+       from assets
+       where user_id = ? and deleted_at is null
+       order by created_at asc`,
+      [userId],
+    ),
+    queryD1<PlaceRow>(
+      `select id, category, name, address, map_url as mapUrl, first_visited_at as firstVisitedAt,
+              last_visited_at as lastVisitedAt, visit_count as visitCount, average_rating as averageRating, notes
+       from places
+       where user_id = ? and deleted_at is null
+       order by updated_at desc`,
+      [userId],
+    ),
     queryD1<SourceDocumentRow>(
       `select
          id,
@@ -367,7 +409,7 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
        from source_documents
        where user_id = ?
          and deleted_at is null
-         and canonical_entity_type in ('zettel', 'media')`,
+         and canonical_entity_type in ('zettel', 'media', 'asset', 'place')`,
       [userId],
     ),
     queryD1<SourceDocumentPropertyRow>(
@@ -380,7 +422,7 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
        inner join source_documents sd on sd.id = sdp.source_document_id
        where sd.user_id = ?
          and sd.deleted_at is null
-         and sd.canonical_entity_type in ('zettel', 'media')
+         and sd.canonical_entity_type in ('zettel', 'media', 'asset', 'place')
        order by sdp.source_document_id, sdp.property_key`,
       [userId],
     ),
@@ -491,6 +533,12 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
     name: row.name,
     brand: row.brand ?? "-",
     condition: row.currentCondition ?? "-",
+    modelName: row.modelName,
+    acquiredDate: row.acquiredDate,
+    acquiredPrice: row.acquiredPrice,
+    notes: row.notes,
+    coverImageUrl: row.coverImageUrl,
+    sourceDocument: sourceDocuments.get(`asset:${row.id}`) ?? null,
   }));
   const places: PlaceMock[] = placeResult.rows.map((row) => ({
     id: row.id,
@@ -498,6 +546,12 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
     name: row.name,
     address: row.address ?? "",
     review: row.notes ?? "",
+    mapUrl: row.mapUrl,
+    firstVisitedAt: row.firstVisitedAt,
+    lastVisitedAt: row.lastVisitedAt,
+    visitCount: row.visitCount,
+    averageRating: row.averageRating,
+    sourceDocument: sourceDocuments.get(`place:${row.id}`) ?? null,
   }));
 
   return {
@@ -828,6 +882,93 @@ export async function linkVaultZettels(input: { sourceId: string; targetId: stri
 
 export async function unlinkVaultZettels(linkId: string) {
   await executeD1(`delete from zettel_links where id = ?`, [linkId]);
+  return getVaultSnapshot();
+}
+
+export async function updateVaultAssetProperties(assetId: string, input: {
+  name?: string | null;
+  category?: string | null;
+  brand?: string | null;
+  condition?: string | null;
+  modelName?: string | null;
+  acquiredDate?: string | null;
+  acquiredPrice?: number | string | null;
+  notes?: string | null;
+}) {
+  const { id: userId } = await resolveUser();
+  const name = input.name?.trim();
+  if (!name) throw new Error("자산명은 비워둘 수 없습니다.");
+
+  await executeD1(
+    `update assets
+     set name = ?,
+         category = ?,
+         brand = ?,
+         model_name = ?,
+         acquired_date = ?,
+         acquired_price = ?,
+         current_condition = ?,
+         notes = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [
+      name,
+      optionalText(input.category) ?? "gear",
+      optionalText(input.brand),
+      optionalText(input.modelName),
+      optionalDate(input.acquiredDate),
+      optionalNumber(input.acquiredPrice),
+      optionalText(input.condition),
+      optionalText(input.notes),
+      assetId,
+      userId,
+    ],
+  );
+  return getVaultSnapshot();
+}
+
+export async function updateVaultPlaceProperties(placeId: string, input: {
+  name?: string | null;
+  category?: string | null;
+  address?: string | null;
+  mapUrl?: string | null;
+  firstVisitedAt?: string | null;
+  lastVisitedAt?: string | null;
+  visitCount?: number | string | null;
+  averageRating?: number | string | null;
+  review?: string | null;
+}) {
+  const { id: userId } = await resolveUser();
+  const name = input.name?.trim();
+  if (!name) throw new Error("장소명은 비워둘 수 없습니다.");
+
+  await executeD1(
+    `update places
+     set name = ?,
+         category = ?,
+         address = ?,
+         map_url = ?,
+         first_visited_at = ?,
+         last_visited_at = ?,
+         visit_count = ?,
+         average_rating = ?,
+         notes = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [
+      name,
+      optionalText(input.category) ?? "restaurant",
+      optionalText(input.address),
+      optionalText(input.mapUrl),
+      optionalDate(input.firstVisitedAt),
+      optionalDate(input.lastVisitedAt),
+      optionalNumber(input.visitCount),
+      optionalNumber(input.averageRating),
+      optionalText(input.review),
+      placeId,
+      userId,
+    ],
+  );
   return getVaultSnapshot();
 }
 

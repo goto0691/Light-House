@@ -42,7 +42,9 @@ type ProjectRow = {
   id: string;
   title: string;
   kind: "project" | "area";
+  status: ProjectMock["status"];
   category: string | null;
+  description: string | null;
   icon: string | null;
   color: string | null;
   progress: number | null;
@@ -157,7 +159,7 @@ export const getActionHubSnapshot = cache(async function getActionHubSnapshot():
 
   const [projectResult, taskResult, taskPeopleResult, taskZettelResult, checklistResult, captureResult, referencePeopleResult, referenceZettelsResult] = await Promise.all([
     queryD1<ProjectRow>(
-      `select id, title, kind, category, icon, color, progress, target_date as targetDate, updated_at as updatedAt
+      `select id, title, kind, status, category, description, icon, color, progress, target_date as targetDate, updated_at as updatedAt
        from projects
        where user_id = ? and deleted_at is null
        order by pinned desc, display_order asc, created_at asc`,
@@ -243,10 +245,13 @@ export const getActionHubSnapshot = cache(async function getActionHubSnapshot():
     id: row.id,
     title: row.title,
     kind: row.kind,
+    status: row.status,
     category: row.category ?? "미분류",
+    description: row.description ?? "",
     icon: row.icon ?? "🛟",
     color: row.color ?? "gold",
     progress: row.progress ?? 0,
+    targetDate: row.targetDate,
     dueLabel: formatDueLabel(row.targetDate),
     recentActivity: formatRecentActivity(row.updatedAt),
   }));
@@ -560,10 +565,73 @@ export async function updateActionHubTaskContent(taskId: string, content: string
   return getActionHubSnapshot();
 }
 
+export async function updateActionHubTaskProperties(
+  taskId: string,
+  input: {
+    title?: string;
+    kind?: TaskMock["kind"];
+    status?: TaskMock["status"];
+    priority?: TaskMock["priority"];
+    brainEnergy?: TaskMock["brainEnergy"];
+    dueAt?: string | null;
+    content?: string;
+  },
+) {
+  const { id: userId } = await resolveUser();
+  const found = await queryD1<{ projectId: string | null; status: TaskMock["status"] }>(
+    `select project_id as projectId, status from tasks where id = ? and user_id = ? and deleted_at is null limit 1`,
+    [taskId, userId],
+  );
+  const current = found.rows[0];
+  if (!current) throw new Error("태스크를 찾지 못했습니다.");
+
+  const title = input.title?.trim();
+  if (!title) throw new Error("제목은 비워둘 수 없습니다.");
+
+  const kind = input.kind === "development" || input.kind === "writing" || input.kind === "research" ? input.kind : "research";
+  const requestedStatus = input.status ?? current.status;
+  const status = STATUS_ORDER.includes(requestedStatus) ? requestedStatus : current.status;
+  const priority = input.priority === "P1" || input.priority === "P2" || input.priority === "P3" ? input.priority : "P2";
+  const brainEnergy = input.brainEnergy === "hyper_focus" || input.brainEnergy === "normal" || input.brainEnergy === "routine" ? input.brainEnergy : "normal";
+  const dueAt = input.dueAt?.trim() || null;
+  const content = input.content?.trim() ?? "";
+
+  await executeD1(
+    `update tasks
+     set title = ?,
+         kind = ?,
+         status = ?,
+         priority = ?,
+         brain_energy = ?,
+         due_at = ?,
+         content = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [title, kind, status, priority, brainEnergy, dueAt, content, taskId, userId],
+  );
+
+  await syncTagsForEntity({
+    userId,
+    taggableType: "task",
+    taggableId: taskId,
+    content,
+  });
+  await attachTaskRelationsFromContent({
+    userId,
+    taskId,
+    content,
+  });
+  if (current.projectId && status !== current.status) {
+    await refreshProjectProgress(userId, current.projectId);
+  }
+  return getActionHubSnapshot();
+}
+
 export async function createActionHubProject(input: {
   title: string;
   kind?: ProjectMock["kind"];
   category?: string;
+  description?: string;
   icon?: string;
   color?: string;
   targetDate?: string | null;
@@ -575,8 +643,66 @@ export async function createActionHubProject(input: {
   await executeD1(
     `insert into projects
       (id, user_id, title, slug, description, icon, color, kind, status, category, target_date, progress, pinned, display_order, created_at, updated_at)
-     values (?, ?, ?, ?, '', ?, ?, ?, 'active', ?, ?, 0, 0, 999, datetime('now'), datetime('now'))`,
-    [id, userId, title, `${slugify(title)}-${id.slice(-6).toLowerCase()}`, input.icon?.trim() || "🛟", input.color?.trim() || "gold", input.kind ?? "project", input.category?.trim() || "미분류", input.targetDate ?? null],
+     values (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, 0, 0, 999, datetime('now'), datetime('now'))`,
+    [
+      id,
+      userId,
+      title,
+      `${slugify(title)}-${id.slice(-6).toLowerCase()}`,
+      input.description?.trim() ?? "",
+      input.icon?.trim() || "🛟",
+      input.color?.trim() || "gold",
+      input.kind ?? "project",
+      input.category?.trim() || "미분류",
+      input.targetDate ?? null,
+    ],
+  );
+  return getActionHubSnapshot();
+}
+
+export async function updateActionHubProjectProperties(
+  projectId: string,
+  input: {
+    title?: string;
+    kind?: ProjectMock["kind"];
+    status?: ProjectMock["status"];
+    category?: string;
+    description?: string;
+    icon?: string;
+    color?: string;
+    targetDate?: string | null;
+  },
+) {
+  const { id: userId } = await resolveUser();
+  const found = await queryD1<{ id: string }>(
+    `select id from projects where id = ? and user_id = ? and deleted_at is null limit 1`,
+    [projectId, userId],
+  );
+  if (!found.rows[0]) throw new Error("프로젝트를 찾지 못했습니다.");
+
+  const title = input.title?.trim();
+  if (!title) throw new Error("프로젝트 제목은 비워둘 수 없습니다.");
+  const kind = input.kind === "project" || input.kind === "area" ? input.kind : "project";
+  const status = input.status === "active" || input.status === "paused" || input.status === "archived" ? input.status : "active";
+  const category = input.category?.trim() || "미분류";
+  const description = input.description?.trim() ?? "";
+  const icon = input.icon?.trim() || "🛟";
+  const color = input.color?.trim() || "gold";
+  const targetDate = input.targetDate?.trim() || null;
+
+  await executeD1(
+    `update projects
+     set title = ?,
+         kind = ?,
+         status = ?,
+         category = ?,
+         description = ?,
+         icon = ?,
+         color = ?,
+         target_date = ?,
+         updated_at = datetime('now')
+     where id = ? and user_id = ?`,
+    [title, kind, status, category, description, icon, color, targetDate, projectId, userId],
   );
   return getActionHubSnapshot();
 }

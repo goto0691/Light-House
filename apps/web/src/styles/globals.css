@@ -511,36 +511,6 @@ button {
   box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary) / 0.55);
 }
 
-.hover-lift {
-  transition:
-    transform 200ms ease,
-    box-shadow 200ms ease,
-    border-color 180ms ease,
-    background-color 180ms ease;
-}
-
-@keyframes bento-fade-up {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (hover: hover) {
-  .hover-lift:hover {
-    transform: translateY(-2px);
-  }
-}
-
-.float-illustration {
-  animation: float-gentle 3s ease-in-out infinite;
-}
-
 .skeleton-shimmer {
   background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
   background-size: 200% 100%;
@@ -554,17 +524,6 @@ button {
 
   100% {
     background-position: -200% 0;
-  }
-}
-
-@keyframes float-gentle {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-4px);
   }
 }
 

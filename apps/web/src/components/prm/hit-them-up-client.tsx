@@ -39,26 +39,26 @@ export function HitThemUpClient({ people }: { people: PersonMock[] }) {
       {duePeople.length ? (
         duePeople.map((person) => (
           <div className="rounded-lg border border-white/10 bg-white/5 p-5 transition hover:bg-white/8" key={person.id}>
-            <Link href={`/prm/${person.id}`}>
+            <Link href={`/prm?detail=person:${person.id}`} scroll={false}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-display text-2xl text-foreground">{person.name}</h2>
                   <p className="mt-1 text-sm text-muted-foreground">{person.groups.join(" · ")}</p>
                 </div>
-                <Tag value={`${person.daysSinceContact}d`} variant="status" />
+                <Tag value={`마지막 연락 ${person.daysSinceContact}일`} variant="status" />
               </div>
               <p className="mt-4 text-sm leading-6 text-muted-foreground">{person.bio}</p>
             </Link>
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Tag value={`cadence ${person.cadenceDays}d`} variant="neutral" />
-              <Tag value={`layer ${person.layer}`} variant="dunbar" />
+              <Tag value={`연락 주기 ${person.cadenceDays}일`} variant="neutral" />
+              <Tag value={`레이어 ${person.layer}`} variant="dunbar" />
               <button
                 className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/15 disabled:opacity-50"
                 disabled={isPending}
                 onClick={() => markContacted(person)}
                 type="button"
               >
-                Mark contacted
+                연락했음
               </button>
             </div>
           </div>

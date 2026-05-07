@@ -1,5 +1,10 @@
 import type { ZettelMock } from "@/lib/mock/vault";
+import {
+  ZETTEL_TYPE_OPTIONS as PROPERTY_ZETTEL_TYPE_OPTIONS,
+} from "@/lib/properties/zettel";
 import { normalizeZettelDocumentKind, ZETTEL_DOCUMENT_KIND_OPTIONS } from "@/lib/vault/zettel-properties";
+
+export { ZETTEL_REVIEW_CADENCE_OPTIONS, ZETTEL_SOURCE_RELIABILITY_OPTIONS, ZETTEL_STATUS_OPTIONS } from "@/lib/properties/zettel";
 
 export type ZettelFormState = {
   title: string;
@@ -19,40 +24,9 @@ export type ZettelFormState = {
   originalCreatedAt: string;
 };
 
-export const ZETTEL_TYPE_OPTIONS: Array<{ value: ZettelMock["type"]; label: string }> = [
-  { value: "fleeting", label: "임시" },
-  { value: "literature", label: "문헌" },
-  { value: "permanent", label: "영구" },
-  { value: "moc", label: "MOC" },
-  { value: "reference", label: "참고" },
-];
-
-export const ZETTEL_STATUS_OPTIONS = [
-  { value: "draft", label: "초안" },
-  { value: "active", label: "활성" },
-  { value: "needs_review", label: "검토 필요" },
-  { value: "archived", label: "보관" },
-];
+export const ZETTEL_TYPE_OPTIONS = PROPERTY_ZETTEL_TYPE_OPTIONS as Array<{ value: ZettelMock["type"]; label: string }>;
 
 export const DOCUMENT_KIND_OPTIONS = ZETTEL_DOCUMENT_KIND_OPTIONS;
-
-export const ZETTEL_SOURCE_RELIABILITY_OPTIONS = [
-  { value: "unknown", label: "미상" },
-  { value: "primary", label: "1차 출처" },
-  { value: "secondary", label: "2차 출처" },
-  { value: "tertiary", label: "3차 출처" },
-  { value: "personal", label: "개인 기록" },
-  { value: "imported", label: "가져옴" },
-  { value: "mixed", label: "혼합" },
-];
-
-export const ZETTEL_REVIEW_CADENCE_OPTIONS = [
-  { value: "none", label: "없음" },
-  { value: "weekly", label: "매주" },
-  { value: "monthly", label: "매월" },
-  { value: "quarterly", label: "분기" },
-  { value: "yearly", label: "매년" },
-];
 
 export function getZettelOptionLabel(options: Array<{ value: string; label: string }>, value: string | null | undefined, fallback = "") {
   if (!value) return fallback;

@@ -11,6 +11,7 @@ export async function POST(request: Request) {
     title?: string;
     kind?: "project" | "area";
     category?: string;
+    description?: string;
     icon?: string;
     color?: string;
     targetDate?: string | null;
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
     title: body.title ?? "",
     kind: body.kind,
     category: body.category,
+    description: body.description,
     icon: body.icon,
     color: body.color,
     targetDate: body.targetDate,

@@ -22,14 +22,14 @@ export function InboxClient() {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <GlassCard>
-        <p className="text-xs uppercase tracking-[0.2em] text-primary">Pending Captures</p>
+        <p className="text-xs tracking-[0.08em] text-primary">검토 대기 캡처</p>
         <div className="mt-4 space-y-3">
           {pendingCaptures.length ? (
             pendingCaptures.map((capture) => (
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4" key={capture.id}>
                 <p className="text-sm font-medium text-foreground">{capture.text}</p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  AI 제안: {capture.suggestedDomain} · confidence {Math.round(capture.confidence * 100)}%
+                  AI 제안: {capture.suggestedDomain} · 신뢰도 {Math.round(capture.confidence * 100)}%
                 </p>
                 <div className="mt-3 flex gap-2">
                   <button
@@ -90,11 +90,11 @@ export function InboxClient() {
       <GlassCard>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-primary">Inbox Tasks</p>
+            <p className="text-xs tracking-[0.08em] text-primary">미분류 작업</p>
             <p className="mt-2 text-sm text-muted-foreground">미분류 태스크를 실제 프로젝트로 보냅니다.</p>
           </div>
           <label className="min-w-0 text-xs font-medium text-muted-foreground sm:w-56">
-            Target project
+            보낼 프로젝트
             <select
               className="mt-2 w-full rounded-2xl border border-white/10 bg-background/80 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary"
               disabled={isPending || routableProjects.length === 0}

@@ -11,13 +11,13 @@ type PersonFilterTabsProps = {
 };
 
 const FILTERS: Array<{ key: PersonFilterKey; label: string }> = [
-  { key: "all", label: "All" },
-  { key: "needs-contact", label: "Hit Them Up" },
-  { key: "favorites", label: "Favorites" },
-  { key: "5", label: "Layer 5" },
-  { key: "15", label: "Layer 15" },
-  { key: "50", label: "Layer 50" },
-  { key: "150", label: "Layer 150" },
+  { key: "all", label: "전체" },
+  { key: "needs-contact", label: "연락 필요" },
+  { key: "favorites", label: "즐겨찾기" },
+  { key: "5", label: "핵심 5" },
+  { key: "15", label: "친밀 15" },
+  { key: "50", label: "친구 50" },
+  { key: "150", label: "느슨한 150" },
 ];
 
 export function PersonFilterTabs({ value, onChange }: PersonFilterTabsProps) {
@@ -26,7 +26,7 @@ export function PersonFilterTabs({ value, onChange }: PersonFilterTabsProps) {
       {FILTERS.map((filter) => (
         <button
           className={cn(
-            "rounded-full border px-3 py-2 text-xs uppercase tracking-[0.16em] transition",
+            "rounded-full border px-3 py-2 text-xs font-medium transition",
             value === filter.key ? "border-primary/20 bg-primary/10 text-primary" : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/8 hover:text-foreground",
           )}
           key={filter.key}

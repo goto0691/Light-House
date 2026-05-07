@@ -20,6 +20,9 @@ const DOMAIN_LABELS: Record<DomainKey, string> = {
 export function LocalNav({ domain }: { domain: DomainKey }) {
   const pathname = usePathname();
   const items = LOCAL_NAV[domain];
+  const activeHref = items
+    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .sort((left, right) => right.href.length - left.href.length)[0]?.href;
   const collapsed = useShellStore((state) => state.lnbCollapsed);
   const toggle = useShellStore((state) => state.toggleLNB);
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
@@ -50,7 +53,7 @@ export function LocalNav({ domain }: { domain: DomainKey }) {
         <>
           <nav aria-label={`${DOMAIN_LABELS[domain]} local navigation`} className="flex flex-col gap-1">
             {items.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const active = item.href === activeHref;
               return (
                 <Link
                   key={item.href}

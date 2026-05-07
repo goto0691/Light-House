@@ -1,15 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, ExternalLink } from "lucide-react";
-
-import { GlassCard } from "@/components/shared/glass-card";
+import { SourcePropertyInspector, type SourceRecordInfo, type SourcePropertyTarget } from "@/components/shared/properties/source-property-inspector";
 import type { ZettelFormState } from "@/components/vault/zettel-form";
 import type { SourceDocumentInfo } from "@/lib/mock/vault";
-import { cn } from "@/lib/utils/cn";
+import type { PropertyDefinition } from "@/lib/properties/types";
+import { ZETTEL_PROPERTY_DEFINITIONS } from "@/lib/properties/zettel";
 import { normalizeZettelDocumentKind } from "@/lib/vault/zettel-properties";
 
-type SourcePropertyTarget =
+type ZettelSourcePropertyTarget =
   | "skip"
   | "title"
   | "summary"
@@ -29,149 +27,63 @@ type ZettelSourcePropertiesPanelProps = {
   form: ZettelFormState;
   onChange: (patch: Partial<ZettelFormState>) => void;
   sourceDocument?: SourceDocumentInfo | null;
+  compact?: boolean;
 };
 
-const TARGET_OPTIONS: Array<{ value: SourcePropertyTarget; label: string }> = [
-  { value: "skip", label: "Keep Raw" },
-  { value: "title", label: "Title" },
-  { value: "summary", label: "Summary" },
-  { value: "category", label: "Category" },
-  { value: "documentKind", label: "Kind" },
-  { value: "status", label: "Status" },
-  { value: "tags", label: "Tags" },
-  { value: "aliases", label: "Aliases" },
-  { value: "sourceReliability", label: "Reliability" },
-  { value: "reviewCadence", label: "Review Cadence" },
-  { value: "reviewDueAt", label: "Review Due" },
-  { value: "source", label: "Source" },
-  { value: "sourceUrl", label: "Source URL" },
-  { value: "originalCreatedAt", label: "Original Date" },
+const TARGET_OPTIONS: Array<SourcePropertyTarget<ZettelFormState> & { value: ZettelSourcePropertyTarget }> = [
+  { value: "skip", label: "원본 유지" },
+  { value: "title", label: "제목", apply: ({ form, sourceDocument, value }) => propertyPatch("title", value, form, sourceDocument) },
+  { value: "summary", label: "요약", apply: ({ form, sourceDocument, value }) => propertyPatch("summary", value, form, sourceDocument) },
+  { value: "category", label: "카테고리", apply: ({ form, sourceDocument, value }) => propertyPatch("category", value, form, sourceDocument) },
+  { value: "documentKind", label: "문서 종류", apply: ({ form, sourceDocument, value }) => propertyPatch("documentKind", value, form, sourceDocument) },
+  { value: "status", label: "상태", apply: ({ form, sourceDocument, value }) => propertyPatch("status", value, form, sourceDocument) },
+  { value: "tags", label: "태그", apply: ({ form, sourceDocument, value }) => propertyPatch("tags", value, form, sourceDocument) },
+  { value: "aliases", label: "별칭", apply: ({ form, sourceDocument, value }) => propertyPatch("aliases", value, form, sourceDocument) },
+  { value: "sourceReliability", label: "출처 신뢰도", apply: ({ form, sourceDocument, value }) => propertyPatch("sourceReliability", value, form, sourceDocument) },
+  { value: "reviewCadence", label: "검토 주기", apply: ({ form, sourceDocument, value }) => propertyPatch("reviewCadence", value, form, sourceDocument) },
+  { value: "reviewDueAt", label: "검토일", apply: ({ form, sourceDocument, value }) => propertyPatch("reviewDueAt", value, form, sourceDocument) },
+  { value: "source", label: "출처", apply: ({ form, sourceDocument, value }) => propertyPatch("source", value, form, sourceDocument) },
+  { value: "sourceUrl", label: "출처 URL", apply: ({ form, sourceDocument, value }) => propertyPatch("sourceUrl", value, form, sourceDocument) },
+  { value: "originalCreatedAt", label: "원본 생성일", apply: ({ form, sourceDocument, value }) => propertyPatch("originalCreatedAt", value, form, sourceDocument) },
 ];
 
-export function ZettelSourcePropertiesPanel({ form, onChange, sourceDocument }: ZettelSourcePropertiesPanelProps) {
-  const visibleProperties = useMemo(() => sourceDocument?.properties.filter((property) => property.value.trim()) ?? [], [sourceDocument]);
-  const [targets, setTargets] = useState<Record<string, SourcePropertyTarget>>({});
-  if (!sourceDocument) return null;
-  const document = sourceDocument;
+const ZETTEL_SOURCE_DEFINITIONS: PropertyDefinition[] = [
+  {
+    key: "zettel.title",
+    entityType: "zettel",
+    field: "title",
+    label: "제목",
+    group: "identity",
+    valueType: "text",
+    sourceAliases: ["title", "name", "제목", "이름"],
+  },
+  {
+    key: "zettel.summary",
+    entityType: "zettel",
+    field: "summary",
+    label: "요약",
+    group: "review",
+    valueType: "longText",
+    sourceAliases: ["summary", "description", "요약", "설명"],
+  },
+  ...ZETTEL_PROPERTY_DEFINITIONS,
+];
 
-  function targetFor(property: SourceDocumentInfo["properties"][number]) {
-    const key = propertyKey(property);
-    return targets[key] ?? guessTarget(property, document);
-  }
-
-  function applyProperty(property: SourceDocumentInfo["properties"][number]) {
-    const target = targetFor(property);
-    const value = property.value.trim();
-    if (!value || target === "skip") return;
-    onChange(propertyPatch(target, value, form, document));
-  }
-
+export function ZettelSourcePropertiesPanel({ compact = false, form, onChange, sourceDocument }: ZettelSourcePropertiesPanelProps) {
   return (
-    <GlassCard priority="secondary">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-primary">Imported Properties</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {document.sourceDatabase ?? "source"} · {document.status}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {document.url ? (
-            <a
-              className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
-              href={document.url}
-              rel="noreferrer"
-              target="_blank"
-              title="Open source"
-            >
-              <ExternalLink className="h-4 w-4" />
-            </a>
-          ) : null}
-          <span className="rounded-md border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-            {visibleProperties.length} properties
-          </span>
-        </div>
-      </div>
-
-      {document.preview ? <p className="mt-4 line-clamp-3 text-sm leading-6 text-muted-foreground">{document.preview}</p> : null}
-
-      {visibleProperties.length ? (
-        <div className="mt-4 grid gap-2">
-          {visibleProperties.map((property) => {
-            const key = propertyKey(property);
-            const target = targetFor(property);
-            const applicable = target !== "skip" && Boolean(property.value.trim());
-            return (
-              <div className="grid gap-3 rounded-md border border-white/10 bg-black/10 p-3 lg:grid-cols-[minmax(0,1fr)_180px_96px]" key={key}>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{property.name}</p>
-                    {property.type ? <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/80">{property.type}</span> : null}
-                  </div>
-                  <p className="mt-1 line-clamp-3 break-words text-sm text-foreground">{property.value}</p>
-                </div>
-                <select
-                  className="input-base h-10 py-0 text-xs"
-                  onChange={(event) => setTargets((current) => ({ ...current, [key]: event.target.value as SourcePropertyTarget }))}
-                  value={target}
-                >
-                  {TARGET_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className={cn(
-                    "focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-3 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
-                    applicable ? "border-primary/25 bg-primary/10 text-primary hover:bg-primary/15" : "border-white/10 bg-white/5 text-muted-foreground",
-                  )}
-                  disabled={!applicable}
-                  onClick={() => applyProperty(property)}
-                  type="button"
-                >
-                  <Check className="h-4 w-4" />
-                  적용
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="mt-4 rounded-md border border-dashed border-white/15 bg-black/10 p-3 text-sm text-muted-foreground">
-          가져온 원본 문서는 있지만 노출된 속성은 없습니다.
-        </p>
-      )}
-    </GlassCard>
+    <SourcePropertyInspector
+      canonicalEntityType="zettel"
+      compact={compact}
+      definitions={ZETTEL_SOURCE_DEFINITIONS}
+      form={form}
+      onChange={onChange}
+      sourceDocument={sourceDocument}
+      targets={TARGET_OPTIONS}
+    />
   );
 }
 
-function propertyKey(property: SourceDocumentInfo["properties"][number]) {
-  return `${property.name}:${property.type ?? ""}:${property.value}`;
-}
-
-function guessTarget(property: SourceDocumentInfo["properties"][number], sourceDocument: SourceDocumentInfo): SourcePropertyTarget {
-  const name = normalize(property.name);
-  const type = normalize(property.type ?? "");
-  const value = property.value.trim();
-
-  if (looksLikeUrl(value) || name.includes("url") || name.includes("링크")) return "sourceUrl";
-  if (name.includes("제목") || name === "title") return "title";
-  if (name.includes("요약") || name.includes("summary") || name.includes("description")) return "summary";
-  if (name.includes("상태") || name.includes("status")) return "status";
-  if (name.includes("별칭") || name.includes("alias")) return "aliases";
-  if (name.includes("신뢰") || name.includes("reliability")) return "sourceReliability";
-  if (name.includes("복습 주기") || name.includes("검토 주기") || name.includes("review cadence")) return "reviewCadence";
-  if (name.includes("복습일") || name.includes("검토일") || name.includes("review due")) return "reviewDueAt";
-  if (name.includes("날짜") || name.includes("일시") || name.includes("created") || type.includes("date")) return "originalCreatedAt";
-  if (name.includes("태그") || name.includes("키워드") || name.includes("topic") || name.includes("tag") || type.includes("multi")) return "tags";
-  if (name.includes("카테고리") || name.includes("category")) return "category";
-  if (name.includes("유형") || name.includes("종류") || name.includes("kind") || name.includes("type")) return "documentKind";
-  if (name.includes("출처") || name.includes("source") || sourceDocument.sourceDatabase?.toLowerCase().includes(name)) return "source";
-  return "skip";
-}
-
-function propertyPatch(target: SourcePropertyTarget, value: string, form: ZettelFormState, sourceDocument: SourceDocumentInfo): Partial<ZettelFormState> {
+function propertyPatch(target: ZettelSourcePropertyTarget, value: string, form: ZettelFormState, sourceDocument: SourceRecordInfo): Partial<ZettelFormState> {
   if (target === "title") return { title: value };
   if (target === "summary") return { summary: value };
   if (target === "category") return { category: compactSingleLine(value, 80) };
@@ -194,10 +106,6 @@ function normalize(value: string) {
 
 function compactSingleLine(value: string, limit: number) {
   return value.replace(/\s+/g, " ").trim().slice(0, limit);
-}
-
-function looksLikeUrl(value: string) {
-  return /^https?:\/\//i.test(value.trim());
 }
 
 function firstUrl(value: string) {

@@ -4,18 +4,20 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
-import { SourceDocumentPanel } from "@/components/shared/source-document-panel";
+import { PropertyPanel } from "@/components/shared/properties/property-panel";
+import { SourcePropertyInspector, type SourcePropertyTarget } from "@/components/shared/properties/source-property-inspector";
 import type { PersonMock } from "@/lib/mock/prm";
+import { PERSON_PROPERTY_DEFINITIONS, PERSON_PROPERTY_GROUPS } from "@/lib/properties/person";
 import { postSnapshotMutation } from "@/lib/snapshot-client";
 import { usePRMStore } from "@/stores/use-prm-store";
 
 type PersonProfileForm = {
   name: string;
   nickname: string;
-  aliases: string;
+  aliases: string[];
   birthDate: string;
   birthdayMemo: string;
-  groups: string;
+  groups: string[];
   dunbarLayer: string;
   intimacy: string;
   coreValue: string;
@@ -29,14 +31,55 @@ type PersonProfileForm = {
   status: PersonMock["status"];
 };
 
+type PersonSourcePropertyTarget =
+  | "skip"
+  | "name"
+  | "nickname"
+  | "aliases"
+  | "groups"
+  | "status"
+  | "dunbarLayer"
+  | "intimacy"
+  | "contactCadenceDays"
+  | "birthDate"
+  | "birthdayMemo"
+  | "phone"
+  | "email"
+  | "address"
+  | "socialLinks"
+  | "coreValue"
+  | "bio"
+  | "profileBody";
+
+const PERSON_SOURCE_TARGETS: Array<SourcePropertyTarget<PersonProfileForm> & { value: PersonSourcePropertyTarget }> = [
+  { value: "skip", label: "원본 유지" },
+  { value: "name", label: "이름", apply: ({ value }) => ({ name: compactSingleLine(value, 120) }) },
+  { value: "nickname", label: "닉네임", apply: ({ value }) => ({ nickname: compactSingleLine(value, 80) }) },
+  { value: "aliases", label: "별칭", apply: ({ form, value }) => ({ aliases: mergeList(form.aliases, value) }) },
+  { value: "groups", label: "그룹", apply: ({ form, value }) => ({ groups: mergeList(form.groups, value) }) },
+  { value: "status", label: "관계 상태", apply: ({ form, value }) => ({ status: normalizePersonStatus(value) ?? form.status }) },
+  { value: "dunbarLayer", label: "관계 레이어", apply: ({ form, value }) => ({ dunbarLayer: normalizeLayer(value) ?? form.dunbarLayer }) },
+  { value: "intimacy", label: "친밀도", apply: ({ form, value }) => ({ intimacy: normalizeNumberText(value) ?? form.intimacy }) },
+  { value: "contactCadenceDays", label: "연락 주기", apply: ({ form, value }) => ({ contactCadenceDays: normalizeNumberText(value) ?? form.contactCadenceDays }) },
+  { value: "birthDate", label: "생일", apply: ({ form, value }) => ({ birthDate: normalizeDate(value) ?? form.birthDate }) },
+  { value: "birthdayMemo", label: "생일 메모", apply: ({ value }) => ({ birthdayMemo: compactSingleLine(value, 160) }) },
+  { value: "phone", label: "전화", apply: ({ value }) => ({ phone: compactSingleLine(value, 80) }) },
+  { value: "email", label: "이메일", apply: ({ value }) => ({ email: compactSingleLine(value, 120) }) },
+  { value: "address", label: "주소", apply: ({ value }) => ({ address: compactSingleLine(value, 200) }) },
+  { value: "socialLinks", label: "소셜 링크", apply: ({ value }) => ({ socialLinks: compactSingleLine(value, 240) }) },
+  { value: "coreValue", label: "핵심 가치", apply: ({ value }) => ({ coreValue: value.trim() }) },
+  { value: "bio", label: "소개", apply: ({ value }) => ({ bio: value.trim() }) },
+  { value: "profileBody", label: "프로필 본문", apply: ({ value }) => ({ profileBody: value.trim() }) },
+];
+
 function buildProfileForm(person: PersonMock): PersonProfileForm {
   return {
     name: person.name,
     nickname: person.nickname ?? "",
-    aliases: person.aliases ?? "",
+    aliases: splitList(person.aliases ?? ""),
     birthDate: person.birthDate?.slice(0, 10) ?? "",
     birthdayMemo: person.birthdayMemo ?? "",
-    groups: person.groups.join(", "),
+    groups: person.groups,
     dunbarLayer: String(person.layer),
     intimacy: person.intimacy ? String(person.intimacy) : "",
     coreValue: person.coreValue === "기록 중" ? "" : person.coreValue,
@@ -91,10 +134,10 @@ export function PersonDrawer({ id }: { id: string }) {
           {
             name: profileForm.name,
             nickname: profileForm.nickname,
-            aliases: profileForm.aliases,
+            aliases: profileForm.aliases.join(", "),
             birthDate: profileForm.birthDate,
             birthdayMemo: profileForm.birthdayMemo,
-            groups: profileForm.groups.split(",").map((group) => group.trim()).filter(Boolean),
+            groups: profileForm.groups,
             dunbarLayer: optionalNumber(profileForm.dunbarLayer),
             intimacy: optionalNumber(profileForm.intimacy),
             coreValue: profileForm.coreValue,
@@ -127,7 +170,7 @@ export function PersonDrawer({ id }: { id: string }) {
       mainSlot={() => (
         <div className="space-y-4">
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-primary">Person</p>
+        <p className="text-xs tracking-[0.08em] text-primary">관계</p>
         <h3 className="mt-2 text-2xl font-semibold text-foreground">{person.name}</h3>
         <p className="mt-2 text-sm text-muted-foreground">{person.bio}</p>
         <div className="mt-4 flex gap-2">
@@ -188,16 +231,25 @@ export function PersonDrawer({ id }: { id: string }) {
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard label="Gifts" value={String(person.giftsCount)} />
-        <MetricCard label="Interactions" value={String(person.interactionsCount)} />
-        <MetricCard label="Tasks" value={String(person.tasksCount)} />
+        <MetricCard label="선물" value={String(person.giftsCount)} />
+        <MetricCard label="상호작용" value={String(person.interactionsCount)} />
+        <MetricCard label="작업" value={String(person.tasksCount)} />
       </section>
 
-      <SourceDocumentPanel sourceDocument={person.sourceDocument} />
+      {profileForm ? (
+        <SourcePropertyInspector
+          canonicalEntityType="person"
+          definitions={PERSON_PROPERTY_DEFINITIONS}
+          form={profileForm}
+          onChange={(patch) => setProfileForm({ ...profileForm, ...patch })}
+          sourceDocument={person.sourceDocument}
+          targets={PERSON_SOURCE_TARGETS}
+        />
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-primary">Log Interaction</p>
+          <p className="text-xs tracking-[0.08em] text-primary">상호작용 기록</p>
           <div className="mt-4 space-y-3">
             <select className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-sm text-foreground" onChange={(event) => setInteractionType(event.target.value)} value={interactionType}>
               <option value="message">메시지</option>
@@ -233,7 +285,7 @@ export function PersonDrawer({ id }: { id: string }) {
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-primary">Add Gift</p>
+          <p className="text-xs tracking-[0.08em] text-primary">선물 추가</p>
           <div className="mt-4 space-y-3">
             <select className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-sm text-foreground" onChange={(event) => setGiftDirection(event.target.value as "given" | "received")} value={giftDirection}>
               <option value="given">준 선물</option>
@@ -268,10 +320,10 @@ export function PersonDrawer({ id }: { id: string }) {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
+      <section className="rounded-lg border border-white/10 bg-white/5 p-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-primary">Basic Info</p>
+            <p className="text-xs tracking-[0.08em] text-primary">정규 속성</p>
             <h4 className="mt-2 text-lg font-semibold text-foreground">관계 속성</h4>
           </div>
           {profileForm ? (
@@ -285,47 +337,20 @@ export function PersonDrawer({ id }: { id: string }) {
             </button>
           ) : null}
         </div>
-        <div className="mt-4 grid gap-2 text-sm text-muted-foreground">
-          <p>Last contacted {person.daysSinceContact} days ago</p>
-          <p>Cadence every {person.cadenceDays} days</p>
-          <p>Status: {person.status}</p>
-          {person.birthDate ? <p>Birth date: {person.birthDate.slice(0, 10)}</p> : null}
-          {person.address ? <p>Address: {person.address}</p> : null}
-        </div>
-        {profileForm ? (
-          <div className="mt-4 space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="이름" value={profileForm.name} onChange={(name) => setProfileForm({ ...profileForm, name })} />
-              <Field label="닉네임" value={profileForm.nickname} onChange={(nickname) => setProfileForm({ ...profileForm, nickname })} />
-              <Field label="별칭" value={profileForm.aliases} onChange={(aliases) => setProfileForm({ ...profileForm, aliases })} />
-              <Field label="그룹" value={profileForm.groups} onChange={(groups) => setProfileForm({ ...profileForm, groups })} />
-              <SelectField
-                label="상태"
-                onChange={(status) => setProfileForm({ ...profileForm, status: status as PersonMock["status"] })}
-                options={["active", "dormant", "observing"]}
-                value={profileForm.status}
-              />
-              <Field label="Dunbar Layer" value={profileForm.dunbarLayer} onChange={(dunbarLayer) => setProfileForm({ ...profileForm, dunbarLayer })} />
-              <Field label="친밀도" value={profileForm.intimacy} onChange={(intimacy) => setProfileForm({ ...profileForm, intimacy })} />
-              <Field label="연락 주기" value={profileForm.contactCadenceDays} onChange={(contactCadenceDays) => setProfileForm({ ...profileForm, contactCadenceDays })} />
-              <Field label="생일" type="date" value={profileForm.birthDate} onChange={(birthDate) => setProfileForm({ ...profileForm, birthDate })} />
-              <Field label="생일 메모" value={profileForm.birthdayMemo} onChange={(birthdayMemo) => setProfileForm({ ...profileForm, birthdayMemo })} />
-              <Field label="전화" value={profileForm.phone} onChange={(phone) => setProfileForm({ ...profileForm, phone })} />
-              <Field label="이메일" value={profileForm.email} onChange={(email) => setProfileForm({ ...profileForm, email })} />
-            </div>
-            <Field label="주소" value={profileForm.address} onChange={(address) => setProfileForm({ ...profileForm, address })} />
-            <Field label="소셜 링크" value={profileForm.socialLinks} onChange={(socialLinks) => setProfileForm({ ...profileForm, socialLinks })} />
-            <TextArea label="Core Value" value={profileForm.coreValue} onChange={(coreValue) => setProfileForm({ ...profileForm, coreValue })} />
-            <TextArea label="Bio" value={profileForm.bio} onChange={(bio) => setProfileForm({ ...profileForm, bio })} />
-            <TextArea label="Profile Body" value={profileForm.profileBody} onChange={(profileBody) => setProfileForm({ ...profileForm, profileBody })} />
-          </div>
-        ) : null}
       </section>
+      {profileForm ? (
+        <PropertyPanel
+          definitions={PERSON_PROPERTY_DEFINITIONS}
+          form={profileForm}
+          groups={PERSON_PROPERTY_GROUPS}
+          onChange={(patch) => setProfileForm({ ...profileForm, ...patch })}
+        />
+      ) : null}
 
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs uppercase tracking-[0.2em] text-primary">Gifts</p>
-          <span className="text-xs text-muted-foreground">{gifts.length} items</span>
+          <p className="text-xs tracking-[0.08em] text-primary">선물</p>
+          <span className="text-xs text-muted-foreground">{gifts.length}개</span>
         </div>
         <div className="mt-4 space-y-3">
           {gifts.length ? (
@@ -371,7 +396,7 @@ export function PersonDrawer({ id }: { id: string }) {
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-primary">Timeline</p>
+        <p className="text-xs tracking-[0.08em] text-primary">타임라인</p>
         <div className="mt-4 space-y-3">
           {person.timeline.map((item) => (
             <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-3" key={item.id}>
@@ -448,54 +473,70 @@ export function PersonDrawer({ id }: { id: string }) {
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+      <p className="text-xs tracking-[0.08em] text-muted-foreground">{label}</p>
       <p className="mt-3 text-2xl font-semibold text-foreground">{value}</p>
     </div>
   );
 }
 
-function Field({ label, onChange, type = "text", value }: { label: string; onChange: (value: string) => void; type?: string; value: string }) {
-  return (
-    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
-      {label}
-      <input
-        className="mt-2 w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case tracking-normal text-foreground outline-none"
-        onChange={(event) => onChange(event.target.value)}
-        type={type}
-        value={value}
-      />
-    </label>
-  );
+function splitList(value: string) {
+  return value
+    .split(/[,;/\n|]+/)
+    .map((item) => compactSingleLine(item, 80))
+    .filter(Boolean);
 }
 
-function SelectField({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: string[]; value: string }) {
-  return (
-    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
-      {label}
-      <select
-        className="mt-2 w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case tracking-normal text-foreground outline-none"
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+function mergeList(current: string[], value: string) {
+  const unique = new Map(current.map((item) => [normalize(item), item]));
+  for (const item of splitList(value)) {
+    const key = normalize(item);
+    if (key && !unique.has(key)) unique.set(key, item);
+  }
+  return Array.from(unique.values());
 }
 
-function TextArea({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
-  return (
-    <label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">
-      {label}
-      <textarea
-        className="mt-2 min-h-[92px] w-full resize-y rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm normal-case leading-6 tracking-normal text-foreground outline-none"
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      />
-    </label>
-  );
+function normalize(value: string) {
+  return value.toLowerCase().replaceAll("_", " ").replaceAll("-", " ").trim();
+}
+
+function compactSingleLine(value: string, limit: number) {
+  const compacted = value.replace(/\s+/g, " ").trim();
+  return compacted.length > limit ? compacted.slice(0, limit).trim() : compacted;
+}
+
+function normalizePersonStatus(value: string): PersonMock["status"] | null {
+  const normalized = normalize(value);
+  if (["active", "활성"].includes(normalized)) return "active";
+  if (["dormant", "inactive", "sleeping", "휴면", "비활성"].includes(normalized)) return "dormant";
+  if (["observing", "observe", "watching", "관찰", "관찰 중", "관찰중"].includes(normalized)) return "observing";
+  return null;
+}
+
+function normalizeLayer(value: string) {
+  const match = value.match(/\b(5|15|50|150)\b/);
+  return match?.[1] ?? null;
+}
+
+function normalizeNumberText(value: string) {
+  const match = value.replaceAll(",", "").match(/-?\d+(\.\d+)?/);
+  return match?.[0] ?? null;
+}
+
+function normalizeDate(value: string) {
+  const trimmed = value.trim();
+  const isoMatch = trimmed.match(/\b(\d{4})[-./](\d{1,2})[-./](\d{1,2})\b/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const koreanMatch = trimmed.match(/\b(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\b/);
+  if (koreanMatch) {
+    const [, year, month, day] = koreanMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
 }

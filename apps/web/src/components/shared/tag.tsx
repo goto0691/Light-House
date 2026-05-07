@@ -32,9 +32,9 @@ function getTone(variant: TagVariant, value: string) {
   }
 
   if (variant === "status") {
-    if (normalized.includes("done")) return "border-[hsl(var(--color-feedback-success)/0.18)] bg-[hsl(var(--color-feedback-success)/0.12)] text-[hsl(var(--color-feedback-success))]";
-    if (normalized.includes("block")) return "border-[hsl(var(--color-feedback-danger)/0.18)] bg-[hsl(var(--color-feedback-danger)/0.12)] text-[hsl(var(--color-feedback-danger))]";
-    if (normalized.includes("review")) return "border-[hsl(var(--color-feedback-info)/0.18)] bg-[hsl(var(--color-feedback-info)/0.12)] text-[hsl(var(--color-feedback-info))]";
+    if (normalized.includes("done") || normalized.includes("active") || normalized.includes("완료") || normalized.includes("활성")) return "border-[hsl(var(--color-feedback-success)/0.18)] bg-[hsl(var(--color-feedback-success)/0.12)] text-[hsl(var(--color-feedback-success))]";
+    if (normalized.includes("block") || normalized.includes("막힘")) return "border-[hsl(var(--color-feedback-danger)/0.18)] bg-[hsl(var(--color-feedback-danger)/0.12)] text-[hsl(var(--color-feedback-danger))]";
+    if (normalized.includes("review") || normalized.includes("검토")) return "border-[hsl(var(--color-feedback-info)/0.18)] bg-[hsl(var(--color-feedback-info)/0.12)] text-[hsl(var(--color-feedback-info))]";
     return "border-[hsl(var(--color-feedback-warning)/0.18)] bg-[hsl(var(--color-feedback-warning)/0.12)] text-[hsl(var(--color-feedback-warning))]";
   }
 
@@ -51,7 +51,7 @@ function getTone(variant: TagVariant, value: string) {
 }
 
 export function Tag({ variant, value, size = "sm", icon: Icon, removable = false, onRemove, className }: TagProps) {
-  const label = value.replaceAll("_", " ");
+  const label = getTagLabel(value);
 
   return (
     <span
@@ -67,7 +67,7 @@ export function Tag({ variant, value, size = "sm", icon: Icon, removable = false
       <span>{label}</span>
       {removable ? (
         <button
-          aria-label={`${label} remove`}
+          aria-label={`${label} 제거`}
           className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-black/10 transition hover:bg-black/20"
           onClick={onRemove}
           type="button"
@@ -79,3 +79,27 @@ export function Tag({ variant, value, size = "sm", icon: Icon, removable = false
   );
 }
 
+function getTagLabel(value: string) {
+  const normalized = value.toLowerCase().replaceAll("_", " ").trim();
+  const labels: Record<string, string> = {
+    active: "활성",
+    blocked: "막힘",
+    done: "완료",
+    dormant: "휴면",
+    favorite: "즐겨찾기",
+    given: "준 선물",
+    "hyper focus": "고집중",
+    "in progress": "진행 중",
+    normal: "보통",
+    observing: "관찰",
+    received: "받은 선물",
+    review: "검토",
+    routine: "루틴",
+    todo: "예정",
+    project: "프로젝트",
+    area: "영역",
+    paused: "보류",
+    archived: "보관",
+  };
+  return labels[normalized] ?? value.replaceAll("_", " ");
+}

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Save, Trash2, Workflow } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Plus, Save, Settings2, Trash2, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { FilterBar, type FilterState } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
 import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shared/page-layout";
+import { SavedViewManager } from "@/components/shared/saved-view-manager";
 import { SavedViewTabs } from "@/components/shared/saved-view-tabs";
 import { ZettelCard } from "@/components/vault/zettel-card";
 import { ZettelReaderPane } from "@/components/vault/zettel-reader-pane";
@@ -48,7 +49,6 @@ const ZETTEL_VIEW_FILTER_KEYS = [
 ];
 
 export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientProps) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const zettels = useVaultStore((state) => state.zettels);
@@ -56,6 +56,10 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   const selectZettel = useVaultStore((state) => state.selectZettel);
   const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
   const [localSavedViews, setLocalSavedViews] = useState(savedViews);
+  const [activeViewKeyState, setActiveViewKeyState] = useState(
+    () => searchParams.get("view") ?? getDefaultSavedViewKey(savedViews) ?? "all",
+  );
+  const [selectedZettelIdState, setSelectedZettelIdState] = useState<string | null>(() => selectedZettelId ?? null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [documentKindFilter, setDocumentKindFilter] = useState("");
@@ -66,12 +70,14 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   const [propertyTags, setPropertyTags] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState("updated-desc");
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
-  const [creatingDraftOpen, setCreatingDraftOpen] = useState(false);
-  const isCreating = creatingDraftOpen || searchParams.get("new") === "1";
-  const activeViewKey = searchParams.get("view") ?? getSavedViewKey(localSavedViews.find((view) => view.isDefault)) ?? getSavedViewKey(localSavedViews[0]) ?? "all";
-  const activeView = localSavedViews.find((view) => getSavedViewKey(view) === activeViewKey) ?? localSavedViews.find((view) => view.isDefault) ?? localSavedViews[0];
+  const [creatingDraftOpen, setCreatingDraftOpen] = useState(() => searchParams.get("new") === "1");
+  const [viewManagerOpen, setViewManagerOpen] = useState(false);
+  const [viewRenameDrafts, setViewRenameDrafts] = useState<Record<string, string>>({});
+  const [viewMutationId, setViewMutationId] = useState<string | null>(null);
+  const isCreating = creatingDraftOpen;
+  const activeView = localSavedViews.find((view) => getSavedViewKey(view) === activeViewKeyState) ?? localSavedViews.find((view) => view.isDefault) ?? localSavedViews[0];
+  const activeViewKey = getSavedViewKey(activeView) ?? activeViewKeyState;
   const activeViewIsPersisted = Boolean(activeView && !activeView.id.startsWith("default-"));
-  const resolvedSelectedId = selectedZettelId ?? storeSelectedZettelId;
   const filterKey = [
     activeViewKey,
     query,
@@ -99,7 +105,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
     if (query && !getZettelSearchText(item).includes(query.toLowerCase())) return false;
     return true;
   }), sortKey);
-  const selected = isCreating ? null : zettels.find((item) => item.id === resolvedSelectedId) ?? visibleZettels[0] ?? zettels[0];
+  const selected = isCreating || !selectedZettelIdState ? null : zettels.find((item) => item.id === selectedZettelIdState) ?? null;
   const listedZettels = visibleZettels.slice(0, visibleLimit);
   const categoryOptions = useMemo(() => Array.from(new Set(zettels.map((zettel) => zettel.category).filter(Boolean))).sort(), [zettels]);
   const categorySuggestions = useMemo(() => buildCategorySuggestions(zettels), [zettels]);
@@ -107,19 +113,65 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   const filterBarInitialFilters = useMemo(() => getFilterBarInitialFilters(activeView), [activeView]);
 
   useEffect(() => {
+    setLocalSavedViews(savedViews);
+  }, [savedViews]);
+
+  useEffect(() => {
+    function syncFromBrowserLocation() {
+      const params = new URLSearchParams(window.location.search);
+      const detailMatch = window.location.pathname.match(/^\/vault\/zettels\/([^/]+)$/);
+      const nextIsCreating = params.get("new") === "1";
+      setActiveViewKeyState(params.get("view") ?? getDefaultSavedViewKey(localSavedViews) ?? "all");
+      setCreatingDraftOpen(nextIsCreating);
+      setSelectedZettelIdState(nextIsCreating || !detailMatch ? null : decodeURIComponent(detailMatch[1]));
+    }
+
+    window.addEventListener("popstate", syncFromBrowserLocation);
+    return () => window.removeEventListener("popstate", syncFromBrowserLocation);
+  }, [localSavedViews]);
+
+  useEffect(() => {
     if (!selected?.id) return;
     if (storeSelectedZettelId !== selected.id) selectZettel(selected.id);
   }, [selectZettel, selected?.id, storeSelectedZettelId]);
 
+  function setZettelsLocation({
+    mode = "push",
+    newOpen = false,
+    selectedId = selectedZettelIdState,
+    viewKey = activeViewKey,
+  }: {
+    mode?: "push" | "replace";
+    newOpen?: boolean;
+    selectedId?: string | null;
+    viewKey?: string | null;
+  }) {
+    const params = new URLSearchParams();
+    if (viewKey) params.set("view", viewKey);
+    if (newOpen) params.set("new", "1");
+    const path = selectedId && !newOpen ? `/vault/zettels/${encodeURIComponent(selectedId)}` : "/vault/zettels";
+    const query = params.toString();
+    window.history[mode === "replace" ? "replaceState" : "pushState"](null, "", query ? `${path}?${query}` : path);
+  }
+
+  function selectSavedView(viewKey: string) {
+    setActiveViewKeyState(viewKey);
+    setCreatingDraftOpen(false);
+    setSelectedZettelIdState(null);
+    setZettelsLocation({ selectedId: null, viewKey });
+  }
+
   function openZettel(id: string) {
     setCreatingDraftOpen(false);
     selectZettel(id);
-    router.push(`/vault/zettels/${id}`);
+    setSelectedZettelIdState(id);
+    setZettelsLocation({ selectedId: id });
   }
 
   function openNewZettel() {
     setCreatingDraftOpen(true);
-    router.push("/vault/zettels?new=1");
+    setSelectedZettelIdState(null);
+    setZettelsLocation({ newOpen: true, selectedId: null });
   }
 
   function buildSavedViewPayload(name?: string) {
@@ -138,7 +190,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
     return {
       domain: "library",
       scope: "knowledge",
-      name: name ?? activeView?.name ?? "Zettel View",
+      name: name ?? activeView?.name ?? "Zettel 뷰",
       icon: activeView?.icon ?? "library",
       searchQuery: query.trim(),
       filterState,
@@ -147,7 +199,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   }
 
   async function saveCurrentView() {
-    const name = window.prompt("저장할 조회 이름", query.trim() || activeView?.name || "Zettel View");
+    const name = window.prompt("저장할 조회 이름", query.trim() || activeView?.name || "Zettel 뷰");
     if (!name?.trim()) return;
     try {
       const viewKey = `${slugifyViewKey(name)}-${Date.now().toString(36)}`;
@@ -161,12 +213,13 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
         }),
       });
       const payload = (await response.json()) as { views?: SavedView[]; error?: string };
-      if (!response.ok || !payload.views) throw new Error(payload.error ?? "Saved view 저장에 실패했습니다.");
+      if (!response.ok || !payload.views) throw new Error(payload.error ?? "저장된 뷰 생성에 실패했습니다.");
       setLocalSavedViews(payload.views);
-      router.push(`/vault/zettels?view=${encodeURIComponent(viewKey)}`);
+      setActiveViewKeyState(viewKey);
+      setZettelsLocation({ selectedId: selectedZettelIdState, viewKey });
       toast.success("현재 조회를 저장했습니다.");
     } catch (error) {
-      toast.error("Saved view 저장에 실패했습니다.", {
+      toast.error("뷰 저장에 실패했습니다.", {
         description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
       });
     }
@@ -185,32 +238,154 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
         }),
       });
       const payload = (await response.json()) as { views?: SavedView[]; error?: string };
-      if (!response.ok || !payload.views) throw new Error(payload.error ?? "Saved view 업데이트에 실패했습니다.");
+      if (!response.ok || !payload.views) throw new Error(payload.error ?? "저장된 뷰 업데이트에 실패했습니다.");
       setLocalSavedViews(payload.views);
-      toast.success("Saved view를 업데이트했습니다.");
+      toast.success("저장된 뷰를 업데이트했습니다.");
     } catch (error) {
-      toast.error("Saved view 업데이트에 실패했습니다.", {
+      toast.error("저장된 뷰 업데이트에 실패했습니다.", {
         description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
       });
     }
   }
 
   async function deleteActiveView() {
-    if (!activeView || !activeViewIsPersisted || !window.confirm(`"${activeView.name}" saved view를 삭제할까요?`)) return;
+    if (!activeView || !activeViewIsPersisted || !window.confirm(`"${activeView.name}" 뷰를 삭제할까요?`)) return;
     try {
       const response = await fetch(`/api/saved-views/${activeView.id}`, { method: "DELETE" });
       const payload = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(payload.error ?? "Saved view 삭제에 실패했습니다.");
+      if (!response.ok) throw new Error(payload.error ?? "저장된 뷰 삭제에 실패했습니다.");
       const refreshed = await fetch("/api/saved-views?domain=library&scope=knowledge", { cache: "no-store" });
       const refreshedPayload = (await refreshed.json()) as { views?: SavedView[]; error?: string };
-      if (!refreshed.ok || !refreshedPayload.views) throw new Error(refreshedPayload.error ?? "Saved view 목록을 다시 불러오지 못했습니다.");
+      if (!refreshed.ok || !refreshedPayload.views) throw new Error(refreshedPayload.error ?? "저장된 뷰 목록을 다시 불러오지 못했습니다.");
       setLocalSavedViews(refreshedPayload.views);
-      router.push("/vault/zettels");
-      toast.success("Saved view를 삭제했습니다.");
+      const nextViewKey = getDefaultSavedViewKey(refreshedPayload.views) ?? "all";
+      setActiveViewKeyState(nextViewKey);
+      setSelectedZettelIdState(null);
+      setZettelsLocation({ mode: "replace", selectedId: null, viewKey: nextViewKey });
+      toast.success("저장된 뷰를 삭제했습니다.");
     } catch (error) {
-      toast.error("Saved view 삭제에 실패했습니다.", {
+      toast.error("저장된 뷰 삭제에 실패했습니다.", {
         description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
       });
+    }
+  }
+
+  async function patchSavedView(view: SavedView, input: Partial<SavedView>, successMessage: string) {
+    if (!isPersistedSavedView(view)) return;
+    setViewMutationId(view.id);
+    try {
+      const response = await fetch(`/api/saved-views/${view.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: input.name ?? view.name,
+          icon: input.icon === undefined ? view.icon : input.icon,
+          searchQuery: input.searchQuery ?? view.searchQuery,
+          filterState: input.filterState ?? view.filterState,
+          sortState: input.sortState ?? view.sortState,
+          viewKey: input.viewKey ?? getSavedViewKey(view),
+          isDefault: input.isDefault ?? view.isDefault,
+          displayOrder: input.displayOrder ?? view.displayOrder,
+        }),
+      });
+      const payload = (await response.json()) as { views?: SavedView[]; error?: string };
+      if (!response.ok || !payload.views) throw new Error(payload.error ?? "저장된 뷰 업데이트에 실패했습니다.");
+      setLocalSavedViews(payload.views);
+      toast.success(successMessage);
+    } catch (error) {
+      toast.error("저장된 뷰를 업데이트하지 못했습니다.", {
+        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+      });
+    } finally {
+      setViewMutationId(null);
+    }
+  }
+
+  async function renameSavedView(view: SavedView) {
+    const nextName = (viewRenameDrafts[view.id] ?? view.name).trim();
+    if (!nextName || nextName === view.name) return;
+    await patchSavedView(view, { name: nextName }, "뷰 이름을 바꿨습니다.");
+  }
+
+  async function overwriteSavedView(view: SavedView) {
+    if (!isPersistedSavedView(view)) return;
+    const nextName = (viewRenameDrafts[view.id] ?? view.name).trim() || view.name;
+    await patchSavedView(
+      view,
+      {
+        ...buildSavedViewPayload(nextName),
+        viewKey: getSavedViewKey(view),
+        isDefault: view.isDefault,
+        displayOrder: view.displayOrder,
+      },
+      "현재 조건으로 뷰를 바꿨습니다.",
+    );
+  }
+
+  async function makeSavedViewDefault(view: SavedView) {
+    await patchSavedView(view, { isDefault: true }, "기본 뷰로 설정했습니다.");
+  }
+
+  async function duplicateSavedView(view: SavedView) {
+    const name = (viewRenameDrafts[view.id] ?? `${view.name} 복사본`).trim() || `${view.name} 복사본`;
+    const viewKey = `${slugifyViewKey(name)}-${Date.now().toString(36)}`;
+    setViewMutationId(view.id);
+    try {
+      const response = await fetch("/api/saved-views", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domain: view.domain,
+          scope: view.scope,
+          name,
+          icon: view.icon ?? "library",
+          searchQuery: view.searchQuery,
+          filterState: view.filterState,
+          sortState: view.sortState,
+          viewKey,
+          displayOrder: localSavedViews.length,
+        }),
+      });
+      const payload = (await response.json()) as { views?: SavedView[]; error?: string };
+      if (!response.ok || !payload.views) throw new Error(payload.error ?? "저장된 뷰 복제에 실패했습니다.");
+      setLocalSavedViews(payload.views);
+      setActiveViewKeyState(viewKey);
+      setSelectedZettelIdState(null);
+      setZettelsLocation({ selectedId: null, viewKey });
+      toast.success("기본 뷰를 편집 가능한 뷰로 복제했습니다.");
+    } catch (error) {
+      toast.error("뷰를 복제하지 못했습니다.", {
+        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+      });
+    } finally {
+      setViewMutationId(null);
+    }
+  }
+
+  async function deleteSavedViewFromManager(view: SavedView) {
+    if (!isPersistedSavedView(view) || !window.confirm(`"${view.name}" 뷰를 삭제할까요?`)) return;
+    setViewMutationId(view.id);
+    try {
+      const response = await fetch(`/api/saved-views/${view.id}`, { method: "DELETE" });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "저장된 뷰 삭제에 실패했습니다.");
+      const refreshed = await fetch("/api/saved-views?domain=library&scope=knowledge", { cache: "no-store" });
+      const refreshedPayload = (await refreshed.json()) as { views?: SavedView[]; error?: string };
+      if (!refreshed.ok || !refreshedPayload.views) throw new Error(refreshedPayload.error ?? "저장된 뷰 목록을 다시 불러오지 못했습니다.");
+      const nextViewKey = activeViewKey === getSavedViewKey(view) ? getDefaultSavedViewKey(refreshedPayload.views) ?? "all" : activeViewKey;
+      setLocalSavedViews(refreshedPayload.views);
+      setActiveViewKeyState(nextViewKey);
+      if (activeViewKey === getSavedViewKey(view)) {
+        setSelectedZettelIdState(null);
+        setZettelsLocation({ mode: "replace", selectedId: null, viewKey: nextViewKey });
+      }
+      toast.success("저장된 뷰를 삭제했습니다.");
+    } catch (error) {
+      toast.error("저장된 뷰 삭제에 실패했습니다.", {
+        description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+      });
+    } finally {
+      setViewMutationId(null);
     }
   }
 
@@ -224,7 +399,8 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
           replaceSnapshot,
         );
         toast.success("Zettel을 삭제했습니다.");
-        router.push("/vault/zettels");
+        setSelectedZettelIdState(null);
+        setZettelsLocation({ mode: "replace", selectedId: null });
       } catch (error) {
         toast.error("메모 삭제에 실패했습니다.", {
           description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
@@ -236,7 +412,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   if (!zettels.length && !isCreating) {
     return (
       <EmptyState
-        cta={{ label: "첫 Zettel 쓰기", hotkey: "Cmd+N", onClick: () => router.push("/vault/zettels?new=1") }}
+        cta={{ label: "첫 Zettel 쓰기", hotkey: "Cmd+N", onClick: openNewZettel }}
         description="생각은 쓰는 순간 연결을 얻습니다. 첫 메모를 만들어 Vault에 불을 켜보세요."
         illustration="zettel"
         title="첫 번째 원석을 던져보세요"
@@ -272,10 +448,10 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             ) : null}
             <Link className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8" href="/vault/zettels/graph">
               <Workflow className="h-4 w-4" />
-              Graph
+              그래프
             </Link>
             <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              {visibleZettels.length} notes
+              메모 {visibleZettels.length}개
             </span>
           </div>
         }
@@ -286,17 +462,17 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
 
       {!isCreating ? (
         <PageToolbar>
-          <SavedViewTabs activeViewKey={getSavedViewKey(activeView) ?? activeViewKey} basePath="/vault/zettels" views={localSavedViews} />
+          <SavedViewTabs activeViewKey={getSavedViewKey(activeView) ?? activeViewKey} basePath="/vault/zettels" onSelect={selectSavedView} views={localSavedViews} />
           <FilterBar
             key={activeViewKey}
             filters={[
-              { kind: "select", key: "type", label: "Type", options: ZETTEL_TYPE_OPTIONS },
-              { kind: "select", key: "documentKind", label: "Kind", options: DOCUMENT_KIND_OPTIONS },
-              { kind: "select", key: "status", label: "Status", options: ZETTEL_STATUS_OPTIONS },
-              { kind: "select", key: "sourceReliability", label: "Reliability", options: ZETTEL_SOURCE_RELIABILITY_OPTIONS },
-              { kind: "select", key: "reviewCadence", label: "Review", options: ZETTEL_REVIEW_CADENCE_OPTIONS },
-              { kind: "tag", key: "category", label: "Category tag", suggestions: categorySuggestions },
-              { kind: "tag", key: "property", label: "Property search", suggestions: sourcePropertySuggestions },
+              { kind: "select", key: "type", label: "메모 타입", options: ZETTEL_TYPE_OPTIONS },
+              { kind: "select", key: "documentKind", label: "문서 종류", options: DOCUMENT_KIND_OPTIONS },
+              { kind: "select", key: "status", label: "상태", options: ZETTEL_STATUS_OPTIONS },
+              { kind: "select", key: "sourceReliability", label: "신뢰도", options: ZETTEL_SOURCE_RELIABILITY_OPTIONS },
+              { kind: "select", key: "reviewCadence", label: "검토 주기", options: ZETTEL_REVIEW_CADENCE_OPTIONS },
+              { kind: "tag", key: "category", label: "분류 태그", suggestions: categorySuggestions },
+              { kind: "tag", key: "property", label: "속성 검색", suggestions: sourcePropertySuggestions },
             ]}
             onChange={(state) => {
               setQuery(state.q);
@@ -312,8 +488,17 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             initialFilters={filterBarInitialFilters}
             initialQuery={activeView?.searchQuery}
             initialSort={getSavedViewSortKey(activeView)}
+            syncUrl={false}
             rightSlot={
               <>
+                <button
+                  className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+                  onClick={() => setViewManagerOpen((open) => !open)}
+                  type="button"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  뷰 관리
+                </button>
                 {activeViewIsPersisted ? (
                   <button
                     className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
@@ -321,7 +506,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
                     type="button"
                   >
                     <Save className="h-4 w-4" />
-                    Update View
+                    현재 뷰 업데이트
                   </button>
                 ) : null}
                 <button
@@ -330,11 +515,11 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
                   type="button"
                 >
                   <Save className="h-4 w-4" />
-                  Save View
+                  뷰 저장
                 </button>
                 {activeViewIsPersisted ? (
                   <button
-                    aria-label="Delete saved view"
+                    aria-label="저장된 뷰 삭제"
                     className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
                     onClick={() => void deleteActiveView()}
                     type="button"
@@ -346,12 +531,26 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             }
             searchPlaceholder="제목, 본문, 태그, 속성 검색"
             sortOptions={[
-              { value: "updated-desc", label: "Recently Updated" },
-              { value: "created-desc", label: "Recently Created" },
-              { value: "title-asc", label: "Title A-Z" },
-              { value: "kind-asc", label: "Kind" },
+              { value: "updated-desc", label: "최근 수정순" },
+              { value: "created-desc", label: "최근 생성순" },
+              { value: "title-asc", label: "제목 가나다순" },
+              { value: "kind-asc", label: "문서 종류순" },
             ]}
           />
+          {viewManagerOpen ? (
+            <SavedViewManager
+              activeViewKey={activeViewKey}
+              mutationId={viewMutationId}
+              onDelete={(view) => void deleteSavedViewFromManager(view)}
+              onDuplicate={(view) => void duplicateSavedView(view)}
+              onMakeDefault={(view) => void makeSavedViewDefault(view)}
+              onOverwrite={(view) => void overwriteSavedView(view)}
+              onRename={(view) => void renameSavedView(view)}
+              onRenameDraftChange={(viewId, name) => setViewRenameDrafts((current) => ({ ...current, [viewId]: name }))}
+              renameDrafts={viewRenameDrafts}
+              views={localSavedViews}
+            />
+          ) : null}
         </PageToolbar>
       ) : null}
 
@@ -366,14 +565,15 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
                 mode={isCreating ? "new" : "existing"}
                 onCancelNew={() => {
                   setCreatingDraftOpen(false);
-                  router.push("/vault/zettels");
+                  setZettelsLocation({ mode: "replace", newOpen: false, selectedId: null });
                 }}
                 onDelete={selected ? deleteSelected : undefined}
                 onRelationsChanged={() => setContextRefreshKey((value) => value + 1)}
                 onSaved={(zettelId) => {
                   setCreatingDraftOpen(false);
                   selectZettel(zettelId);
-                  router.push(`/vault/zettels/${zettelId}`);
+                  setSelectedZettelIdState(zettelId);
+                  setZettelsLocation({ mode: "replace", selectedId: zettelId });
                 }}
                 zettel={selected}
               />
@@ -389,8 +589,8 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             <GlassCard className="order-2 max-h-none xl:order-1 xl:max-h-[calc(100vh-220px)] xl:overflow-y-auto" priority="secondary">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-primary">Notes</p>
-                  <p className="mt-1 text-xs text-muted-foreground">목록은 읽기와 선택만 담당합니다.</p>
+                  <p className="text-xs tracking-[0.08em] text-primary">메모 목록</p>
+                  <p className="mt-1 text-xs text-muted-foreground">목록에서 고르면 오른쪽에 글이 열립니다.</p>
                 </div>
                 <span className="rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                   {listedZettels.length}/{visibleZettels.length}
@@ -438,6 +638,14 @@ function normalizeFilterValue(value: string) {
 
 function getSavedViewKey(view: SavedView | null | undefined) {
   return view?.viewKey ?? view?.id ?? null;
+}
+
+function getDefaultSavedViewKey(views: SavedView[]) {
+  return getSavedViewKey(views.find((view) => view.isDefault)) ?? getSavedViewKey(views[0]);
+}
+
+function isPersistedSavedView(view: SavedView | null | undefined) {
+  return Boolean(view && !view.id.startsWith("default-"));
 }
 
 function getSavedViewSortKey(view: SavedView | null | undefined) {

@@ -31,17 +31,17 @@ function parseDetail(detail: string | null): DrawerEntity[] {
 function titleFor(entity: DrawerEntity) {
   switch (entity.type) {
     case "person":
-      return "Relationship Detail";
+      return "관계 상세";
     case "task":
-      return "Task Drawer";
+      return "작업 상세";
     case "zettel":
-      return "Zettel Drawer";
+      return "Zettel 상세";
     case "media":
-      return "Media Drawer";
+      return "미디어 상세";
     case "place":
-      return "Place Drawer";
+      return "장소 상세";
     default:
-      return "Detail Drawer";
+      return "상세";
   }
 }
 
@@ -84,7 +84,7 @@ export function SideDrawerHost() {
       if (event.key === "Escape" && entities.length) {
         const params = new URLSearchParams(searchParams.toString());
         params.delete("detail");
-        router.replace(params.size ? `${pathname}?${params.toString()}` : pathname);
+        router.replace(params.size ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
       }
 
       if (event.key === "Tab" && entities.length && containerRef.current) {
@@ -128,7 +128,7 @@ export function SideDrawerHost() {
   const closeAll = () => {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("detail");
-    router.replace(params.size ? `${pathname}?${params.toString()}` : pathname);
+    router.replace(params.size ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
   };
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { RotateCcw, Save, Trash2, X } from "lucide-react";
+import { RotateCcw, Save, Settings2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { GlassCard } from "@/components/shared/glass-card";
@@ -61,6 +61,7 @@ export function ZettelReaderPane({
   );
   const [draft, setDraft] = useState(initialDraft);
   const [isSaving, setIsSaving] = useState(false);
+  const [propertiesOpen, setPropertiesOpen] = useState(true);
   const activeDraft = draft.key === draftKey ? draft : initialDraft;
   const form = activeDraft.form;
   const signature = JSON.stringify(form);
@@ -121,8 +122,8 @@ export function ZettelReaderPane({
             <Tag value={typeLabel} variant="neutral" />
             {documentKindLabel ? <Tag value={documentKindLabel} variant="neutral" /> : null}
             {form.status ? <Tag value={statusLabel} variant="status" /> : null}
-            <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              {dirty ? "unsaved" : mode === "new" ? "new" : "saved"}
+            <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] tracking-[0.08em] text-muted-foreground">
+              {dirty ? "저장 전" : mode === "new" ? "새 메모" : "저장됨"}
             </span>
           </div>
           <input
@@ -134,6 +135,15 @@ export function ZettelReaderPane({
           <ZettelRecallStrip form={form} zettel={zettel} />
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            aria-pressed={propertiesOpen}
+            className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8"
+            onClick={() => setPropertiesOpen((open) => !open)}
+            type="button"
+          >
+            <Settings2 className="h-4 w-4" />
+            {propertiesOpen ? "속성 닫기" : "속성 열기"}
+          </button>
           {mode === "new" && onCancelNew ? (
             <button
               className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8"
@@ -177,7 +187,7 @@ export function ZettelReaderPane({
       </div>
 
       <label className="mt-5 block">
-        <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">Summary</span>
+        <span className="mb-2 block text-xs tracking-[0.08em] text-muted-foreground">요약</span>
         <textarea
           className="input-base min-h-32 resize-y leading-6"
           onChange={(event) => patchForm({ summary: event.target.value })}
@@ -192,32 +202,46 @@ export function ZettelReaderPane({
   const propertiesPanel = (
     <ZettelPropertiesPanel
       categoryOptions={categoryOptions}
+      className="h-fit"
       form={form}
       onChange={patchForm}
     />
   );
+  const sourcePropertiesRail =
+    mode === "existing" && zettel ? (
+      <div className="hidden xl:block">
+        <ZettelSourcePropertiesPanel compact form={form} onChange={patchForm} sourceDocument={zettel.sourceDocument} />
+      </div>
+    ) : null;
+  const sourcePropertiesMobile =
+    propertiesOpen && mode === "existing" && zettel ? (
+      <div className="xl:hidden">
+        <ZettelSourcePropertiesPanel compact form={form} onChange={patchForm} sourceDocument={zettel.sourceDocument} />
+      </div>
+    ) : null;
+  const relationsPanel = mode === "existing" && zettel ? <ZettelRelationsPanel onChanged={onRelationsChanged} refreshKey={contextRefreshKey} zettelId={zettel.id} /> : null;
+  const writingGridClassName = propertiesOpen
+    ? "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]"
+    : "grid items-start gap-4";
+  const propertyRail = propertiesOpen ? (
+    <aside className="min-w-0 space-y-4 xl:sticky xl:top-4 xl:row-span-2 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:pr-1">
+      {propertiesPanel}
+      {sourcePropertiesRail}
+    </aside>
+  ) : null;
 
   return (
     <div className="space-y-4">
-      {mode === "new" ? (
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-          <div className="min-w-0 space-y-4">
-            {titleSummaryCard}
-            <MarkdownEditor onChange={(content) => patchForm({ content })} value={form.content} />
-          </div>
-          {propertiesPanel}
-        </div>
-      ) : (
-        <>
-          {titleSummaryCard}
+      <div className={writingGridClassName}>
+        <div className="min-w-0">{titleSummaryCard}</div>
+        {propertyRail}
+        <div className="min-w-0">
           <MarkdownEditor onChange={(content) => patchForm({ content })} value={form.content} />
-          {propertiesPanel}
-        </>
-      )}
+        </div>
+        {sourcePropertiesMobile}
+      </div>
 
-      {mode === "existing" && zettel ? <ZettelSourcePropertiesPanel form={form} onChange={patchForm} sourceDocument={zettel.sourceDocument} /> : null}
-
-      {mode === "existing" && zettel ? <ZettelRelationsPanel onChanged={onRelationsChanged} refreshKey={contextRefreshKey} zettelId={zettel.id} /> : null}
+      {relationsPanel}
     </div>
   );
 }
@@ -236,8 +260,8 @@ function ZettelRecallStrip({ form, zettel }: { form: ZettelFormState; zettel?: Z
     { label: "주기", value: cadenceLabel },
     { label: "다음 검토", value: formatDateForDisplay(form.reviewDueAt) },
     { label: "원본일", value: formatDateForDisplay(form.originalCreatedAt) },
-    { label: "Backlinks", value: zettel?.backlinks.length ? String(zettel.backlinks.length) : "" },
-    { label: "Outgoing", value: zettel?.outgoingLinks.length ? String(zettel.outgoingLinks.length) : "" },
+    { label: "역링크", value: zettel?.backlinks.length ? String(zettel.backlinks.length) : "" },
+    { label: "연결", value: zettel?.outgoingLinks.length ? String(zettel.outgoingLinks.length) : "" },
   ].filter((pill) => pill.value);
   const tags = form.tags.filter(Boolean).slice(0, 6);
   const aliases = form.aliases.filter(Boolean).slice(0, 4);
