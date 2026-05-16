@@ -24,7 +24,7 @@ type D1Envelope<T> = {
 function getRequiredEnv(name: string) {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`${name} is not configured.`);
+    throw new Error(`${name} 환경 변수가 설정되지 않았습니다.`);
   }
 
   return value;
@@ -54,13 +54,13 @@ export async function queryD1<T>(sql: string, params: unknown[] = []) {
   const payload = (await response.json()) as D1Envelope<T>;
 
   if (!response.ok || payload.success === false) {
-    const message = payload.errors?.map((error) => error.message).filter(Boolean).join(" | ") || "D1 query failed.";
+    const message = payload.errors?.map((error) => error.message).filter(Boolean).join(" | ") || "D1 쿼리에 실패했습니다.";
     throw new Error(message);
   }
 
   const result = payload.result?.[0];
   if (!result || result.success === false) {
-    throw new Error("D1 returned an empty result.");
+    throw new Error("D1 응답이 비어 있습니다.");
   }
 
   return {

@@ -5,21 +5,21 @@ import { cn } from "@/lib/utils/cn";
 import { RelationKindBadge } from "@/components/shared/context/relation-evidence-card";
 
 const TYPE_LABELS: Record<ContextNode["type"], string> = {
-  project: "Project",
-  task: "Task",
-  zettel: "Zettel",
-  media: "Media",
-  person: "Person",
-  daily_log: "Day",
-  daily_entry: "Daily Entry",
-  workout: "Workout",
-  career: "Career",
-  gift: "Gift",
-  interaction: "Interaction",
-  place: "Place",
-  asset: "Asset",
-  source_document: "Record",
-  tag: "Tag",
+  project: "프로젝트",
+  task: "작업",
+  zettel: "지식",
+  media: "미디어",
+  person: "사람",
+  daily_log: "하루",
+  daily_entry: "개별 기록",
+  workout: "운동",
+  career: "커리어",
+  gift: "선물",
+  interaction: "상호작용",
+  place: "장소",
+  asset: "자산",
+  source_document: "원본",
+  tag: "태그",
 };
 
 export function ContextNodeCard({
@@ -33,7 +33,7 @@ export function ContextNodeCard({
   onOpen?: (node: ContextNode) => void;
   compact?: boolean;
 }) {
-  const identityLabel = node.disambiguationLabel ?? (node.type === "person" && node.sourceDocumentId ? `record ${node.sourceDocumentId}` : node.subtitle);
+  const identityLabel = node.disambiguationLabel ?? (node.type === "person" && node.sourceDocumentId ? "원본 문서 연결됨" : node.subtitle);
   const content = (
     <>
       <div className="flex min-w-0 items-start justify-between gap-3">
@@ -46,7 +46,7 @@ export function ContextNodeCard({
           ) : null}
         </div>
         {node.tone === "warning" ? (
-          <span className="shrink-0 rounded-full border border-[hsl(var(--color-feedback-warning)/0.24)] bg-[hsl(var(--color-feedback-warning)/0.1)] px-2 py-0.5 text-[10px] text-[hsl(var(--color-feedback-warning))]">
+        <span className="shrink-0 rounded-md border border-[hsl(var(--color-feedback-warning)/0.24)] bg-[hsl(var(--color-feedback-warning)/0.1)] px-2 py-0.5 text-[10px] text-[hsl(var(--color-feedback-warning))]">
             검토
           </span>
         ) : null}
@@ -66,7 +66,7 @@ export function ContextNodeCard({
     return (
       <button
         aria-label={`${node.title} 열기`}
-        className={cn("focus-ring min-h-11 w-full rounded-md border border-white/10 bg-white/5 p-3 text-left transition hover:bg-white/8", compact && "p-2")}
+        className={cn("focus-ring min-h-11 w-full rounded-md border border-white/10 bg-white/5 p-3 text-left hover:bg-white/8", compact && "p-2")}
         onClick={() => onOpen(node)}
         type="button"
       >
@@ -76,7 +76,7 @@ export function ContextNodeCard({
   }
 
   return (
-    <Link aria-label={`${node.title} 열기`} className={cn("focus-ring block min-h-11 rounded-md border border-white/10 bg-white/5 p-3 transition hover:bg-white/8", compact && "p-2")} href={node.href}>
+    <Link aria-label={`${node.title} 열기`} className={cn("focus-ring block min-h-11 rounded-md border border-white/10 bg-white/5 p-3 hover:bg-white/8", compact && "p-2")} href={node.href}>
       {content}
     </Link>
   );

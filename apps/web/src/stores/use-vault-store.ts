@@ -21,6 +21,12 @@ type VaultState = {
   assets: AssetMock[];
   places: PlaceMock[];
   replaceSnapshot: (snapshot: Pick<VaultState, "selectedZettelId" | "zettels" | "media" | "assets" | "places">) => void;
+  replaceMedia: (media: MediaMock[]) => void;
+  replaceAssets: (assets: AssetMock[]) => void;
+  replacePlaces: (places: PlaceMock[]) => void;
+  upsertMedia: (media: MediaMock) => void;
+  upsertAsset: (asset: AssetMock) => void;
+  upsertPlace: (place: PlaceMock) => void;
   selectZettel: (id: string) => void;
   updateZettelContent: (id: string, content: string) => void;
   updateZettelTitle: (id: string, title: string) => void;
@@ -46,6 +52,27 @@ export const useVaultStore = create<VaultState>()(
           assets: snapshot.assets,
           places: snapshot.places,
         }),
+      replaceMedia: (media) => set({ media }),
+      replaceAssets: (assets) => set({ assets }),
+      replacePlaces: (places) => set({ places }),
+      upsertMedia: (media) =>
+        set((state) => ({
+          media: state.media.some((item) => item.id === media.id)
+            ? state.media.map((item) => (item.id === media.id ? media : item))
+            : [media, ...state.media],
+        })),
+      upsertAsset: (asset) =>
+        set((state) => ({
+          assets: state.assets.some((item) => item.id === asset.id)
+            ? state.assets.map((item) => (item.id === asset.id ? asset : item))
+            : [asset, ...state.assets],
+        })),
+      upsertPlace: (place) =>
+        set((state) => ({
+          places: state.places.some((item) => item.id === place.id)
+            ? state.places.map((item) => (item.id === place.id ? place : item))
+            : [place, ...state.places],
+        })),
       selectZettel: (id) => set({ selectedZettelId: id }),
       updateZettelContent: (id, content) =>
         set((state) => ({

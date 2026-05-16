@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 
 import { Person360Client } from "@/components/prm/person-360-client";
-import { getPRMPerson } from "@/lib/server/prm";
+import { compactContextBundleForPage } from "@/lib/context/compact-bundle";
 import { getContextBundle } from "@/lib/server/context";
+import { getPRMPerson } from "@/lib/server/prm";
 
 export default async function PersonDeepLinkPage({
   params,
@@ -14,5 +15,5 @@ export default async function PersonDeepLinkPage({
 
   if (!person) notFound();
 
-  return <Person360Client bundle={bundle} />;
+  return <Person360Client bundle={compactContextBundleForPage(bundle, { edgeLimit: 36, nodePreviewLength: 80, snippetLength: 80 })} />;
 }

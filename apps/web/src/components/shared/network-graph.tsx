@@ -44,7 +44,7 @@ export function NetworkGraph({
     <div className={cn("rounded-lg border border-white/10 bg-black/10 p-4", className)}>
       <div className="flex flex-wrap gap-2">
         {nodes.map((node) => (
-          <span className={cn("rounded-full border px-3 py-1.5 text-xs", toneClasses[node.tone ?? (edgeSet.has(node.id) ? "gold" : "muted")])} key={node.id}>
+          <span className={cn("rounded-md border px-3 py-1.5 text-xs", toneClasses[node.tone ?? (edgeSet.has(node.id) ? "gold" : "muted")])} key={node.id}>
             {node.label}
           </span>
         ))}
@@ -56,7 +56,7 @@ export function NetworkGraph({
               <span>{edge.source}</span>
               <span className="text-primary">→</span>
               <span>{edge.target}</span>
-              {edge.label ? <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">{edge.label}</span> : null}
+              {edge.label ? <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5">{edge.label}</span> : null}
             </div>
           ))}
         </div>

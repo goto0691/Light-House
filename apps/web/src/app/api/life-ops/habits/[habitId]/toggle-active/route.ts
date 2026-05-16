@@ -5,8 +5,8 @@ import { toggleHabitActive } from "@/lib/server/life-ops";
 
 export async function POST(_: Request, { params }: { params: Promise<{ habitId: string }> }) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   const { habitId } = await params;
-  const snapshot = await toggleHabitActive(habitId);
-  return NextResponse.json({ snapshot });
+  const delta = await toggleHabitActive(habitId);
+  return NextResponse.json({ delta });
 }

@@ -19,7 +19,7 @@ export const PERSON_PROPERTY_GROUPS: PropertyGroupDefinition[] = [
   { key: "domain", label: "관계 리듬", defaultOpen: true },
   { key: "dates", label: "기념일", defaultOpen: true },
   { key: "source", label: "연락처", defaultOpen: true },
-  { key: "review", label: "메모", defaultOpen: true },
+  { key: "review", label: "프로필", defaultOpen: true },
 ];
 
 export const PERSON_PROPERTY_DEFINITIONS: PropertyDefinition[] = [
@@ -136,12 +136,12 @@ export const PERSON_PROPERTY_DEFINITIONS: PropertyDefinition[] = [
     key: "person.birthdayMemo",
     entityType: "person",
     field: "birthdayMemo",
-    label: "생일 메모",
+    label: "생일 기록",
     group: "dates",
     valueType: "text",
     display: "text",
     defaultVisibleInDetail: true,
-    sourceAliases: ["birthday memo", "생일 메모"],
+    sourceAliases: ["birthday memo", "생일 메모", "생일 기록"],
   },
   {
     key: "person.phone",

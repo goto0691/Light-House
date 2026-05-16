@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ContextNodeCard } from "@/components/shared/context/context-node-card";
-import { RelationEvidenceCard } from "@/components/shared/context/relation-evidence-card";
+import { displayRelationLabel, RelationEvidenceCard } from "@/components/shared/context/relation-evidence-card";
 import type { ContextBundle, ContextEdge, ContextLensKey, ContextNode } from "@/lib/context/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -56,6 +56,7 @@ export function ContextRail({
   const nodes = pagedNodes[lens] ?? nodesForLens(bundle, lens);
   const currentPage = pagination[lens];
   const isAccordion = density === "accordion";
+  const edgeCount = bundle.summary?.edgeCount ?? bundle.edges.length;
 
   useEffect(() => {
     setIsOpen(density === "rail");
@@ -77,7 +78,7 @@ export function ContextRail({
         limit: String(page.limit),
       });
       const response = await fetch(`/api/context/${bundle.focus.type}/${encodeURIComponent(bundle.focus.id)}?${params.toString()}`, { cache: "no-store" });
-      if (!response.ok) throw new Error("context pagination failed");
+      if (!response.ok) throw new Error("맥락을 더 불러오지 못했습니다.");
       const payload = (await response.json()) as { bundle: ContextBundle };
       const nextNodes = nodesForLens(payload.bundle, lens);
       setPagedNodes((current) => ({
@@ -117,14 +118,14 @@ export function ContextRail({
           type="button"
         >
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-primary">Context</p>
+            <p className="text-[10px] tracking-[0.08em] text-primary">맥락</p>
             <h3 className="mt-1 truncate text-base font-semibold text-foreground">{bundle.focus.title}</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              {bundle.edges.length} edges · {bundle.quality.unresolvedCount} review
+              연결 {edgeCount}개 · 검토 {bundle.quality.unresolvedCount}개
             </p>
           </div>
           {bundle.quality.lowConfidenceCount ? (
-            <span className="rounded-full border border-[hsl(var(--color-feedback-warning)/0.24)] bg-[hsl(var(--color-feedback-warning)/0.1)] px-2 py-1 text-[10px] text-[hsl(var(--color-feedback-warning))]">
+            <span className="rounded-md border border-[hsl(var(--color-feedback-warning)/0.24)] bg-[hsl(var(--color-feedback-warning)/0.1)] px-2 py-1 text-[10px] text-[hsl(var(--color-feedback-warning))]">
               {bundle.quality.lowConfidenceCount}
             </span>
           ) : null}
@@ -133,7 +134,7 @@ export function ContextRail({
           {LENSES.map((item) => (
             <button
               className={cn(
-                "focus-ring min-h-11 rounded-full border px-3 text-[11px] transition",
+                "focus-ring min-h-11 rounded-md border px-3 text-[11px]",
                 lens === item.key ? "border-primary/30 bg-primary/12 text-primary" : "border-white/10 bg-black/10 text-muted-foreground hover:bg-white/6 hover:text-foreground",
               )}
               key={item.key}
@@ -157,12 +158,12 @@ export function ContextRail({
             />
           ))
         ) : (
-          <div className="rounded-lg border border-dashed border-white/15 bg-white/5 p-4 text-sm text-muted-foreground">이 lens에는 아직 연결된 항목이 없습니다.</div>
+          <div className="rounded-lg border border-dashed border-white/15 bg-white/5 p-4 text-sm text-muted-foreground">이 보기에는 아직 연결된 항목이 없습니다.</div>
         )}
         {currentPage?.hasMore ? (
           <div ref={sentinelRef} className="pt-1">
             <button
-              className="focus-ring min-h-11 w-full rounded-md border border-white/10 bg-black/10 px-3 text-xs text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:opacity-50"
+              className="focus-ring min-h-11 w-full rounded-md border border-white/10 bg-black/10 px-3 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:opacity-50"
               disabled={isLoadingMore}
               onClick={() => void loadMore()}
               type="button"
@@ -175,19 +176,19 @@ export function ContextRail({
 
       {bundle.edges.length ? (
         <section className={cn("rounded-lg border border-white/10 bg-white/5 p-3", isAccordion && !isOpen && "hidden")}>
-          <p className="text-[10px] uppercase tracking-[0.18em] text-primary">Evidence</p>
+          <p className="text-[10px] tracking-[0.08em] text-primary">근거</p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {bundle.edges.slice(0, 6).map((edge) => (
               <button
                 className={cn(
-                  "focus-ring min-h-11 rounded-full border px-3 text-[11px] transition",
+                  "focus-ring min-h-11 rounded-md border px-3 text-[11px]",
                   selectedEdge?.id === edge.id ? "border-primary/30 bg-primary/12 text-primary" : "border-white/10 bg-black/10 text-muted-foreground hover:bg-white/6",
                 )}
                 key={edge.id}
                 onClick={() => setSelectedEdge(edge)}
                 type="button"
               >
-                {edge.label}
+                {displayRelationLabel(edge.label)}
               </button>
             ))}
           </div>
@@ -196,7 +197,7 @@ export function ContextRail({
               <RelationEvidenceCard edge={selectedEdge} />
               {selectedEdge.kind === "explicit" && onDetachEdge ? (
                 <button
-                  className="focus-ring min-h-11 w-full rounded-md border border-[hsl(var(--color-feedback-danger)/0.22)] bg-[hsl(var(--color-feedback-danger)/0.08)] px-3 text-xs text-[hsl(var(--color-feedback-danger))] transition hover:bg-[hsl(var(--color-feedback-danger)/0.14)]"
+                  className="focus-ring min-h-11 w-full rounded-md border border-[hsl(var(--color-feedback-danger)/0.22)] bg-[hsl(var(--color-feedback-danger)/0.08)] px-3 text-xs text-[hsl(var(--color-feedback-danger))] hover:bg-[hsl(var(--color-feedback-danger)/0.14)]"
                   onClick={() => onDetachEdge(selectedEdge)}
                   type="button"
                 >

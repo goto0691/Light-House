@@ -21,7 +21,7 @@ export function TaskCard({ projectId, task }: { projectId?: string; task: TaskMo
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 inline-flex h-10 w-1.5 rounded-full bg-white/10 transition [@media(hover:hover)]:group-hover:bg-primary/60" />
+          <span className="mt-0.5 inline-flex h-10 w-1.5 rounded-sm bg-primary/55" />
           <div className="min-w-0">
             <p className="text-[11px] tracking-[0.08em] text-muted-foreground">{optionLabel(TASK_KIND_OPTIONS, task.kind, task.kind)}</p>
             <h3 className="text-pretty mt-1 line-clamp-2 text-sm font-medium text-foreground">{task.title}</h3>
@@ -34,11 +34,11 @@ export function TaskCard({ projectId, task }: { projectId?: string; task: TaskMo
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <Tag value={task.brainEnergy} variant="energy" />
-        {task.dueAt ? <span className="tabular-nums rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] tracking-[0.08em] text-muted-foreground">{task.dueAt}</span> : null}
+        {task.dueAt ? <span className="tabular-nums rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] tracking-[0.08em] text-muted-foreground">{task.dueAt}</span> : null}
       </div>
 
-      <div className="mt-4 rounded-full bg-black/10 p-1">
-        <div className="h-1.5 rounded-full bg-primary/75 transition-all duration-300" style={{ width: `${progress}%` }} />
+      <div className="mt-4 rounded-md bg-black/10 p-1">
+        <div className="h-1.5 rounded-sm bg-primary/75" style={{ width: `${progress}%` }} />
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3 text-xs text-muted-foreground">

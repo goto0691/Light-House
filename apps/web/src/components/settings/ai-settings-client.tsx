@@ -37,19 +37,19 @@ export function AISettingsClient({ initial }: AISettingsClientProps) {
         <p className="text-xs uppercase tracking-[0.24em] text-primary">AI</p>
         <h1 className="mt-3 font-display text-4xl text-foreground">라우팅 설정</h1>
         <div className="mt-5 space-y-4">
-          <label className="flex items-center justify-between rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-foreground">
+          <label className="flex items-center justify-between rounded-md border border-white/10 bg-white/5 px-4 py-3 text-sm text-foreground">
             <span>AI 기능 활성화</span>
             <input checked={isEnabled} onChange={(event) => setIsEnabled(event.target.checked)} type="checkbox" />
           </label>
 
-          <label className="block rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted-foreground">
-            <span className="block">Confidence Threshold: {threshold.toFixed(2)}</span>
+          <label className="block rounded-md border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted-foreground">
+            <span className="block">자동 라우팅 신뢰도 기준: {threshold.toFixed(2)}</span>
             <input className="mt-3 w-full" max="0.95" min="0.4" onChange={(event) => setThreshold(Number(event.target.value))} step="0.05" type="range" value={threshold} />
           </label>
 
-          <label className="block space-y-2 rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted-foreground">
-            <span className="block">Fallback Model</span>
-            <select className="w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-foreground" onChange={(event) => setFallbackModel(event.target.value)} value={fallbackModel}>
+          <label className="block space-y-2 rounded-md border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted-foreground">
+            <span className="block">대체 모델</span>
+            <select className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-foreground" onChange={(event) => setFallbackModel(event.target.value)} value={fallbackModel}>
               <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash-Lite</option>
               <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
               <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
@@ -58,7 +58,7 @@ export function AISettingsClient({ initial }: AISettingsClientProps) {
           </label>
 
           <button
-            className="rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
             disabled={isPending}
             onClick={() => {
               startTransition(async () => {
@@ -96,7 +96,7 @@ export function AISettingsClient({ initial }: AISettingsClientProps) {
       <div className="space-y-4">
         <div className="mt-5 flex flex-wrap gap-2">
           <button
-            className="rounded-2xl border border-white/10 px-3 py-2 text-sm text-foreground"
+            className="rounded-md border border-white/10 px-3 py-2 text-sm text-foreground"
             disabled={isPending}
             onClick={() => {
               startTransition(async () => {
@@ -151,7 +151,7 @@ export function AISettingsClient({ initial }: AISettingsClientProps) {
             오늘 요약 생성
           </button>
           <button
-            className="rounded-2xl border border-white/10 px-3 py-2 text-sm text-foreground"
+            className="rounded-md border border-white/10 px-3 py-2 text-sm text-foreground"
             disabled={isPending}
             onClick={() => {
               startTransition(async () => {

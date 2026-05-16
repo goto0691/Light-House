@@ -52,13 +52,13 @@ export function NotificationCenter() {
       onClose={close}
       panelClassName="max-w-[520px]"
       subtitle="자동화, 관계 리마인더, 시스템 후속 작업을 여기서 확인합니다."
-      title="Notifications"
+      title="알림"
     >
       <div className="space-y-4 p-5">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">최근 자동화와 시스템 알림을 확인합니다.</p>
           <button
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 px-3 py-2 text-sm text-foreground disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-foreground disabled:opacity-60"
             disabled={isPending}
             onClick={() => {
               startTransition(async () => {
@@ -88,7 +88,7 @@ export function NotificationCenter() {
           {items.length ? (
             items.map((item) => (
               <button
-                className="focus-ring block w-full rounded-3xl border border-white/10 bg-white/5 p-4 text-left transition [@media(hover:hover)]:hover:bg-white/8"
+                className="focus-ring block w-full rounded-lg border border-white/10 bg-white/5 p-4 text-left [@media(hover:hover)]:hover:bg-white/8"
                 key={item.id}
                 onClick={() => {
                   startTransition(async () => {

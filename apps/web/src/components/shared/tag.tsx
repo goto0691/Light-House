@@ -56,7 +56,7 @@ export function Tag({ variant, value, size = "sm", icon: Icon, removable = false
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border font-medium uppercase tracking-[0.16em]",
+        "inline-flex items-center gap-1.5 rounded-md border font-medium uppercase tracking-[0.16em]",
         size === "sm" ? "px-2.5 py-1 text-[10px]" : "px-3 py-1.5 text-[11px]",
         getTone(variant, value),
         className,
@@ -68,7 +68,7 @@ export function Tag({ variant, value, size = "sm", icon: Icon, removable = false
       {removable ? (
         <button
           aria-label={`${label} 제거`}
-          className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-black/10 transition hover:bg-black/20"
+          className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-black/10 hover:bg-black/20"
           onClick={onRemove}
           type="button"
         >
@@ -100,6 +100,10 @@ function getTagLabel(value: string) {
     area: "영역",
     paused: "보류",
     archived: "보관",
+    "layer 5": "핵심 5",
+    "layer 15": "친밀 15",
+    "layer 50": "친구 50",
+    "layer 150": "느슨한 150",
   };
   return labels[normalized] ?? value.replaceAll("_", " ");
 }

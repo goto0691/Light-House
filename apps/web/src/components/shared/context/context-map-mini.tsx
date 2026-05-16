@@ -23,13 +23,14 @@ function toneClass(node: ContextNode) {
 export function ContextMapMini({ bundle, className, onOpenNode }: { bundle: ContextBundle; className?: string; onOpenNode?: (node: ContextNode) => void }) {
   const visibleNodes = [bundle.focus, ...bundle.nodes.filter((node) => !(node.type === bundle.focus.type && node.id === bundle.focus.id)).slice(0, 10)];
   const positions = new Map(visibleNodes.map((node, index) => [`${node.type}:${node.id}`, positionFor(index, visibleNodes.length)]));
+  const edgeCount = bundle.summary?.edgeCount ?? bundle.edges.length;
 
   return (
     <section className={cn("rounded-lg border border-white/10 bg-white/5 p-4", className)}>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-primary">Context Map</p>
-          <p className="mt-1 text-xs text-muted-foreground">{bundle.edges.length} edges</p>
+          <p className="text-xs tracking-[0.08em] text-primary">맥락 지도</p>
+          <p className="mt-1 text-xs text-muted-foreground">연결 {edgeCount}개</p>
         </div>
       </div>
       <div className="relative mt-4 aspect-[4/3] overflow-hidden rounded-lg border border-white/10 bg-black/15">
@@ -59,7 +60,7 @@ export function ContextMapMini({ bundle, className, onOpenNode }: { bundle: Cont
             <button
               aria-label={`${node.title} 열기`}
               className={cn(
-                "focus-ring absolute grid h-10 w-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border text-[10px] font-semibold text-foreground shadow-sm transition hover:scale-105",
+                "focus-ring absolute grid h-10 w-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border text-[10px] font-semibold text-foreground shadow-sm",
                 toneClass(node),
                 isFocus && "h-12 w-12 border-primary bg-primary/20 text-primary",
               )}

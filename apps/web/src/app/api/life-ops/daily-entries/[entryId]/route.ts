@@ -18,8 +18,8 @@ export async function POST(request: Request, context: { params: Promise<{ entryI
   try {
     const body = (await request.json()) as Body;
     const { entryId } = await context.params;
-    return NextResponse.json({ snapshot: await updateDailyEntry(entryId, body) });
+    return NextResponse.json({ delta: await updateDailyEntry(entryId, body) });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Daily entry update failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "일일 기록 저장에 실패했습니다." }, { status: 500 });
   }
 }

@@ -125,7 +125,7 @@
 
 html {
   color-scheme: dark;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
 }
 
 :root[data-theme="light"] {
@@ -512,19 +512,8 @@ button {
 }
 
 .skeleton-shimmer {
-  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.5s ease-in-out infinite;
-}
-
-@keyframes skeleton-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-
-  100% {
-    background-position: -200% 0;
-  }
+  background: hsl(var(--color-surface-overlay) / 0.66);
+  box-shadow: inset 0 1px 0 0 hsl(var(--glass-highlight));
 }
 
 .surface-raised {
@@ -553,7 +542,7 @@ button {
   border: 1px solid hsl(var(--border));
   background: hsl(var(--color-surface-sunken) / 0.92);
   color: hsl(var(--foreground));
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   padding: 0.875rem 1rem;
   outline: none;
   transition:

@@ -6,16 +6,17 @@ import { CheckSquare, Clapperboard, FileText, Link2, Search, Trash2, UserRound }
 import { toast } from "sonner";
 
 import { GlassCard } from "@/components/shared/glass-card";
+import { displayRelationLabel } from "@/components/shared/context/relation-evidence-card";
 import type { ContextBundle, ContextEdge, ContextNode, ContextSearchResult, EntityType } from "@/lib/context/types";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
+import type { ZettelMock } from "@/lib/mock/vault";
 import { cn } from "@/lib/utils/cn";
-import { useVaultStore } from "@/stores/use-vault-store";
 
 type AttachTargetType = Extract<EntityType, "person" | "media" | "zettel" | "task">;
 
 type ZettelRelationsPanelProps = {
   zettelId: string;
   onChanged?: () => void;
+  onZettelsChange?: (zettels: ZettelMock[]) => void;
   refreshKey?: number | string;
 };
 
@@ -37,7 +38,7 @@ type SearchState = {
 const ATTACH_TARGETS: Array<{ value: AttachTargetType; label: string }> = [
   { value: "person", label: "사람" },
   { value: "media", label: "미디어" },
-  { value: "zettel", label: "메모" },
+  { value: "zettel", label: "지식" },
   { value: "task", label: "작업" },
 ];
 
@@ -53,11 +54,10 @@ const TYPE_LABELS: Record<AttachTargetType, string> = {
   media: "미디어",
   person: "사람",
   task: "작업",
-  zettel: "메모",
+  zettel: "지식",
 };
 
-export function ZettelRelationsPanel({ zettelId, onChanged, refreshKey }: ZettelRelationsPanelProps) {
-  const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
+export function ZettelRelationsPanel({ zettelId, onChanged, onZettelsChange, refreshKey }: ZettelRelationsPanelProps) {
   const [bundleState, setBundleState] = useState<BundleState | null>(null);
   const [errorState, setErrorState] = useState<ErrorState | null>(null);
   const [query, setQuery] = useState("");
@@ -96,7 +96,7 @@ export function ZettelRelationsPanel({ zettelId, onChanged, refreshKey }: Zettel
         setErrorState(null);
       })
       .catch((reason: unknown) => {
-        if (!controller.signal.aborted) setErrorState({ message: reason instanceof Error ? reason.message : "relation load failed", zettelId });
+        if (!controller.signal.aborted) setErrorState({ message: reason instanceof Error ? reason.message : "관계 불러오기에 실패했습니다.", zettelId });
       });
     return () => controller.abort();
   }, [localRefreshKey, refreshKey, zettelId]);
@@ -112,7 +112,7 @@ export function ZettelRelationsPanel({ zettelId, onChanged, refreshKey }: Zettel
       try {
         const params = new URLSearchParams({ q: trimmedQuery, types: targetType });
         const response = await fetch(`/api/context/search?${params.toString()}`, { signal: controller.signal });
-        if (!response.ok) throw new Error("relation search failed");
+        if (!response.ok) throw new Error("관계 검색에 실패했습니다.");
         const payload = (await response.json()) as { results: ContextSearchResult[] };
         setSearchState({
           key: currentSearchKey,
@@ -134,7 +134,7 @@ export function ZettelRelationsPanel({ zettelId, onChanged, refreshKey }: Zettel
     return [
       { key: "people", label: "사람", nodes: bundle.grouped.people },
       { key: "media", label: "미디어", nodes: bundle.grouped.media },
-      { key: "zettels", label: "연결 메모", nodes: bundle.grouped.zettels },
+      { key: "zettels", label: "연결 지식", nodes: bundle.grouped.zettels },
       { key: "projects", label: "작업", nodes: bundle.grouped.projects },
     ];
   }, [bundle]);
@@ -145,18 +145,15 @@ export function ZettelRelationsPanel({ zettelId, onChanged, refreshKey }: Zettel
     setMutatingKey(`attach:${result.type}:${result.id}`);
     try {
       if (result.type === "zettel") {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-          "/api/vault/zettel-links",
-          { context: relationLabel, sourceId: zettelId, targetId: result.id },
-          replaceSnapshot,
-        );
+        const payload = await postZettelRelationMutation("/api/vault/zettel-links", { context: relationLabel, sourceId: zettelId, targetId: result.id });
+        onZettelsChange?.(payload.zettels ?? []);
       } else {
         const response = await fetch("/api/context/edges", {
           body: JSON.stringify(edgePayload(zettelId, result, relationLabel)),
           headers: { "Content-Type": "application/json" },
           method: "POST",
         });
-        if (!response.ok) throw new Error("relation attach failed");
+        if (!response.ok) throw new Error("관계 연결 요청에 실패했습니다.");
       }
       await loadBundle();
       setQuery("");
@@ -176,15 +173,12 @@ export function ZettelRelationsPanel({ zettelId, onChanged, refreshKey }: Zettel
     try {
       const zettelLinkId = getZettelLinkId(edge);
       if (zettelLinkId) {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-          `/api/vault/zettel-links/${encodeURIComponent(zettelLinkId)}/delete`,
-          undefined,
-          replaceSnapshot,
-        );
+        const payload = await postZettelRelationMutation(`/api/vault/zettel-links/${encodeURIComponent(zettelLinkId)}/delete`);
+        onZettelsChange?.(payload.zettels ?? []);
       } else {
         const params = new URLSearchParams({ focusId: zettelId, focusType: "zettel" });
         const response = await fetch(`/api/context/edges/${encodeURIComponent(edge.id)}?${params.toString()}`, { method: "DELETE" });
-        if (!response.ok) throw new Error("relation detach failed");
+        if (!response.ok) throw new Error("관계 해제 요청에 실패했습니다.");
       }
       await loadBundle();
       onChanged?.();
@@ -203,10 +197,10 @@ export function ZettelRelationsPanel({ zettelId, onChanged, refreshKey }: Zettel
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Link2 className="h-4 w-4 text-primary" />
-          <p className="text-xs uppercase tracking-[0.2em] text-primary">Relations</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-primary">관계</p>
         </div>
         <span className="rounded-md border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          {relationCount} linked
+          연결 {relationCount}
         </span>
       </div>
 
@@ -216,7 +210,7 @@ export function ZettelRelationsPanel({ zettelId, onChanged, refreshKey }: Zettel
             {ATTACH_TARGETS.map((item) => (
               <button
                 className={cn(
-                  "focus-ring min-h-9 rounded px-2.5 text-xs transition",
+                  "focus-ring min-h-9 rounded px-2.5 text-xs",
                   targetType === item.value ? "bg-primary/12 text-primary" : "text-muted-foreground hover:bg-white/8 hover:text-foreground",
                 )}
                 key={item.value}
@@ -255,10 +249,10 @@ export function ZettelRelationsPanel({ zettelId, onChanged, refreshKey }: Zettel
                   <div className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 px-3 py-3" key={`${result.type}:${result.id}`}>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">{result.title}</p>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">{result.subtitle ?? result.type}</p>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{searchResultSubtitle(result)}</p>
                     </div>
                     <button
-                      className="focus-ring shrink-0 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                      className="focus-ring shrink-0 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={alreadyLinked || mutatingKey !== null}
                       onClick={() => void attach(result)}
                       type="button"
@@ -341,12 +335,12 @@ function RelationNodeRow({
           {iconForType(node.type)}
           <span className="truncate text-sm font-medium text-foreground">{node.title}</span>
         </span>
-        {node.subtitle ? <span className="mt-1 block truncate text-xs text-muted-foreground">{node.subtitle}</span> : null}
+        {node.subtitle ? <span className="mt-1 block truncate text-xs text-muted-foreground">{relationNodeSubtitle(node.subtitle)}</span> : null}
       </Link>
       {edge ? (
         <button
           aria-label="관계 해제"
-          className="focus-ring inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          className="focus-ring inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
           disabled={mutatingKey !== null}
           onClick={() => void onDetach(edge)}
           type="button"
@@ -356,6 +350,19 @@ function RelationNodeRow({
       ) : null}
     </div>
   );
+}
+
+function searchResultSubtitle(result: ContextSearchResult) {
+  if (result.disambiguationLabel) return result.disambiguationLabel;
+  return relationNodeSubtitle(result.subtitle ?? result.type);
+}
+
+function relationNodeSubtitle(value: string) {
+  const labels: Record<string, string> = {
+    Backlink: "역링크",
+    "Outgoing link": "나가는 링크",
+  };
+  return labels[value] ?? displayRelationLabel(value);
 }
 
 function edgePayload(zettelId: string, target: ContextSearchResult, label: string) {
@@ -420,6 +427,17 @@ function iconForType(type: EntityType) {
 
 async function fetchZettelContextBundle(zettelId: string, signal?: AbortSignal) {
   const response = await fetch(`/api/context/zettel/${encodeURIComponent(zettelId)}`, { cache: "no-store", signal });
-  if (!response.ok) throw new Error("relation load failed");
+  if (!response.ok) throw new Error("관계 불러오기에 실패했습니다.");
   return response.json() as Promise<{ bundle: ContextBundle }>;
+}
+
+async function postZettelRelationMutation(url: string, body?: Record<string, unknown>) {
+  const response = await fetch(url, {
+    body: body ? JSON.stringify(body) : undefined,
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  const payload = (await response.json().catch(() => null)) as { zettels?: ZettelMock[]; error?: string } | null;
+  if (!response.ok) throw new Error(payload?.error ?? "지식 관계 변경에 실패했습니다.");
+  return payload ?? {};
 }

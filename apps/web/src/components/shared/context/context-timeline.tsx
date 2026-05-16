@@ -12,7 +12,7 @@ export function ContextTimeline({ bundle, onOpenNode }: { bundle: ContextBundle;
 
   return (
     <section className="rounded-lg border border-white/10 bg-white/5 p-4">
-      <p className="text-xs uppercase tracking-[0.18em] text-primary">Context Timeline</p>
+      <p className="text-xs tracking-[0.08em] text-primary">맥락 타임라인</p>
       <div className="mt-4 grid gap-3">
         {bundle.timeline.map((item) => (
           <div className="grid gap-2 border-l border-white/10 pl-3" key={`${item.date}:${item.nodes.map((node) => node.id).join(":")}`}>

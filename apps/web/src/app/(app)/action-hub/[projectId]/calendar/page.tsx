@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ProjectCalendarClient } from "@/components/action-hub/project-calendar-client";
-import { getActionHubProject, getActionHubSnapshot } from "@/lib/server/action-hub";
+import { getActionHubProjectDetail } from "@/lib/server/action-hub";
 
 export default async function ProjectCalendarPage({
   params,
@@ -9,11 +9,10 @@ export default async function ProjectCalendarPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const project = await getActionHubProject(projectId);
-  if (!project) notFound();
+  const detail = await getActionHubProjectDetail(projectId);
+  if (!detail) notFound();
 
-  const snapshot = await getActionHubSnapshot();
-  const tasks = snapshot.tasks.filter((task) => task.projectId === projectId && task.dueAt);
+  const tasks = detail.tasks.filter((task) => task.dueAt);
 
-  return <ProjectCalendarClient project={project} tasks={tasks} />;
+  return <ProjectCalendarClient project={detail.project} tasks={tasks} />;
 }

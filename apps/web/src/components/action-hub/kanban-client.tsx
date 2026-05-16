@@ -7,19 +7,21 @@ import { KanbanBoard } from "@/components/action-hub/kanban-board";
 import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
 import { ProjectHeader } from "@/components/action-hub/project-header";
 import { ProjectPropertiesPanel } from "@/components/action-hub/project-properties-panel";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
+import { postDeltaMutation } from "@/lib/snapshot-client";
 import { TaskCard } from "@/components/action-hub/task-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { PageLayout, PageToolbar } from "@/components/shared/page-layout";
-import { useActionHubStore } from "@/stores/use-action-hub-store";
+import { type ActionHubTaskDelta, useActionHubStore } from "@/stores/use-action-hub-store";
+import { useShellStore } from "@/stores/use-shell-store";
 import type { ProjectMock, TaskMock } from "@/lib/mock/action-hub";
 import { TASK_BRAIN_ENERGY_OPTIONS, TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/properties/task";
 
 export function KanbanClient({ project }: { project: ProjectMock }) {
   const [isPending, startTransition] = useTransition();
   const allTasks = useActionHubStore((state) => state.tasks);
-  const replaceSnapshot = useActionHubStore((state) => state.replaceSnapshot);
+  const applyTaskDelta = useActionHubStore((state) => state.applyTaskDelta);
+  const openQuickCapture = useShellStore((state) => state.openQuickCapture);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
@@ -40,17 +42,17 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
         <TaskCard projectId={project.id} task={task} />
         <div className="mt-2 flex justify-end">
           <button
-            className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] tracking-[0.08em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+            className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-[11px] tracking-[0.08em] text-muted-foreground hover:bg-white/8 hover:text-foreground"
             disabled={isPending}
             onClick={() => {
               startTransition(async () => {
                 try {
-                  await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                  await postDeltaMutation<{ delta: ActionHubTaskDelta }, ActionHubTaskDelta>(
                     `/api/action-hub/tasks/${task.id}/cycle-status`,
                     undefined,
-                    replaceSnapshot,
+                    applyTaskDelta,
                   );
-                  toast.success("태스크 상태를 다음 단계로 이동했습니다.");
+                  toast.success("작업 상태를 다음 단계로 이동했습니다.");
                 } catch (error) {
                   toast.error("상태 이동에 실패했습니다.", {
                     description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
@@ -104,7 +106,7 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
               {visibleTasks.length}개 작업
             </span>
           }
-          searchPlaceholder="태스크 제목, 메모, 연결 키워드 검색"
+          searchPlaceholder="작업 제목, 내용, 연결 키워드 검색"
         />
       </PageToolbar>
       <KanbanBoard
@@ -119,7 +121,7 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
           entityType="project"
           mainSlot={() => (
             <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-muted-foreground">
-              이 프로젝트와 연결된 태스크, 사람, Zettel, 날짜 기록을 한 자리에서 탐색합니다.
+              이 프로젝트와 연결된 작업, 사람, 지식, 날짜 기록을 한 자리에서 탐색합니다.
             </div>
           )}
           railDefaultLens="overview"
@@ -130,9 +132,9 @@ export function KanbanClient({ project }: { project: ProjectMock }) {
           cta={{
             label: "빠른 입력",
             hotkey: "Cmd+Shift+N",
-            onClick: () => window.dispatchEvent(new CustomEvent("light-house:open-quick-capture")),
+            onClick: () => openQuickCapture({ domain: "action-hub", label: project.title, projectId: project.id }),
           }}
-          description="필터를 넓히거나 빠른 입력으로 새 태스크를 던져보세요."
+          description="필터를 넓히거나 빠른 입력으로 새 작업을 추가해보세요."
           illustration="task"
           title="이 보드에는 아직 움직이는 카드가 없어요"
         />

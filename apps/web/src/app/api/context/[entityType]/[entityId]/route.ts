@@ -23,11 +23,11 @@ const RELATION_KINDS = new Set<RelationKind>(["explicit", "source", "mention", "
 
 export async function GET(_request: Request, { params }: { params: Promise<{ entityType: string; entityId: string }> }) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   const { entityType, entityId } = await params;
   if (!ENTITY_TYPES.includes(entityType as EntityType)) {
-    return NextResponse.json({ error: "Unsupported entity type" }, { status: 400 });
+    return NextResponse.json({ error: "지원하지 않는 엔티티 유형입니다." }, { status: 400 });
   }
 
   const { searchParams } = new URL(_request.url);

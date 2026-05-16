@@ -18,6 +18,27 @@ export type ActionHubSnapshot = {
   referenceZettels: ActionHubReference[];
 };
 
+export type ActionHubTaskMutationDelta = {
+  project: ProjectMock | null;
+  task: TaskMock;
+};
+
+export type ActionHubProjectMutationDelta = {
+  project: ProjectMock;
+};
+
+export type ActionHubCaptureMutationDelta = {
+  pendingCapture?: PendingCaptureMock;
+  pendingCaptureId?: string;
+  project?: ProjectMock | null;
+  referenceZettel?: ActionHubReference;
+  routedEntity?: {
+    id: string;
+    type: "task" | "zettel";
+  };
+  task?: TaskMock;
+};
+
 export type CaptureContext = {
   domain?: string;
   projectId?: string | null;
@@ -33,8 +54,8 @@ export type CaptureSuggestion = {
     fields: Record<string, string | number | null>;
     confidence: number;
   };
+  delta: ActionHubCaptureMutationDelta;
   taskId?: string;
-  snapshot: ActionHubSnapshot;
 };
 
 type UserRow = { id: string };
@@ -154,6 +175,214 @@ async function refreshProjectProgress(userId: string, projectId: string) {
   );
 }
 
+function projectFromRow(row: ProjectRow): ProjectMock {
+  return {
+    id: row.id,
+    title: row.title,
+    kind: row.kind,
+    status: row.status,
+    category: row.category ?? "미분류",
+    description: row.description ?? "",
+    icon: row.icon ?? "🛟",
+    color: row.color ?? "gold",
+    progress: row.progress ?? 0,
+    targetDate: row.targetDate,
+    dueLabel: formatDueLabel(row.targetDate),
+    recentActivity: formatRecentActivity(row.updatedAt),
+  };
+}
+
+function taskFromRow(
+  row: TaskRow,
+  checklistItems: TaskMock["checklistItems"],
+  linkedPeople: string[],
+  linkedZettels: string[],
+): TaskMock {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    kind: row.kind,
+    status: row.status,
+    priority: row.priority,
+    brainEnergy: row.brainEnergy,
+    dueAt: row.dueAt ?? undefined,
+    checklist: {
+      total: Number(row.checklistTotal ?? 0),
+      completed: Number(row.checklistCompleted ?? 0),
+    },
+    checklistItems,
+    linkedPeople,
+    linkedZettels,
+    content: withDefaultContent(row.content),
+  };
+}
+
+async function getActionHubProjectReadModel(userId: string, projectId: string) {
+  const projectResult = await queryD1<ProjectRow>(
+    `select id, title, kind, status, category, description, icon, color, progress, target_date as targetDate, updated_at as updatedAt
+     from projects
+     where user_id = ?
+       and id = ?
+       and deleted_at is null
+     limit 1`,
+    [userId, projectId],
+  );
+  const projectRow = projectResult.rows[0];
+  return projectRow ? projectFromRow(projectRow) : null;
+}
+
+async function getActionHubReferences(userId: string) {
+  const [referencePeopleResult, referenceZettelsResult] = await Promise.all([
+    queryD1<ReferenceRow>(`select id, name as title from people where user_id = ? and deleted_at is null order by is_favorite desc, name asc`, [userId]),
+    queryD1<ReferenceRow>(`select id, title from zettels where user_id = ? and deleted_at is null order by pinned desc, updated_at desc`, [userId]),
+  ]);
+  return {
+    people: referencePeopleResult.rows,
+    zettels: referenceZettelsResult.rows,
+  };
+}
+
+async function getActionHubProjectsReadModel(userId: string, projectId?: string) {
+  const filters = ["user_id = ?", "deleted_at is null"];
+  const params: string[] = [userId];
+  if (projectId) {
+    filters.push("id = ?");
+    params.push(projectId);
+  }
+  const result = await queryD1<ProjectRow>(
+    `select id, title, kind, status, category, description, icon, color, progress, target_date as targetDate, updated_at as updatedAt
+     from projects
+     where ${filters.join(" and ")}
+     order by pinned desc, display_order asc, created_at asc`,
+    params,
+  );
+  return result.rows.map(projectFromRow);
+}
+
+async function getActionHubPendingCapturesReadModel(userId: string) {
+  const result = await queryD1<CaptureRow>(
+    `select id, raw_text as rawText, suggested_domain as suggestedDomain, suggested_fields as suggestedFields, confidence
+     from quick_captures
+     where user_id = ? and status = 'pending'
+     order by created_at desc`,
+    [userId],
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    text: row.rawText,
+    suggestedDomain: row.suggestedDomain ?? "task",
+    confidence: Number(row.confidence ?? 0.5),
+  }));
+}
+
+async function getActionHubTasksReadModel(
+  userId: string,
+  options: {
+    projectId?: string | null;
+    status?: TaskMock["status"];
+    taskId?: string;
+  } = {},
+) {
+  const filters = ["t.user_id = ?", "t.deleted_at is null"];
+  const params: Array<string> = [userId];
+  if (options.projectId !== undefined) {
+    if (options.projectId === null) {
+      filters.push("t.project_id is null");
+    } else {
+      filters.push("t.project_id = ?");
+      params.push(options.projectId);
+    }
+  }
+  if (options.status) {
+    filters.push("t.status = ?");
+    params.push(options.status);
+  }
+  if (options.taskId) {
+    filters.push("t.id = ?");
+    params.push(options.taskId);
+  }
+
+  const taskResult = await queryD1<TaskRow>(
+    `select
+       t.id,
+       t.project_id as projectId,
+       t.title,
+       t.kind,
+       t.status,
+       t.priority,
+       t.brain_energy as brainEnergy,
+       t.due_at as dueAt,
+       t.content,
+       coalesce(sum(case when c.id is not null then 1 else 0 end), 0) as checklistTotal,
+       coalesce(sum(case when c.is_completed = 1 then 1 else 0 end), 0) as checklistCompleted
+     from tasks t
+     left join checklists c on c.task_id = t.id
+     where ${filters.join(" and ")}
+     group by t.id
+     order by case when t.project_id is null then 0 else 1 end asc, t.display_order asc, t.created_at asc`,
+    params,
+  );
+  const taskIds = taskResult.rows.map((row) => row.id);
+  if (!taskIds.length) return [];
+
+  const placeholders = taskIds.map(() => "?").join(", ");
+  const [taskPeopleResult, taskZettelResult, checklistResult] = await Promise.all([
+    queryD1<TaskPersonRow>(
+      `select r.task_id as taskId, p.name as personName
+       from task_people_relations r
+       inner join tasks t on t.id = r.task_id
+       inner join people p on p.id = r.person_id
+       where t.user_id = ?
+         and t.id in (${placeholders})`,
+      [userId, ...taskIds],
+    ),
+    queryD1<TaskZettelRow>(
+      `select r.task_id as taskId, z.title as zettelTitle
+       from task_zettel_relations r
+       inner join tasks t on t.id = r.task_id
+       inner join zettels z on z.id = r.zettel_id
+       where t.user_id = ?
+         and t.id in (${placeholders})`,
+      [userId, ...taskIds],
+    ),
+    queryD1<ChecklistRow>(
+      `select c.id, c.task_id as taskId, c.content, c.is_completed as isCompleted
+       from checklists c
+       inner join tasks t on t.id = c.task_id
+       where t.user_id = ?
+         and t.id in (${placeholders})
+       order by c.display_order asc, c.created_at asc`,
+      [userId, ...taskIds],
+    ),
+  ]);
+
+  const taskPeopleMap = new Map<string, string[]>();
+  for (const row of taskPeopleResult.rows) {
+    const current = taskPeopleMap.get(row.taskId) ?? [];
+    current.push(row.personName);
+    taskPeopleMap.set(row.taskId, current);
+  }
+
+  const taskZettelMap = new Map<string, string[]>();
+  for (const row of taskZettelResult.rows) {
+    const current = taskZettelMap.get(row.taskId) ?? [];
+    current.push(row.zettelTitle);
+    taskZettelMap.set(row.taskId, current);
+  }
+
+  const checklistMap = new Map<string, TaskMock["checklistItems"]>();
+  for (const row of checklistResult.rows) {
+    const current = checklistMap.get(row.taskId) ?? [];
+    current.push({ id: row.id, content: row.content, completed: Boolean(row.isCompleted) });
+    checklistMap.set(row.taskId, current);
+  }
+
+  return taskResult.rows.map((row) =>
+    taskFromRow(row, checklistMap.get(row.id) ?? [], taskPeopleMap.get(row.id) ?? [], taskZettelMap.get(row.id) ?? []),
+  );
+}
+
 export const getActionHubSnapshot = cache(async function getActionHubSnapshot(): Promise<ActionHubSnapshot> {
   const { id: userId } = await resolveUser();
 
@@ -241,39 +470,11 @@ export const getActionHubSnapshot = cache(async function getActionHubSnapshot():
     checklistMap.set(row.taskId, current);
   }
 
-  const projects: ProjectMock[] = projectResult.rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    kind: row.kind,
-    status: row.status,
-    category: row.category ?? "미분류",
-    description: row.description ?? "",
-    icon: row.icon ?? "🛟",
-    color: row.color ?? "gold",
-    progress: row.progress ?? 0,
-    targetDate: row.targetDate,
-    dueLabel: formatDueLabel(row.targetDate),
-    recentActivity: formatRecentActivity(row.updatedAt),
-  }));
+  const projects = projectResult.rows.map(projectFromRow);
 
-  const tasks: TaskMock[] = taskResult.rows.map((row) => ({
-    id: row.id,
-    projectId: row.projectId,
-    title: row.title,
-    kind: row.kind,
-    status: row.status,
-    priority: row.priority,
-    brainEnergy: row.brainEnergy,
-    dueAt: row.dueAt ?? undefined,
-    checklist: {
-      total: Number(row.checklistTotal ?? 0),
-      completed: Number(row.checklistCompleted ?? 0),
-    },
-    checklistItems: checklistMap.get(row.id) ?? [],
-    linkedPeople: taskPeopleMap.get(row.id) ?? [],
-    linkedZettels: taskZettelMap.get(row.id) ?? [],
-    content: withDefaultContent(row.content),
-  }));
+  const tasks = taskResult.rows.map((row) =>
+    taskFromRow(row, checklistMap.get(row.id) ?? [], taskPeopleMap.get(row.id) ?? [], taskZettelMap.get(row.id) ?? []),
+  );
 
   const pendingCaptures: PendingCaptureMock[] = captureResult.rows.map((row) => ({
     id: row.id,
@@ -292,33 +493,184 @@ export const getActionHubSnapshot = cache(async function getActionHubSnapshot():
 });
 
 export async function getActionHubProject(projectId: string) {
-  const snapshot = await getActionHubSnapshot();
-  return snapshot.projects.find((project) => project.id === projectId) ?? null;
+  const { id: userId } = await resolveUser();
+  return getActionHubProjectReadModel(userId, projectId);
+}
+
+export async function getActionHubTasks() {
+  const { id: userId } = await resolveUser();
+  return getActionHubTasksReadModel(userId);
+}
+
+export async function getActionHubHydrationSnapshot(pathname = "/action-hub"): Promise<ActionHubSnapshot> {
+  const { id: userId } = await resolveUser();
+  const path = pathname.split("?")[0] || "/action-hub";
+  const segments = path.split("/").filter(Boolean);
+  const section = segments[1] ?? "";
+  const empty: ActionHubSnapshot = {
+    pendingCaptures: [],
+    projects: [],
+    referencePeople: [],
+    referenceZettels: [],
+    tasks: [],
+  };
+
+  if (section === "archive") return empty;
+
+  if (section === "inbox") {
+    const [projects, tasks, pendingCaptures] = await Promise.all([
+      getActionHubProjectsReadModel(userId),
+      getActionHubTasksReadModel(userId, { projectId: null }),
+      getActionHubPendingCapturesReadModel(userId),
+    ]);
+    return { ...empty, pendingCaptures, projects, tasks };
+  }
+
+  if (!section) {
+    const projects = await getActionHubProjectsReadModel(userId);
+    return { ...empty, projects };
+  }
+
+  const projectId = section;
+  const taskId = segments[3] === "tasks" ? segments[4] : undefined;
+  const [projects, tasks, references] = await Promise.all([
+    getActionHubProjectsReadModel(userId, projectId),
+    getActionHubTasksReadModel(userId, taskId ? { projectId, taskId } : { projectId }),
+    taskId ? getActionHubReferences(userId) : Promise.resolve({ people: [], zettels: [] }),
+  ]);
+  return {
+    ...empty,
+    projects,
+    referencePeople: references.people,
+    referenceZettels: references.zettels,
+    tasks,
+  };
 }
 
 export async function getActionHubProjectDetail(projectId: string) {
-  const snapshot = await getActionHubSnapshot();
-  const project = snapshot.projects.find((item) => item.id === projectId) ?? null;
+  const { id: userId } = await resolveUser();
+  const [project, tasks, references] = await Promise.all([
+    getActionHubProjectReadModel(userId, projectId),
+    getActionHubTasksReadModel(userId, { projectId }),
+    getActionHubReferences(userId),
+  ]);
   if (!project) return null;
   return {
     project,
-    tasks: snapshot.tasks.filter((task) => task.projectId === projectId),
-    people: snapshot.referencePeople,
-    zettels: snapshot.referenceZettels,
+    tasks,
+    people: references.people,
+    zettels: references.zettels,
   };
 }
 
 export async function getActionHubArchive() {
-  const snapshot = await getActionHubSnapshot();
+  const { id: userId } = await resolveUser();
+  const [projectResult, tasks] = await Promise.all([
+    queryD1<ProjectRow>(
+      `select id, title, kind, status, category, description, icon, color, progress, target_date as targetDate, updated_at as updatedAt
+       from projects
+       where user_id = ?
+         and deleted_at is null
+         and progress >= 100
+       order by updated_at desc, created_at desc`,
+      [userId],
+    ),
+    getActionHubTasksReadModel(userId, { status: "done" }),
+  ]);
   return {
-    projects: snapshot.projects.filter((project) => project.progress >= 100),
-    tasks: snapshot.tasks.filter((task) => task.status === "done"),
+    projects: projectResult.rows.map(projectFromRow),
+    tasks,
   };
 }
 
 export async function getActionHubTask(projectId: string, taskId: string) {
-  const snapshot = await getActionHubSnapshot();
-  return snapshot.tasks.find((task) => task.id === taskId && task.projectId === projectId) ?? null;
+  const { id: userId } = await resolveUser();
+  const tasks = await getActionHubTasksReadModel(userId, { projectId, taskId });
+  return tasks[0] ?? null;
+}
+
+async function getActionHubTaskMutationDelta(userId: string, taskId: string): Promise<ActionHubTaskMutationDelta> {
+  const [taskResult, taskPeopleResult, taskZettelResult, checklistResult] = await Promise.all([
+    queryD1<TaskRow>(
+      `select
+         t.id,
+         t.project_id as projectId,
+         t.title,
+         t.kind,
+         t.status,
+         t.priority,
+         t.brain_energy as brainEnergy,
+         t.due_at as dueAt,
+         t.content,
+         coalesce(sum(case when c.id is not null then 1 else 0 end), 0) as checklistTotal,
+         coalesce(sum(case when c.is_completed = 1 then 1 else 0 end), 0) as checklistCompleted
+       from tasks t
+       left join checklists c on c.task_id = t.id
+       where t.user_id = ?
+         and t.id = ?
+         and t.deleted_at is null
+       group by t.id
+       limit 1`,
+      [userId, taskId],
+    ),
+    queryD1<TaskPersonRow>(
+      `select r.task_id as taskId, p.name as personName
+       from task_people_relations r
+       inner join tasks t on t.id = r.task_id
+       inner join people p on p.id = r.person_id
+       where t.user_id = ?
+         and t.id = ?`,
+      [userId, taskId],
+    ),
+    queryD1<TaskZettelRow>(
+      `select r.task_id as taskId, z.title as zettelTitle
+       from task_zettel_relations r
+       inner join tasks t on t.id = r.task_id
+       inner join zettels z on z.id = r.zettel_id
+       where t.user_id = ?
+         and t.id = ?`,
+      [userId, taskId],
+    ),
+    queryD1<ChecklistRow>(
+      `select c.id, c.task_id as taskId, c.content, c.is_completed as isCompleted
+       from checklists c
+       inner join tasks t on t.id = c.task_id
+       where t.user_id = ?
+         and t.id = ?
+       order by c.display_order asc, c.created_at asc`,
+      [userId, taskId],
+    ),
+  ]);
+  const taskRow = taskResult.rows[0];
+  if (!taskRow) throw new Error("태스크를 찾지 못했습니다.");
+
+  const projectResult = taskRow.projectId
+    ? await queryD1<ProjectRow>(
+        `select id, title, kind, status, category, description, icon, color, progress, target_date as targetDate, updated_at as updatedAt
+         from projects
+         where user_id = ?
+           and id = ?
+           and deleted_at is null
+         limit 1`,
+        [userId, taskRow.projectId],
+      )
+    : { rows: [] };
+
+  return {
+    project: projectResult.rows[0] ? projectFromRow(projectResult.rows[0]) : null,
+    task: taskFromRow(
+      taskRow,
+      checklistResult.rows.map((row) => ({ id: row.id, content: row.content, completed: Boolean(row.isCompleted) })),
+      taskPeopleResult.rows.map((row) => row.personName),
+      taskZettelResult.rows.map((row) => row.zettelTitle),
+    ),
+  };
+}
+
+async function getActionHubProjectMutationDelta(userId: string, projectId: string): Promise<ActionHubProjectMutationDelta> {
+  const project = await getActionHubProjectReadModel(userId, projectId);
+  if (!project) throw new Error("프로젝트를 찾지 못했습니다.");
+  return { project };
 }
 
 export async function ingestActionHubCapture(text: string, context?: CaptureContext): Promise<CaptureSuggestion> {
@@ -346,8 +698,10 @@ export async function ingestActionHubCapture(text: string, context?: CaptureCont
     confidence,
   };
 
+  const shouldAutoRouteTask = domain === "task" && (forcedDomain === "task" || (aiAnalysis?.shouldAutoRoute ?? true));
+  let delta: ActionHubCaptureMutationDelta;
   let taskId: string | undefined;
-  if (domain === "task" && (aiAnalysis?.shouldAutoRoute ?? true)) {
+  if (shouldAutoRouteTask) {
     taskId = ulid();
     const taskContent = aiAnalysis?.summary?.trim() || payload;
     await executeD1(
@@ -379,6 +733,16 @@ export async function ingestActionHubCapture(text: string, context?: CaptureCont
       taskId,
       content: taskContent,
     });
+
+    const taskDelta = await getActionHubTaskMutationDelta(userId, taskId);
+    delta = {
+      project: taskDelta.project,
+      routedEntity: {
+        id: taskId,
+        type: "task",
+      },
+      task: taskDelta.task,
+    };
   } else {
     await executeD1(
       `insert into quick_captures
@@ -386,14 +750,22 @@ export async function ingestActionHubCapture(text: string, context?: CaptureCont
        values (?, ?, ?, 'pending', ?, ?, ?, datetime('now'), datetime('now'))`,
       [captureId, userId, payload, domain, JSON.stringify(suggested.fields), confidence],
     );
+    delta = {
+      pendingCapture: {
+        id: captureId,
+        text: payload,
+        suggestedDomain: domain,
+        confidence,
+      },
+    };
   }
 
   return {
     captureId,
-    status: domain === "task" ? "routed" : "pending",
+    status: shouldAutoRouteTask ? "routed" : "pending",
+    delta,
     suggested,
     taskId,
-    snapshot: await getActionHubSnapshot(),
   };
 }
 
@@ -405,7 +777,9 @@ export async function dismissPendingCapture(captureId: string) {
      where id = ? and user_id = ?`,
     [captureId, userId],
   );
-  return getActionHubSnapshot();
+  return {
+    pendingCaptureId: captureId,
+  } satisfies ActionHubCaptureMutationDelta;
 }
 
 function parseSuggestedFields(value: string | null | undefined) {
@@ -450,6 +824,24 @@ export async function acceptPendingCapture(captureId: string) {
        values (?, ?, ?, ?, ?, ?, ?, 'fleeting', 'Quick Capture', 0, datetime('now'), datetime('now'))`,
       [routedEntityId, userId, title, `${slugify(title)}-${routedEntityId.slice(-6).toLowerCase()}`, capture.rawText, capture.rawText, summarizeTitle(capture.rawText)],
     );
+    await executeD1(
+      `update quick_captures
+       set status = 'accepted', routed_entity_type = ?, routed_entity_id = ?, updated_at = datetime('now')
+       where id = ? and user_id = ?`,
+      [routedEntityType, routedEntityId, captureId, userId],
+    );
+
+    return {
+      pendingCaptureId: captureId,
+      referenceZettel: {
+        id: routedEntityId,
+        title,
+      },
+      routedEntity: {
+        id: routedEntityId,
+        type: "zettel",
+      },
+    } satisfies ActionHubCaptureMutationDelta;
   } else {
     const priority = stringField(fields, "priority");
     const brainEnergy = stringField(fields, "brainEnergy");
@@ -483,7 +875,16 @@ export async function acceptPendingCapture(captureId: string) {
     [routedEntityType, routedEntityId, captureId, userId],
   );
 
-  return getActionHubSnapshot();
+  const taskDelta = await getActionHubTaskMutationDelta(userId, routedEntityId);
+  return {
+    pendingCaptureId: captureId,
+    project: taskDelta.project,
+    routedEntity: {
+      id: routedEntityId,
+      type: "task",
+    },
+    task: taskDelta.task,
+  } satisfies ActionHubCaptureMutationDelta;
 }
 
 export async function routeInboxTaskToProject(taskId: string, projectId: string) {
@@ -513,7 +914,7 @@ export async function routeInboxTaskToProject(taskId: string, projectId: string)
     [projectId, taskId, userId],
   );
   await refreshProjectProgress(userId, projectId);
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, taskId);
 }
 
 export async function cycleActionHubTaskStatus(taskId: string) {
@@ -536,7 +937,7 @@ export async function cycleActionHubTaskStatus(taskId: string) {
   if (current.projectId) {
     await refreshProjectProgress(userId, current.projectId);
   }
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, taskId);
 }
 
 export async function updateActionHubTaskTitle(taskId: string, title: string) {
@@ -544,7 +945,7 @@ export async function updateActionHubTaskTitle(taskId: string, title: string) {
   const nextTitle = title.trim();
   if (!nextTitle) throw new Error("제목은 비워둘 수 없습니다.");
   await executeD1(`update tasks set title = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [nextTitle, taskId, userId]);
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, taskId);
 }
 
 export async function updateActionHubTaskContent(taskId: string, content: string) {
@@ -562,7 +963,7 @@ export async function updateActionHubTaskContent(taskId: string, content: string
     taskId,
     content: nextContent,
   });
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, taskId);
 }
 
 export async function updateActionHubTaskProperties(
@@ -624,7 +1025,7 @@ export async function updateActionHubTaskProperties(
   if (current.projectId && status !== current.status) {
     await refreshProjectProgress(userId, current.projectId);
   }
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, taskId);
 }
 
 export async function createActionHubProject(input: {
@@ -657,7 +1058,7 @@ export async function createActionHubProject(input: {
       input.targetDate ?? null,
     ],
   );
-  return getActionHubSnapshot();
+  return getActionHubProjectMutationDelta(userId, id);
 }
 
 export async function updateActionHubProjectProperties(
@@ -704,7 +1105,7 @@ export async function updateActionHubProjectProperties(
      where id = ? and user_id = ?`,
     [title, kind, status, category, description, icon, color, targetDate, projectId, userId],
   );
-  return getActionHubSnapshot();
+  return getActionHubProjectMutationDelta(userId, projectId);
 }
 
 export async function createChecklistItem(taskId: string, content: string) {
@@ -724,7 +1125,7 @@ export async function createChecklistItem(taskId: string, content: string) {
      values (?, ?, ?, 0, ?, null, datetime('now'))`,
     [ulid(), taskId, cleaned, Number(maxOrder.rows[0]?.nextOrder ?? 0)],
   );
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, taskId);
 }
 
 export async function toggleChecklistItem(checklistId: string) {
@@ -750,13 +1151,13 @@ export async function toggleChecklistItem(checklistId: string) {
   if (item.projectId) {
     await refreshProjectProgress(userId, item.projectId);
   }
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, item.taskId);
 }
 
 export async function deleteChecklistItem(checklistId: string) {
   const { id: userId } = await resolveUser();
-  const found = await queryD1<{ projectId: string | null }>(
-    `select t.project_id as projectId
+  const found = await queryD1<{ taskId: string; projectId: string | null }>(
+    `select c.task_id as taskId, t.project_id as projectId
      from checklists c
      inner join tasks t on t.id = c.task_id
      where c.id = ? and t.user_id = ?
@@ -768,7 +1169,7 @@ export async function deleteChecklistItem(checklistId: string) {
   if (found.rows[0].projectId) {
     await refreshProjectProgress(userId, found.rows[0].projectId);
   }
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, found.rows[0].taskId);
 }
 
 export async function attachTaskPerson(taskId: string, personId: string) {
@@ -780,7 +1181,7 @@ export async function attachTaskPerson(taskId: string, personId: string) {
        and exists (select 1 from people where id = ? and user_id = ? and deleted_at is null)`,
     [taskId, personId, taskId, userId, personId, userId],
   );
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, taskId);
 }
 
 export async function detachTaskPerson(taskId: string, personName: string) {
@@ -789,7 +1190,7 @@ export async function detachTaskPerson(taskId: string, personName: string) {
   const personId = person.rows[0]?.id;
   if (!personId) throw new Error("연결할 인물을 찾지 못했습니다.");
   await executeD1(`delete from task_people_relations where task_id = ? and person_id = ?`, [taskId, personId]);
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, taskId);
 }
 
 export async function attachTaskZettel(taskId: string, zettelId: string) {
@@ -801,7 +1202,7 @@ export async function attachTaskZettel(taskId: string, zettelId: string) {
        and exists (select 1 from zettels where id = ? and user_id = ? and deleted_at is null)`,
     [taskId, zettelId, taskId, userId, zettelId, userId],
   );
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, taskId);
 }
 
 export async function detachTaskZettel(taskId: string, zettelTitle: string) {
@@ -810,7 +1211,7 @@ export async function detachTaskZettel(taskId: string, zettelTitle: string) {
   const zettelId = zettel.rows[0]?.id;
   if (!zettelId) throw new Error("연결할 메모를 찾지 못했습니다.");
   await executeD1(`delete from task_zettel_relations where task_id = ? and zettel_id = ?`, [taskId, zettelId]);
-  return getActionHubSnapshot();
+  return getActionHubTaskMutationDelta(userId, taskId);
 }
 
 export async function seedActionHubSupportData() {
@@ -856,7 +1257,7 @@ export async function seedActionHubSupportData() {
      values
       ('task-p1-shell', ?, 'project-modu-works', 'P1 Shared Layer 마감 정리', 'development', '공용 상호작용 레이어를 마무리하고 다음 슬라이스 전환 준비.', 'review', 'P1', 'hyper_focus', '2026-04-25', 0, datetime('now'), datetime('now')),
       ('task-life-ops', ?, 'project-modu-works', 'Life Ops Daily Command Center UI 보강', 'development', '날짜 라우트, Heatmap, 저널링 경험을 정리한다.', 'in_progress', 'P1', 'normal', '2026-04-26', 1, datetime('now'), datetime('now')),
-      ('task-prm', ?, 'project-modu-works', 'PRM Card Grid와 Drawer 연결', 'development', '관계 건강도, 타임라인, 선물 보드 진입점 구현.', 'done', 'P2', 'normal', '2026-04-23', 2, datetime('now'), datetime('now')),
+      ('task-prm', ?, 'project-modu-works', 'PRM 카드 그리드와 드로어 연결', 'development', '관계 건강도, 타임라인, 선물 보드 진입점 구현.', 'done', 'P2', 'normal', '2026-04-23', 2, datetime('now'), datetime('now')),
       ('task-episode-25', ?, 'project-trauma-repair', '25화 결말 장면 다시 쓰기', 'writing', '세리프 중심 장문 집필. 감정 고조와 정리 리듬을 조율한다.', 'in_progress', 'P1', 'hyper_focus', '2026-04-28', 0, datetime('now'), datetime('now')),
       ('task-hotteok-research', ?, 'area-hotteok-business', '호떡집 겨울 신메뉴 리서치', 'research', '경쟁 메뉴, 가격 정책, SNS 레퍼런스를 조사한다.', 'todo', 'P2', 'routine', '2026-04-29', 0, datetime('now'), datetime('now')),
       ('task-inbox-capture', ?, null, '재민이랑 월요일 호떡집 미팅', 'research', 'Quick Capture에서 넘어온 미분류 항목.', 'todo', 'P2', 'normal', '2026-04-28', 0, datetime('now'), datetime('now'))`,
@@ -869,7 +1270,7 @@ export async function seedActionHubSupportData() {
      values
       ('check-task-p1-shell-1', 'task-p1-shell', '쉘 라우트 점검', 1, 0, datetime('now'), datetime('now')),
       ('check-task-p1-shell-2', 'task-p1-shell', 'Hotkey 테스트', 1, 1, datetime('now'), datetime('now')),
-      ('check-task-p1-shell-3', 'task-p1-shell', 'Drawer 링크 점검', 1, 2, datetime('now'), datetime('now')),
+      ('check-task-p1-shell-3', 'task-p1-shell', '드로어 링크 점검', 1, 2, datetime('now'), datetime('now')),
       ('check-task-p1-shell-4', 'task-p1-shell', 'Toast 검증', 1, 3, datetime('now'), datetime('now')),
       ('check-task-p1-shell-5', 'task-p1-shell', 'Palette 검색 테스트', 1, 4, datetime('now'), datetime('now')),
       ('check-task-p1-shell-6', 'task-p1-shell', '문서 반영', 0, 5, null, datetime('now')),
@@ -878,7 +1279,7 @@ export async function seedActionHubSupportData() {
       ('check-task-life-ops-3', 'task-life-ops', '저널 UI polish', 0, 2, null, datetime('now')),
       ('check-task-life-ops-4', 'task-life-ops', '트렌드 카드 보강', 0, 3, null, datetime('now')),
       ('check-task-prm-1', 'task-prm', 'Person grid', 1, 0, datetime('now'), datetime('now')),
-      ('check-task-prm-2', 'task-prm', 'Drawer 연결', 1, 1, datetime('now'), datetime('now')),
+      ('check-task-prm-2', 'task-prm', '드로어 연결', 1, 1, datetime('now'), datetime('now')),
       ('check-task-prm-3', 'task-prm', 'Timeline 카드', 1, 2, datetime('now'), datetime('now')),
       ('check-task-prm-4', 'task-prm', 'Graph 진입점', 1, 3, datetime('now'), datetime('now')),
       ('check-task-prm-5', 'task-prm', 'Gift 보드', 1, 4, datetime('now'), datetime('now')),

@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Appearance settings update failed." },
+      { error: error instanceof Error ? error.message : "화면 설정 저장에 실패했습니다." },
       { status: 400 },
     );
   }

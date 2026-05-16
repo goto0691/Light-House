@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Settings2 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,8 +33,26 @@ import {
 import type { SavedView } from "@/lib/server/ui-state";
 
 type DailyEntriesClientProps = {
+  deferInitialEntries?: boolean;
   entries: DailyEntry[];
   savedViews: SavedView[];
+};
+
+type DailyEntryListItem = DailyEntry & {
+  backgroundPreview?: string | null;
+  bodyPreview?: string;
+  hasBackground?: boolean;
+  hasBody?: boolean;
+  hasSourceDocument?: boolean;
+  isSummary?: boolean;
+};
+
+type DailyEntriesPayload = {
+  entries?: DailyEntryListItem[];
+  limit?: number;
+  nextOffset?: number | null;
+  offset?: number;
+  total?: number;
 };
 
 const DAILY_ENTRY_KINDS = ["journal", "meditation", "sermon_note", "workout", "note"] as const satisfies readonly DailyEntry["kind"][];
@@ -66,12 +84,20 @@ const DAILY_ENTRY_COLUMNS: CollectionColumnDefinition[] = [
   { key: "background", label: "배경" },
 ];
 
-export function DailyEntriesClient({ entries, savedViews }: DailyEntriesClientProps) {
+export function DailyEntriesClient({ deferInitialEntries = false, entries, savedViews }: DailyEntriesClientProps) {
   const searchParams = useSearchParams();
+  const initialActiveViewKey = searchParams.get("view") ?? getDefaultSavedViewKey(savedViews) ?? "calendar";
+  const initialActiveView = savedViews.find((view) => getSavedViewKey(view) === initialActiveViewKey) ?? savedViews.find((view) => view.isDefault) ?? savedViews[0];
+  const [localEntries, setLocalEntries] = useState<DailyEntryListItem[]>(entries);
+  const [entriesLoading, setEntriesLoading] = useState(deferInitialEntries);
+  const [entriesError, setEntriesError] = useState<string | null>(null);
+  const [entriesTotal, setEntriesTotal] = useState(entries.length);
+  const [isLoadingMoreEntries, setIsLoadingMoreEntries] = useState(false);
+  const [nextEntriesOffset, setNextEntriesOffset] = useState<number | null>(null);
   const [localSavedViews, setLocalSavedViews] = useState(savedViews);
-  const [activeViewKeyState, setActiveViewKeyState] = useState(() => searchParams.get("view") ?? getDefaultSavedViewKey(savedViews) ?? "calendar");
-  const [query, setQuery] = useState("");
-  const [kindFilter, setKindFilter] = useState<DailyEntry["kind"][]>([]);
+  const [activeViewKeyState, setActiveViewKeyState] = useState(initialActiveViewKey);
+  const [query, setQuery] = useState(initialActiveView?.searchQuery ?? "");
+  const [kindFilter, setKindFilter] = useState<DailyEntry["kind"][]>(() => getKindFilter(initialActiveView));
   const [viewManagerOpen, setViewManagerOpen] = useState(false);
   const [viewRenameDrafts, setViewRenameDrafts] = useState<Record<string, string>>({});
   const [viewMutationId, setViewMutationId] = useState<string | null>(null);
@@ -79,18 +105,107 @@ export function DailyEntriesClient({ entries, savedViews }: DailyEntriesClientPr
   const activeViewKey = getSavedViewKey(activeView) ?? activeViewKeyState;
   const activeViewIsPersisted = isPersistedSavedView(activeView);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => savedViewColumnKeys(activeView?.sortState.columns, DAILY_ENTRY_COLUMNS));
-  const viewEntries = activeView ? applyDailyEntryView(entries, activeView) : entries;
-  const visibleEntries = viewEntries.filter((entry) => {
+  const queryTerm = query.toLowerCase();
+  const serverFiltersEntries = deferInitialEntries;
+  const viewEntries = useMemo(() => (activeView ? applyDailyEntryView(localEntries, activeView, { skipSearch: serverFiltersEntries }) : localEntries), [activeView, localEntries, serverFiltersEntries]);
+  const visibleEntries = useMemo(() => viewEntries.filter((entry) => {
     if (kindFilter.length && !kindFilter.includes(entry.kind)) return false;
-    if (query && !dailyEntrySearchText(entry).includes(query.toLowerCase())) return false;
+    if (!serverFiltersEntries && queryTerm && !dailyEntrySearchText(entry).includes(queryTerm)) return false;
     return true;
-  });
-  const kindCount = new Set(visibleEntries.map((entry) => entry.kind)).size;
-  const peopleLinkCount = visibleEntries.reduce((count, entry) => count + (entry.people?.length ?? 0), 0);
+  }), [kindFilter, queryTerm, serverFiltersEntries, viewEntries]);
+  const entryStats = useMemo(() => ({
+    kindCount: new Set(visibleEntries.map((entry) => entry.kind)).size,
+    peopleLinkCount: visibleEntries.reduce((count, entry) => count + (entry.people?.length ?? 0), 0),
+  }), [visibleEntries]);
+  const { kindCount, peopleLinkCount } = entryStats;
+  const entryRequestParams = useMemo(() => {
+    const params = new URLSearchParams({ limit: "40", offset: "0" });
+    const kinds = kindFilter.length ? kindFilter : getKindFilter(activeView);
+    for (const kind of kinds) params.append("kind", kind);
+    if (query.trim()) params.set("q", query.trim());
+    if (activeView?.viewKey === "people-mentions" || activeView?.filterState.hasPeople === true) params.set("hasPeople", "1");
+    if (activeView?.viewKey === "emotion-timeline" || activeView?.filterState.hasEmotion === true) params.set("hasEmotion", "1");
+    return params.toString();
+  }, [activeView, kindFilter, query]);
 
   useEffect(() => {
     setLocalSavedViews(savedViews);
   }, [savedViews]);
+
+  useEffect(() => {
+    if (!deferInitialEntries) {
+      setLocalEntries(entries);
+      setEntriesLoading(false);
+      setEntriesError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    setEntriesLoading(true);
+    setEntriesError(null);
+
+    async function loadEntries() {
+      try {
+        const response = await fetch(`/api/life-ops/entries?${entryRequestParams}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("일일 기록을 불러오지 못했습니다.");
+        const payload = (await response.json()) as DailyEntriesPayload;
+        setLocalEntries(payload.entries ?? []);
+        setEntriesTotal(payload.total ?? payload.entries?.length ?? 0);
+        setNextEntriesOffset(payload.nextOffset ?? null);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setEntriesError(error instanceof Error ? error.message : "일일 기록을 불러오지 못했습니다.");
+      } finally {
+        if (!controller.signal.aborted) setEntriesLoading(false);
+      }
+    }
+
+    void loadEntries();
+
+    return () => {
+      controller.abort();
+    };
+  }, [deferInitialEntries, entries, entryRequestParams]);
+
+  function mergeEntryDetail(entry: DailyEntry) {
+    setLocalEntries((current) =>
+      current.map((item) =>
+        item.id === entry.id
+          ? {
+              ...item,
+              ...entry,
+              hasBackground: Boolean(entry.background?.trim()),
+              hasBody: Boolean(entry.body?.trim()),
+              hasSourceDocument: Boolean(entry.sourceDocument),
+              isSummary: false,
+            }
+          : item,
+      ),
+    );
+  }
+
+  async function loadMoreEntries() {
+    if (nextEntriesOffset === null || isLoadingMoreEntries) return;
+    setIsLoadingMoreEntries(true);
+    setEntriesError(null);
+    try {
+      const params = new URLSearchParams(entryRequestParams);
+      params.set("offset", String(nextEntriesOffset));
+      const response = await fetch(`/api/life-ops/entries?${params.toString()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("일일 기록을 더 불러오지 못했습니다.");
+      const payload = (await response.json()) as DailyEntriesPayload;
+      setLocalEntries((current) => mergeEntries(current, payload.entries ?? []));
+      setEntriesTotal(payload.total ?? entriesTotal);
+      setNextEntriesOffset(payload.nextOffset ?? null);
+    } catch (error) {
+      setEntriesError(error instanceof Error ? error.message : "일일 기록을 더 불러오지 못했습니다.");
+    } finally {
+      setIsLoadingMoreEntries(false);
+    }
+  }
 
   function setDailyEntriesLocation(viewKey: string) {
     const params = new URLSearchParams({ view: viewKey });
@@ -255,10 +370,10 @@ export function DailyEntriesClient({ entries, savedViews }: DailyEntriesClientPr
       aside={<DailyEntryLens activeView={activeView} entries={visibleEntries} />}
       asideWidth="md"
       description="일기, 묵상, 설교 노트, 운동 기록을 날짜 컨테이너에 가두지 않고 속성 기반 컬렉션으로 다시 엮습니다."
-      eyebrow="Life Ops"
+      eyebrow="생활기록"
       metrics={[
         { label: "표시 중", value: visibleEntries.length },
-        { label: "전체 기록", value: entries.length },
+        { label: "전체 기록", value: entriesLoading ? "불러오는 중" : entriesTotal },
         { label: "기록 종류", value: kindCount },
         { label: "사람 연결", value: peopleLinkCount },
       ]}
@@ -280,7 +395,7 @@ export function DailyEntriesClient({ entries, savedViews }: DailyEntriesClientPr
               <>
                 <CollectionColumnControls columns={DAILY_ENTRY_COLUMNS} onChange={setVisibleColumnKeys} visibleKeys={visibleColumnKeys} />
                 <button
-                  className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+                  className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8"
                   onClick={() => setViewManagerOpen((open) => !open)}
                   type="button"
                 >
@@ -312,8 +427,31 @@ export function DailyEntriesClient({ entries, savedViews }: DailyEntriesClientPr
       }
     >
       <div className="grid gap-4">
-        {visibleEntries.length ? (
-          visibleEntries.map((entry) => <DailyEntryArchiveCard entry={entry} key={entry.id} visibleFields={visibleColumnKeys} />)
+        {entriesLoading ? (
+          <GlassCard className="p-5">
+            <p className="text-sm text-muted-foreground">일일 기록을 불러오는 중입니다.</p>
+          </GlassCard>
+        ) : entriesError ? (
+          <EmptyState
+            description={entriesError}
+            title="일일 기록을 불러오지 못했습니다."
+          />
+        ) : visibleEntries.length ? (
+          <>
+            {visibleEntries.map((entry) => (
+              <DailyEntryArchiveCard entry={entry} key={entry.id} onDetailLoaded={mergeEntryDetail} visibleFields={visibleColumnKeys} />
+            ))}
+            {nextEntriesOffset !== null ? (
+              <button
+                className="focus-ring min-h-11 rounded-md border border-white/10 bg-white/5 px-4 text-sm font-medium text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:opacity-50"
+                disabled={isLoadingMoreEntries}
+                onClick={() => void loadMoreEntries()}
+                type="button"
+              >
+                {isLoadingMoreEntries ? "불러오는 중" : `더 보기 (${localEntries.length}/${entriesTotal})`}
+              </button>
+            ) : null}
+          </>
         ) : (
           <EmptyState
             description="현재 saved view 조건에 맞는 기록이 없습니다. 다른 view를 선택하거나 데이터 설정에서 컬렉션 상태를 확인하세요."
@@ -335,7 +473,15 @@ function getKindFilter(view: SavedView | null | undefined) {
   return values.filter(isDailyEntryKind);
 }
 
-function applyDailyEntryView(entries: DailyEntry[], view: SavedView) {
+function mergeEntries(current: DailyEntryListItem[], incoming: DailyEntryListItem[]) {
+  const map = new Map(current.map((entry) => [entry.id, entry]));
+  for (const entry of incoming) {
+    map.set(entry.id, { ...map.get(entry.id), ...entry });
+  }
+  return [...map.values()];
+}
+
+function applyDailyEntryView(entries: DailyEntryListItem[], view: SavedView, options: { skipSearch?: boolean } = {}) {
   const kindFilter = getKindFilter(view);
   const hasPeople = view.viewKey === "people-mentions" || view.filterState.hasPeople === true;
   const hasEmotion = view.viewKey === "emotion-timeline" || view.filterState.hasEmotion === true;
@@ -349,12 +495,12 @@ function applyDailyEntryView(entries: DailyEntry[], view: SavedView) {
     filtered = filtered.filter((entry) => Boolean(entry.emotion?.trim()));
   }
 
-  if (view.searchQuery.trim()) {
+  if (!options.skipSearch && view.searchQuery.trim()) {
     const query = view.searchQuery.trim().toLowerCase();
     filtered = filtered.filter((entry) => dailyEntrySearchText(entry).includes(query));
   }
 
-  return filtered.sort((left, right) => {
+  return [...filtered].sort((left, right) => {
     const dateSort = right.date.localeCompare(left.date);
     if (dateSort !== 0) return dateSort;
     return left.title.localeCompare(right.title);
@@ -377,10 +523,10 @@ function dailyEntrySearchText(entry: DailyEntry) {
 }
 
 function DailyEntryLens({ activeView, entries }: { activeView?: SavedView; entries: DailyEntry[] }) {
-  const kindCounts = DAILY_ENTRY_KINDS.map((kind) => ({
+  const kindCounts = useMemo(() => DAILY_ENTRY_KINDS.map((kind) => ({
     kind,
     count: entries.filter((entry) => entry.kind === kind).length,
-  })).filter((item) => item.count > 0);
+  })).filter((item) => item.count > 0), [entries]);
   const latestDate = entries[0]?.date ?? "-";
   const oldestDate = entries[entries.length - 1]?.date ?? "-";
 
@@ -421,10 +567,60 @@ function DailyEntryLens({ activeView, entries }: { activeView?: SavedView; entri
   );
 }
 
-function DailyEntryArchiveCard({ entry, visibleFields }: { entry: DailyEntry; visibleFields: string[] }) {
-  const visible = new Set(visibleFields);
+function DailyEntryArchiveCard({
+  entry,
+  onDetailLoaded,
+  visibleFields,
+}: {
+  entry: DailyEntryListItem;
+  onDetailLoaded: (entry: DailyEntry) => void;
+  visibleFields: string[];
+}) {
+  const [detailEntry, setDetailEntry] = useState<DailyEntryListItem>(entry);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const visible = useMemo(() => new Set(visibleFields), [visibleFields]);
+  const displayEntry = detailEntry.id === entry.id ? detailEntry : entry;
   const showHeaderMeta = visible.has("kind") || visible.has("date");
   const showInlineProperties = visible.has("emotion") || visible.has("eventSummary") || visible.has("verse") || visible.has("tagsSnapshot");
+  const needsDetail = Boolean(displayEntry.isSummary);
+
+  useEffect(() => {
+    setDetailEntry(entry);
+    setDetailError(null);
+  }, [entry]);
+
+  const loadDetail = useCallback(async () => {
+    if (!needsDetail || detailLoading) return;
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const response = await fetch(`/api/life-ops/entries/${encodeURIComponent(entry.id)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("기록 상세를 불러오지 못했습니다.");
+      const payload = (await response.json()) as { entry?: DailyEntry };
+      if (!payload.entry) throw new Error("기록 상세를 찾지 못했습니다.");
+      const nextEntry: DailyEntryListItem = {
+        ...displayEntry,
+        ...payload.entry,
+        hasBackground: Boolean(payload.entry.background?.trim()),
+        hasBody: Boolean(payload.entry.body?.trim()),
+        hasSourceDocument: Boolean(payload.entry.sourceDocument),
+        isSummary: false,
+      };
+      setDetailEntry(nextEntry);
+      onDetailLoaded(payload.entry);
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : "기록 상세를 불러오지 못했습니다.");
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [detailLoading, displayEntry, entry.id, needsDetail, onDetailLoaded]);
+
+  useEffect(() => {
+    if (visible.has("background") && displayEntry.hasBackground && needsDetail) {
+      void loadDetail();
+    }
+  }, [displayEntry.hasBackground, loadDetail, needsDetail, visible]);
 
   return (
     <article className="rounded-lg border border-white/10 bg-white/5 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
@@ -433,30 +629,30 @@ function DailyEntryArchiveCard({ entry, visibleFields }: { entry: DailyEntry; vi
           {showHeaderMeta ? (
             <div className="flex flex-wrap items-center gap-2">
               {visible.has("kind") ? (
-                <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] text-primary">{KIND_LABELS[entry.kind]}</span>
+                <span className="rounded-md border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] text-primary">{KIND_LABELS[displayEntry.kind]}</span>
               ) : null}
-              {visible.has("date") ? <span className="text-sm text-muted-foreground">{entry.date}</span> : null}
+              {visible.has("date") ? <span className="text-sm text-muted-foreground">{displayEntry.date}</span> : null}
             </div>
           ) : null}
-          <h2 className="mt-3 text-2xl font-semibold text-foreground">{entry.title}</h2>
+          <h2 className="mt-3 text-2xl font-semibold text-foreground">{displayEntry.title}</h2>
           {showInlineProperties ? (
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {visible.has("emotion") && entry.emotion ? <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1">감정: {entry.emotion}</span> : null}
-              {visible.has("eventSummary") && entry.eventSummary ? <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1">사건: {entry.eventSummary}</span> : null}
-              {visible.has("verse") && entry.verse ? <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1">본문: {entry.verse}</span> : null}
-              {visible.has("tagsSnapshot") && entry.tagsSnapshot ? <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1">태그: {entry.tagsSnapshot}</span> : null}
+              {visible.has("emotion") && displayEntry.emotion ? <span className="rounded-md border border-white/10 bg-black/10 px-2.5 py-1">감정: {displayEntry.emotion}</span> : null}
+              {visible.has("eventSummary") && displayEntry.eventSummary ? <span className="rounded-md border border-white/10 bg-black/10 px-2.5 py-1">사건: {displayEntry.eventSummary}</span> : null}
+              {visible.has("verse") && displayEntry.verse ? <span className="rounded-md border border-white/10 bg-black/10 px-2.5 py-1">본문: {displayEntry.verse}</span> : null}
+              {visible.has("tagsSnapshot") && displayEntry.tagsSnapshot ? <span className="rounded-md border border-white/10 bg-black/10 px-2.5 py-1">태그: {displayEntry.tagsSnapshot}</span> : null}
             </div>
           ) : null}
         </div>
-        <Link className="rounded-md border border-white/10 bg-black/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground" href={`/life-ops/${entry.date}`} scroll={false}>
+        <Link className="rounded-md border border-white/10 bg-black/10 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground" href={`/life-ops/${displayEntry.date}`} scroll={false}>
           날짜 로그 보기
         </Link>
       </div>
 
-      {visible.has("people") && entry.people?.length ? (
+      {visible.has("people") && displayEntry.people?.length ? (
         <div className="mt-4 flex flex-wrap gap-2">
-          {entry.people.map((person) => (
-            <Link className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-muted-foreground transition hover:text-foreground" href={`/prm/${person.id}`} key={person.id} scroll={false}>
+          {displayEntry.people.map((person) => (
+            <Link className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs text-muted-foreground hover:text-foreground" href={`/prm/${person.id}`} key={person.id} scroll={false}>
               {person.name}
             </Link>
           ))}
@@ -464,11 +660,13 @@ function DailyEntryArchiveCard({ entry, visibleFields }: { entry: DailyEntry; vi
       ) : null}
 
       {visible.has("body") ? (
-        entry.body ? (
-          <details className="mt-4 rounded-md border border-white/10 bg-black/10 p-4">
+        displayEntry.hasBody || displayEntry.body || displayEntry.bodyPreview ? (
+          <details className="mt-4 rounded-md border border-white/10 bg-black/10 p-4" onToggle={(event) => {
+            if (event.currentTarget.open) void loadDetail();
+          }}>
             <summary className="cursor-pointer text-sm font-medium text-foreground">본문 보기</summary>
             <div className="mt-3 max-h-[30rem] overflow-y-auto">
-              <MarkdownView value={entry.body} />
+              {detailLoading ? <p className="text-sm text-muted-foreground">본문을 불러오는 중입니다.</p> : detailError ? <p className="text-sm text-muted-foreground">{detailError}</p> : <MarkdownView value={displayEntry.body || displayEntry.bodyPreview || ""} />}
             </div>
           </details>
         ) : (
@@ -476,18 +674,20 @@ function DailyEntryArchiveCard({ entry, visibleFields }: { entry: DailyEntry; vi
         )
       ) : null}
 
-      {visible.has("background") && entry.background ? (
+      {visible.has("background") && (displayEntry.background || displayEntry.backgroundPreview || detailLoading) ? (
         <div className="mt-4 rounded-md border border-white/10 bg-black/10 p-4 text-sm leading-6 text-muted-foreground">
           <p className="text-xs text-primary">배경</p>
-          <p className="mt-2 whitespace-pre-wrap">{entry.background}</p>
+          <p className="mt-2 whitespace-pre-wrap">{detailLoading ? "배경을 불러오는 중입니다." : displayEntry.background ?? displayEntry.backgroundPreview}</p>
         </div>
       ) : null}
 
-      {visible.has("sourceDocument") && entry.sourceDocument ? (
-        <details className="mt-4 rounded-md border border-white/10 bg-black/10 p-4">
+      {visible.has("sourceDocument") && (displayEntry.sourceDocument || displayEntry.hasSourceDocument) ? (
+        <details className="mt-4 rounded-md border border-white/10 bg-black/10 p-4" onToggle={(event) => {
+          if (event.currentTarget.open) void loadDetail();
+        }}>
           <summary className="cursor-pointer text-xs text-muted-foreground">원본 속성</summary>
           <div className="mt-3">
-            <SourceDocumentPanel sourceDocument={entry.sourceDocument} />
+            {detailLoading ? <p className="text-sm text-muted-foreground">원본 속성을 불러오는 중입니다.</p> : detailError ? <p className="text-sm text-muted-foreground">{detailError}</p> : displayEntry.sourceDocument ? <SourceDocumentPanel sourceDocument={displayEntry.sourceDocument} /> : <p className="text-sm text-muted-foreground">연결된 원본 속성이 없습니다.</p>}
           </div>
         </details>
       ) : null}

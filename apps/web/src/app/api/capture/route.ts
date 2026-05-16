@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const text = body.text?.trim() ?? "";
 
     if (!text) {
-      return NextResponse.json({ error: "Text is required" }, { status: 400 });
+      return NextResponse.json({ error: "내용을 입력해 주세요." }, { status: 400 });
     }
 
     const result = await ingestActionHubCapture(text, body.context);
@@ -35,12 +35,12 @@ export async function POST(request: Request) {
             type: result.suggested.domain,
             id: result.captureId,
           },
-      snapshot: result.snapshot,
+      delta: result.delta,
     });
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Capture failed.",
+        error: error instanceof Error ? error.message : "캡처 처리에 실패했습니다.",
       },
       { status: 500 },
     );

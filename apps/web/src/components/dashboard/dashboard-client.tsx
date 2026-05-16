@@ -98,13 +98,13 @@ export function DashboardClient({
     <PageLayout>
       <PageHeader
         eyebrow="Light House"
-        title="Dashboard"
+        title="오늘 보기"
         description="오늘의 작업, 관계, 기록, 에너지를 한 화면에서 스캔합니다."
         meta={
           <>
-            <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">{tasks.length} tasks</span>
-            <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">{people.length} people</span>
-            <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">{zettels.length} zettels</span>
+            <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">작업 {tasks.length}</span>
+            <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">사람 {people.length}</span>
+            <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">지식 {zettels.length}</span>
           </>
         }
       />

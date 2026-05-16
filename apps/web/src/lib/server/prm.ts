@@ -14,6 +14,15 @@ export type PRMSnapshot = {
   networkEdges: NetworkEdgeMock[];
 };
 
+export type PRMMutationDelta = {
+  deletedGiftId?: string;
+  deletedInteractionId?: string;
+  deletedNetworkEdgeId?: string;
+  gift?: GiftMock;
+  networkEdge?: NetworkEdgeMock;
+  person?: PersonMock | null;
+};
+
 type UserRow = { id: string };
 type PersonRow = {
   id: string;
@@ -108,6 +117,60 @@ function birthdayLabel(value: string | null) {
   return `${mm}-${dd}`;
 }
 
+function personFromRow(row: PersonRow, timeline: PersonMock["timeline"], sourceDocument: SourceDocumentInfo | null): PersonMock {
+  return {
+    id: row.id,
+    name: row.name,
+    nickname: row.nickname ?? undefined,
+    aliases: row.aliases,
+    birthDate: row.birthDate,
+    birthdayMemo: row.birthdayMemo,
+    layer: (row.dunbarLayer ?? 50) as PersonMock["layer"],
+    groups: parseGroups(row.groups),
+    status: row.status,
+    favorite: Boolean(row.isFavorite),
+    bio: row.bio ?? "설명이 아직 없습니다.",
+    profileBody: row.profileBody,
+    coreValue: row.coreValue ?? "기록 중",
+    intimacy: row.intimacy,
+    daysSinceContact: calculateDaysSinceContact(row.lastContactedAt),
+    cadenceDays: row.contactCadenceDays ?? 14,
+    upcomingBirthday: birthdayLabel(row.birthDate),
+    phone: row.phone,
+    email: row.email,
+    address: row.address,
+    socialLinks: row.socialLinks,
+    giftsCount: Number(row.giftsCount ?? 0),
+    interactionsCount: Number(row.interactionsCount ?? 0),
+    tasksCount: Number(row.tasksCount ?? 0),
+    timeline,
+    sourceDocument,
+  };
+}
+
+function giftFromRow(row: GiftRow): GiftMock {
+  return {
+    id: row.id,
+    personId: row.personId,
+    direction: row.direction,
+    title: row.title,
+    occurredAt: row.occurredAt,
+    satisfaction: row.satisfaction,
+    notes: row.notes,
+  };
+}
+
+function networkEdgeFromRow(row: NetworkEdgeRow): NetworkEdgeMock {
+  return {
+    id: row.id,
+    sourcePersonId: row.sourcePersonId,
+    targetPersonId: row.targetPersonId,
+    relationType: row.relationType,
+    strength: Number(row.strength ?? 3),
+    notes: row.notes,
+  };
+}
+
 export async function seedPRMSupportData() {
   const { id: userId } = await resolveUser();
   const existing = await queryD1<{ count: number | null }>(`select count(*) as count from people where user_id = ?`, [userId]);
@@ -165,11 +228,12 @@ export const getPRMSnapshot = cache(async function getPRMSnapshot(): Promise<PRM
          p.bio, p.profile_body as profileBody, p.core_value as coreValue,
          p.last_contacted_at as lastContactedAt, p.contact_cadence_days as contactCadenceDays,
          p.phone, p.email, p.address, p.social_links as socialLinks,
-         (select count(*) from gifts g where g.person_id = p.id) as giftsCount,
-         (select count(*) from interactions i where i.person_id = p.id) as interactionsCount,
+         (select count(*) from gifts g where g.person_id = p.id and g.user_id = p.user_id and g.deleted_at is null) as giftsCount,
+         (select count(*) from interactions i where i.person_id = p.id and i.user_id = p.user_id and i.deleted_at is null) as interactionsCount,
          (select count(*) from task_people_relations tpr inner join tasks t on t.id = tpr.task_id where tpr.person_id = p.id and t.deleted_at is null) as tasksCount
        from people p
        where p.user_id = ?
+         and p.deleted_at is null
        order by p.is_favorite desc, p.dunbar_layer asc, p.name asc`,
       [userId],
     ),
@@ -268,79 +332,386 @@ export const getPRMSnapshot = cache(async function getPRMSnapshot(): Promise<PRM
     timelineMap.set(id, items);
   }
 
-  const people: PersonMock[] = peopleResult.rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    nickname: row.nickname ?? undefined,
-    aliases: row.aliases,
-    birthDate: row.birthDate,
-    birthdayMemo: row.birthdayMemo,
-    layer: (row.dunbarLayer ?? 50) as PersonMock["layer"],
-    groups: parseGroups(row.groups),
-    status: row.status,
-    favorite: Boolean(row.isFavorite),
-    bio: row.bio ?? "설명이 아직 없습니다.",
-    profileBody: row.profileBody,
-    coreValue: row.coreValue ?? "기록 중",
-    intimacy: row.intimacy,
-    daysSinceContact: calculateDaysSinceContact(row.lastContactedAt),
-    cadenceDays: row.contactCadenceDays ?? 14,
-    upcomingBirthday: birthdayLabel(row.birthDate),
-    phone: row.phone,
-    email: row.email,
-    address: row.address,
-    socialLinks: row.socialLinks,
-    giftsCount: Number(row.giftsCount ?? 0),
-    interactionsCount: Number(row.interactionsCount ?? 0),
-    tasksCount: Number(row.tasksCount ?? 0),
-    timeline: timelineMap.get(row.id) ?? [],
-    sourceDocument: sourceDocuments.get(row.id) ?? null,
-  }));
-
-  const gifts: GiftMock[] = giftsResult.rows.map((row) => ({
-    id: row.id,
-    personId: row.personId,
-    direction: row.direction,
-    title: row.title,
-    occurredAt: row.occurredAt,
-    satisfaction: row.satisfaction,
-    notes: row.notes,
-  }));
-
-  const networkEdges: NetworkEdgeMock[] = networkEdgeResult.rows.map((row) => ({
-    id: row.id,
-    sourcePersonId: row.sourcePersonId,
-    targetPersonId: row.targetPersonId,
-    relationType: row.relationType,
-    strength: Number(row.strength ?? 3),
-    notes: row.notes,
-  }));
+  const people: PersonMock[] = peopleResult.rows.map((row) => personFromRow(row, timelineMap.get(row.id) ?? [], sourceDocuments.get(row.id) ?? null));
+  const gifts: GiftMock[] = giftsResult.rows.map(giftFromRow);
+  const networkEdges: NetworkEdgeMock[] = networkEdgeResult.rows.map(networkEdgeFromRow);
 
   return { people, gifts, networkEdges };
 });
 
+async function getPRMPersonMutationDelta(userId: string, personId: string): Promise<Pick<PRMMutationDelta, "person">> {
+  const [personResult, interactionTimeline, giftTimeline, taskTimeline, zettelTimeline, dailyEntryTimeline, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
+    queryD1<PersonRow>(
+      `select
+         p.id, p.name, p.nickname, p.aliases, p.birth_date as birthDate, p.birthday_memo as birthdayMemo,
+         p.groups, p.dunbar_layer as dunbarLayer, p.intimacy, p.status, p.is_favorite as isFavorite,
+         p.bio, p.profile_body as profileBody, p.core_value as coreValue,
+         p.last_contacted_at as lastContactedAt, p.contact_cadence_days as contactCadenceDays,
+         p.phone, p.email, p.address, p.social_links as socialLinks,
+         (select count(*) from gifts g where g.person_id = p.id and g.user_id = p.user_id and g.deleted_at is null) as giftsCount,
+         (select count(*) from interactions i where i.person_id = p.id and i.user_id = p.user_id and i.deleted_at is null) as interactionsCount,
+         (select count(*) from task_people_relations tpr inner join tasks t on t.id = tpr.task_id where tpr.person_id = p.id and t.deleted_at is null) as tasksCount
+       from people p
+       where p.user_id = ?
+         and p.id = ?
+         and p.deleted_at is null
+       limit 1`,
+      [userId, personId],
+    ),
+    queryD1<TimelineRow>(
+      `select id, person_id as personId, occurred_at as date, summary as title, 'interaction' as kind
+       from interactions
+       where user_id = ? and person_id = ? and deleted_at is null`,
+      [userId, personId],
+    ),
+    queryD1<TimelineRow>(
+      `select id, person_id as personId, occurred_at as date, title, 'gift' as kind
+       from gifts
+       where user_id = ? and person_id = ? and deleted_at is null`,
+      [userId, personId],
+    ),
+    queryD1<TimelineRow>(
+      `select t.id as id, tpr.person_id as personId, coalesce(t.updated_at, t.created_at) as date, t.title, 'task' as kind
+       from task_people_relations tpr
+       inner join tasks t on t.id = tpr.task_id
+       where t.user_id = ? and tpr.person_id = ? and t.deleted_at is null`,
+      [userId, personId],
+    ),
+    queryD1<TimelineRow>(
+      `select z.id as id, zpr.person_id as personId, coalesce(z.updated_at, z.created_at) as date, z.title, 'zettel' as kind
+       from zettel_people_relations zpr
+       inner join zettels z on z.id = zpr.zettel_id
+       where z.user_id = ? and zpr.person_id = ? and z.deleted_at is null`,
+      [userId, personId],
+    ),
+    queryD1<TimelineRow>(
+      `select dle.id as id, depr.person_id as personId, dle.date, coalesce(dle.title, 'Daily Entry') as title, 'daily_entry' as kind
+       from daily_entry_people_relations depr
+       inner join daily_log_entries dle on dle.id = depr.daily_entry_id
+       where dle.user_id = ? and depr.person_id = ? and dle.deleted_at is null`,
+      [userId, personId],
+    ),
+    queryD1<SourceDocumentRow>(
+      `select id, canonical_entity_id as canonicalEntityId, source_database as sourceDatabase, source_id as sourceId, document_role as documentRole, status, raw_content_preview as preview
+       from source_documents
+       where user_id = ? and deleted_at is null and canonical_entity_type = 'person' and canonical_entity_id = ?
+       limit 1`,
+      [userId, personId],
+    ),
+    queryD1<SourceDocumentPropertyRow>(
+      `select sdp.source_document_id as sourceDocumentId, sdp.property_name as name, sdp.value_text as value, sdp.property_type as type
+       from source_document_properties sdp
+       inner join source_documents sd on sd.id = sdp.source_document_id
+       where sd.user_id = ? and sd.deleted_at is null and sd.canonical_entity_type = 'person' and sd.canonical_entity_id = ?
+       order by sdp.property_key`,
+      [userId, personId],
+    ),
+  ]);
+
+  const row = personResult.rows[0];
+  if (!row) throw new Error("인물 데이터를 찾지 못했습니다.");
+
+  const timeline = [...interactionTimeline.rows, ...giftTimeline.rows, ...taskTimeline.rows, ...zettelTimeline.rows, ...dailyEntryTimeline.rows]
+    .map((item) => ({ id: item.id, date: item.date.slice(0, 10), title: item.title, kind: item.kind }))
+    .sort((left, right) => (left.date < right.date ? 1 : -1));
+  const sourceDocumentRow = sourceDocumentResult.rows[0];
+  const sourceDocument: SourceDocumentInfo | null = sourceDocumentRow
+    ? {
+        id: sourceDocumentRow.id,
+        sourceDatabase: sourceDocumentRow.sourceDatabase,
+        sourceId: sourceDocumentRow.sourceId,
+        documentRole: sourceDocumentRow.documentRole,
+        status: sourceDocumentRow.status,
+        preview: sourceDocumentRow.preview,
+        properties: sourcePropertyResult.rows
+          .filter((property) => property.value)
+          .map((property) => ({ name: property.name, value: property.value ?? "", type: property.type })),
+      }
+    : null;
+
+  return { person: personFromRow(row, timeline, sourceDocument) };
+}
+
+async function getGiftMutationDelta(userId: string, giftId: string): Promise<Pick<PRMMutationDelta, "gift">> {
+  const result = await queryD1<GiftRow>(
+    `select id, person_id as personId, direction, title, occurred_at as occurredAt, satisfaction, notes
+     from gifts
+     where id = ? and user_id = ? and deleted_at is null
+     limit 1`,
+    [giftId, userId],
+  );
+  const row = result.rows[0];
+  if (!row) throw new Error("선물 데이터를 찾지 못했습니다.");
+  return { gift: giftFromRow(row) };
+}
+
+async function getNetworkEdgeMutationDelta(userId: string, edgeId: string): Promise<Pick<PRMMutationDelta, "networkEdge">> {
+  const result = await queryD1<NetworkEdgeRow>(
+    `select id, source_person_id as sourcePersonId, target_person_id as targetPersonId, relation_type as relationType, strength, notes
+     from network_edges
+     where id = ? and user_id = ? and deleted_at is null
+     limit 1`,
+    [edgeId, userId],
+  );
+  const row = result.rows[0];
+  if (!row) throw new Error("관계선 데이터를 찾지 못했습니다.");
+  return { networkEdge: networkEdgeFromRow(row) };
+}
+
 export async function getPRMPerson(personId: string) {
-  const snapshot = await getPRMSnapshot();
-  return snapshot.people.find((person) => person.id === personId) ?? null;
+  const { id: userId } = await resolveUser();
+  try {
+    const delta = await getPRMPersonMutationDelta(userId, personId);
+    return delta.person ?? null;
+  } catch (error) {
+    if (error instanceof Error && error.message === "인물 데이터를 찾지 못했습니다.") return null;
+    throw error;
+  }
+}
+
+export async function getPRMPeople() {
+  const { id: userId } = await resolveUser();
+  const result = await queryD1<PersonRow>(
+    `select
+       p.id, p.name, p.nickname, p.aliases, p.birth_date as birthDate, p.birthday_memo as birthdayMemo,
+       p.groups, p.dunbar_layer as dunbarLayer, p.intimacy, p.status, p.is_favorite as isFavorite,
+       p.bio, p.profile_body as profileBody, p.core_value as coreValue,
+       p.last_contacted_at as lastContactedAt, p.contact_cadence_days as contactCadenceDays,
+       p.phone, p.email, p.address, p.social_links as socialLinks,
+       (select count(*) from gifts g where g.person_id = p.id and g.user_id = p.user_id and g.deleted_at is null) as giftsCount,
+       (select count(*) from interactions i where i.person_id = p.id and i.user_id = p.user_id and i.deleted_at is null) as interactionsCount,
+       (select count(*) from task_people_relations tpr inner join tasks t on t.id = tpr.task_id where tpr.person_id = p.id and t.deleted_at is null) as tasksCount
+     from people p
+     where p.user_id = ?
+       and p.deleted_at is null
+     order by p.is_favorite desc, p.dunbar_layer asc, p.name asc`,
+    [userId],
+  );
+  return result.rows.map((row) => personFromRow(row, [], null));
+}
+
+function compactPersonForList(person: PersonMock): PersonMock {
+  return {
+    id: person.id,
+    name: person.name,
+    ...(person.nickname ? { nickname: person.nickname } : {}),
+    layer: person.layer,
+    groups: person.groups,
+    status: person.status,
+    ...(person.favorite ? { favorite: true } : {}),
+    bio: person.bio,
+    coreValue: person.coreValue,
+    daysSinceContact: person.daysSinceContact,
+    cadenceDays: person.cadenceDays,
+    ...(person.upcomingBirthday ? { upcomingBirthday: person.upcomingBirthday } : {}),
+    giftsCount: person.giftsCount,
+    interactionsCount: person.interactionsCount,
+    tasksCount: person.tasksCount,
+    timeline: [],
+  };
+}
+
+export async function getPRMPeopleList() {
+  return (await getPRMPeople()).map(compactPersonForList);
 }
 
 export async function getPRMGifts() {
-  const snapshot = await getPRMSnapshot();
-  return { rows: snapshot.gifts };
+  const { id: userId } = await resolveUser();
+  const result = await queryD1<GiftRow>(
+    `select id, person_id as personId, direction, title, occurred_at as occurredAt, satisfaction, notes
+     from gifts
+     where user_id = ? and deleted_at is null
+     order by occurred_at desc, created_at desc`,
+    [userId],
+  );
+  return { rows: result.rows.map(giftFromRow) };
 }
 
 export async function getPRMGift(giftId: string) {
-  const snapshot = await getPRMSnapshot();
-  const gift = snapshot.gifts.find((item) => item.id === giftId) ?? null;
-  const person = gift ? snapshot.people.find((item) => item.id === gift.personId) ?? null : null;
-  return gift ? { gift, person } : null;
+  const { id: userId } = await resolveUser();
+  try {
+    const gift = (await getGiftMutationDelta(userId, giftId)).gift;
+    if (!gift) return null;
+    const person = (await getPRMPersonMutationDelta(userId, gift.personId).catch(() => ({ person: null }))).person ?? null;
+    return { gift, person };
+  } catch (error) {
+    if (error instanceof Error && error.message === "선물 데이터를 찾지 못했습니다.") return null;
+    throw error;
+  }
 }
 
 export async function getPRMNeedsContact() {
-  const snapshot = await getPRMSnapshot();
-  return snapshot.people
+  const { id: userId } = await resolveUser();
+  const result = await queryD1<PersonRow>(
+    `select
+       p.id, p.name, p.nickname, p.aliases, p.birth_date as birthDate, p.birthday_memo as birthdayMemo,
+       p.groups, p.dunbar_layer as dunbarLayer, p.intimacy, p.status, p.is_favorite as isFavorite,
+       p.bio, p.profile_body as profileBody, p.core_value as coreValue,
+       p.last_contacted_at as lastContactedAt, p.contact_cadence_days as contactCadenceDays,
+       p.phone, p.email, p.address, p.social_links as socialLinks,
+       (select count(*) from gifts g where g.person_id = p.id and g.user_id = p.user_id and g.deleted_at is null) as giftsCount,
+       (select count(*) from interactions i where i.person_id = p.id and i.user_id = p.user_id and i.deleted_at is null) as interactionsCount,
+       (select count(*) from task_people_relations tpr inner join tasks t on t.id = tpr.task_id where tpr.person_id = p.id and t.deleted_at is null) as tasksCount
+     from people p
+     where p.user_id = ?
+       and p.deleted_at is null
+     order by p.last_contacted_at asc, p.dunbar_layer asc, p.name asc`,
+    [userId],
+  );
+  return result.rows
+    .map((row) => personFromRow(row, [], null))
     .filter((person) => person.daysSinceContact > person.cadenceDays)
     .sort((left, right) => right.daysSinceContact - left.daysSinceContact);
+}
+
+export async function getPRMPeopleTouchedOn(date: string, limit = 6) {
+  const { id: userId } = await resolveUser();
+  const result = await queryD1<PersonRow>(
+    `select
+       p.id, p.name, p.nickname, p.aliases, p.birth_date as birthDate, p.birthday_memo as birthdayMemo,
+       p.groups, p.dunbar_layer as dunbarLayer, p.intimacy, p.status, p.is_favorite as isFavorite,
+       p.bio, p.profile_body as profileBody, p.core_value as coreValue,
+       p.last_contacted_at as lastContactedAt, p.contact_cadence_days as contactCadenceDays,
+       p.phone, p.email, p.address, p.social_links as socialLinks,
+       (select count(*) from gifts g where g.person_id = p.id and g.user_id = p.user_id and g.deleted_at is null) as giftsCount,
+       (select count(*) from interactions i where i.person_id = p.id and i.user_id = p.user_id and i.deleted_at is null) as interactionsCount,
+       (select count(*) from task_people_relations tpr inner join tasks t on t.id = tpr.task_id where tpr.person_id = p.id and t.deleted_at is null) as tasksCount
+     from people p
+     where p.user_id = ?
+       and p.deleted_at is null
+       and (
+         exists (
+           select 1
+           from interactions i
+           where i.person_id = p.id
+             and i.user_id = p.user_id
+             and i.deleted_at is null
+             and i.occurred_at = ?
+         )
+         or exists (
+           select 1
+           from gifts g
+           where g.person_id = p.id
+             and g.user_id = p.user_id
+             and g.deleted_at is null
+             and g.occurred_at = ?
+         )
+         or exists (
+           select 1
+           from task_people_relations tpr
+           inner join tasks t on t.id = tpr.task_id
+           where tpr.person_id = p.id
+             and t.user_id = p.user_id
+             and t.deleted_at is null
+             and date(coalesce(t.updated_at, t.created_at)) = ?
+         )
+         or exists (
+           select 1
+           from zettel_people_relations zpr
+           inner join zettels z on z.id = zpr.zettel_id
+           where zpr.person_id = p.id
+             and z.user_id = p.user_id
+             and z.deleted_at is null
+             and date(coalesce(z.updated_at, z.created_at)) = ?
+         )
+         or exists (
+           select 1
+           from daily_entry_people_relations depr
+           inner join daily_log_entries dle on dle.id = depr.daily_entry_id
+           where depr.person_id = p.id
+             and dle.user_id = p.user_id
+             and dle.deleted_at is null
+             and dle.date = ?
+         )
+       )
+     order by p.is_favorite desc, p.dunbar_layer asc, p.name asc
+     limit ?`,
+    [userId, date, date, date, date, date, limit],
+  );
+  return result.rows.map((row) => personFromRow(row, [], null));
+}
+
+export async function getPRMNetwork() {
+  const { id: userId } = await resolveUser();
+  const result = await queryD1<NetworkEdgeRow>(
+    `select id, source_person_id as sourcePersonId, target_person_id as targetPersonId, relation_type as relationType, strength, notes
+     from network_edges
+     where user_id = ? and deleted_at is null
+     order by updated_at desc, created_at desc`,
+    [userId],
+  );
+  return result.rows.map(networkEdgeFromRow);
+}
+
+export async function getPRMContextPeople(limit = 8) {
+  const { id: userId } = await resolveUser();
+  const result = await queryD1<{ id: string }>(
+    `select id
+     from people
+     where user_id = ? and deleted_at is null
+     order by is_favorite desc, dunbar_layer asc, name asc
+     limit ?`,
+    [userId, limit],
+  );
+  return result.rows;
+}
+
+function personIdsFromDetailParam(detail: string | null) {
+  if (!detail) return [];
+  return detail
+    .split(",")
+    .map((item) => item.split(":"))
+    .filter(([type, id]) => type === "person" && Boolean(id))
+    .map(([, id]) => id);
+}
+
+async function getPRMPeopleWithFocusedPeople(focusedPersonIds: string[]) {
+  const people = await getPRMPeopleList();
+  if (!focusedPersonIds.length) return people;
+
+  const focusedPeople = (await Promise.all(focusedPersonIds.map((personId) => getPRMPerson(personId)))).filter((person): person is PersonMock => Boolean(person));
+  if (!focusedPeople.length) return people;
+
+  const focusedById = new Map(focusedPeople.map((person) => [person.id, person]));
+  const merged = people.map((person) => focusedById.get(person.id) ?? person);
+  const existingIds = new Set(merged.map((person) => person.id));
+  return [...merged, ...focusedPeople.filter((person) => !existingIds.has(person.id))];
+}
+
+export async function getPRMHydrationSnapshot(pathAndSearch = "/prm"): Promise<PRMSnapshot> {
+  const url = new URL(pathAndSearch, "http://local");
+  const segments = url.pathname.split("/").filter(Boolean);
+  const section = segments[1] ?? "";
+  const empty: PRMSnapshot = { gifts: [], networkEdges: [], people: [] };
+
+  if (section === "gifts") {
+    const [people, gifts] = await Promise.all([getPRMPeopleList(), getPRMGifts()]);
+    return { ...empty, gifts: gifts.rows, people };
+  }
+
+  if (section === "graph") {
+    const [people, networkEdges] = await Promise.all([getPRMPeopleList(), getPRMNetwork()]);
+    return { ...empty, networkEdges, people };
+  }
+
+  if (section === "hit-them-up") {
+    const people = (await getPRMNeedsContact()).map(compactPersonForList);
+    return { ...empty, people };
+  }
+
+  if (section) {
+    const person = await getPRMPerson(section);
+    return { ...empty, people: person ? [person] : [] };
+  }
+
+  const focusedPersonIds = personIdsFromDetailParam(url.searchParams.get("detail"));
+  if (focusedPersonIds.length) {
+    const [people, gifts] = await Promise.all([getPRMPeopleWithFocusedPeople(focusedPersonIds), getPRMGifts()]);
+    return { ...empty, gifts: gifts.rows, people };
+  }
+
+  const people = await getPRMPeopleList();
+  return { ...empty, people };
 }
 
 export async function markPersonContacted(personId: string) {
@@ -354,7 +725,7 @@ export async function markPersonContacted(personId: string) {
      values (?, ?, ?, date('now'), 'message', '직접 연락 완료', 'PRM에서 연락 완료로 마킹', datetime('now'), datetime('now'))`,
     [ulid(), userId, personId],
   );
-  return getPRMSnapshot();
+  return getPRMPersonMutationDelta(userId, personId);
 }
 
 export async function togglePersonFavorite(personId: string) {
@@ -362,7 +733,7 @@ export async function togglePersonFavorite(personId: string) {
   const current = await queryD1<{ isFavorite: number }>("select is_favorite as isFavorite from people where id = ? and user_id = ? limit 1", [personId, userId]);
   const next = current.rows[0]?.isFavorite ? 0 : 1;
   await executeD1(`update people set is_favorite = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [next, personId, userId]);
-  return getPRMSnapshot();
+  return getPRMPersonMutationDelta(userId, personId);
 }
 
 export async function updatePersonProfile(personId: string, input: {
@@ -441,7 +812,7 @@ export async function updatePersonProfile(personId: string, input: {
       userId,
     ],
   );
-  return getPRMSnapshot();
+  return getPRMPersonMutationDelta(userId, personId);
 }
 
 export async function createPersonInteraction(personId: string, input: { summary: string; type?: string; occurredAt?: string; content?: string }) {
@@ -455,13 +826,21 @@ export async function createPersonInteraction(personId: string, input: { summary
     [ulid(), userId, personId, input.occurredAt ?? new Date().toISOString().slice(0, 10), input.type ?? "message", summary, input.content?.trim() || null],
   );
   await executeD1(`update people set last_contacted_at = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [input.occurredAt ?? new Date().toISOString().slice(0, 10), personId, userId]);
-  return getPRMSnapshot();
+  return getPRMPersonMutationDelta(userId, personId);
 }
 
 export async function deleteInteraction(interactionId: string) {
   const { id: userId } = await resolveUser();
+  const found = await queryD1<{ personId: string }>(
+    `select person_id as personId from interactions where id = ? and user_id = ? and deleted_at is null limit 1`,
+    [interactionId, userId],
+  );
+  const personId = found.rows[0]?.personId;
   await executeD1(`update interactions set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [interactionId, userId]);
-  return getPRMSnapshot();
+  return {
+    ...(personId ? await getPRMPersonMutationDelta(userId, personId) : { person: null }),
+    deletedInteractionId: interactionId,
+  } satisfies PRMMutationDelta;
 }
 
 export async function createGift(personId: string, input: { title: string; direction: GiftMock["direction"]; occurredAt?: string; satisfaction?: string; notes?: string }) {
@@ -469,18 +848,30 @@ export async function createGift(personId: string, input: { title: string; direc
   const title = input.title.trim();
   if (!title) throw new Error("선물 이름은 비워둘 수 없습니다.");
 
+  const giftId = ulid();
   await executeD1(
     `insert into gifts (id, user_id, person_id, direction, title, occurred_at, satisfaction, notes, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    [ulid(), userId, personId, input.direction, title, input.occurredAt ?? new Date().toISOString().slice(0, 10), input.satisfaction?.trim() || null, input.notes?.trim() || null],
+    [giftId, userId, personId, input.direction, title, input.occurredAt ?? new Date().toISOString().slice(0, 10), input.satisfaction?.trim() || null, input.notes?.trim() || null],
   );
-  return getPRMSnapshot();
+  return {
+    ...(await getPRMPersonMutationDelta(userId, personId)),
+    ...(await getGiftMutationDelta(userId, giftId)),
+  } satisfies PRMMutationDelta;
 }
 
 export async function deleteGift(giftId: string) {
   const { id: userId } = await resolveUser();
+  const found = await queryD1<{ personId: string }>(
+    `select person_id as personId from gifts where id = ? and user_id = ? and deleted_at is null limit 1`,
+    [giftId, userId],
+  );
+  const personId = found.rows[0]?.personId;
   await executeD1(`update gifts set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [giftId, userId]);
-  return getPRMSnapshot();
+  return {
+    ...(personId ? await getPRMPersonMutationDelta(userId, personId) : { person: null }),
+    deletedGiftId: giftId,
+  } satisfies PRMMutationDelta;
 }
 
 export async function createNetworkEdge(input: { sourcePersonId: string; targetPersonId: string; relationType?: string; strength?: number; notes?: string }) {
@@ -501,16 +892,19 @@ export async function createNetworkEdge(input: { sourcePersonId: string; targetP
   );
   if (existing.rows[0]) throw new Error("이미 같은 두 사람 사이의 관계선이 있습니다.");
 
+  const edgeId = ulid();
   await executeD1(
     `insert into network_edges (id, user_id, source_person_id, target_person_id, relation_type, strength, notes, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    [ulid(), userId, input.sourcePersonId, input.targetPersonId, input.relationType?.trim() || null, Math.max(1, Math.min(5, Math.round(input.strength ?? 3))), input.notes?.trim() || null],
+    [edgeId, userId, input.sourcePersonId, input.targetPersonId, input.relationType?.trim() || null, Math.max(1, Math.min(5, Math.round(input.strength ?? 3))), input.notes?.trim() || null],
   );
-  return getPRMSnapshot();
+  return getNetworkEdgeMutationDelta(userId, edgeId);
 }
 
 export async function deleteNetworkEdge(edgeId: string) {
   const { id: userId } = await resolveUser();
   await executeD1(`update network_edges set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [edgeId, userId]);
-  return getPRMSnapshot();
+  return {
+    deletedNetworkEdgeId: edgeId,
+  } satisfies PRMMutationDelta;
 }

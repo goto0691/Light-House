@@ -26,7 +26,7 @@ export function OverlayFrame({ children, className, onClose, open, panelClassNam
     >
       <div
         aria-modal="true"
-        className={cn("glass-elevated w-full rounded-[28px] border border-white/10", panelClassName)}
+        className={cn("glass-elevated w-full rounded-lg border border-white/10", panelClassName)}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
       >
@@ -40,7 +40,7 @@ export function OverlayFrame({ children, className, onClose, open, panelClassNam
               {headerSlot}
               <button
                 aria-label="오버레이 닫기"
-                className="focus-ring inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-black/10 text-muted-foreground transition [@media(hover:hover)]:hover:bg-white/8 [@media(hover:hover)]:hover:text-foreground"
+                className="focus-ring inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground [@media(hover:hover)]:hover:bg-white/8 [@media(hover:hover)]:hover:text-foreground"
                 onClick={onClose}
                 type="button"
               >

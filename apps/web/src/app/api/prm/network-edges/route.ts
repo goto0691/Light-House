@@ -5,7 +5,7 @@ import { createNetworkEdge } from "@/lib/server/prm";
 
 export async function POST(request: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   const body = (await request.json()) as {
     sourcePersonId?: string;
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     notes?: string;
   };
 
-  const snapshot = await createNetworkEdge({
+  const delta = await createNetworkEdge({
     sourcePersonId: body.sourcePersonId ?? "",
     targetPersonId: body.targetPersonId ?? "",
     relationType: body.relationType,
@@ -23,5 +23,5 @@ export async function POST(request: Request) {
     notes: body.notes,
   });
 
-  return NextResponse.json({ snapshot });
+  return NextResponse.json({ delta });
 }

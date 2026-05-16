@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ rules });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Source property mapping rules load failed." },
+      { error: error instanceof Error ? error.message : "원본 컬럼 매핑 규칙을 불러오지 못했습니다." },
       { status: 400 },
     );
   }
@@ -19,7 +19,7 @@ export async function PATCH(request: Request) {
   try {
     const body = (await request.json()) as SourcePropertyMappingMutationInput;
     if (!body.propertyName?.trim()) {
-      return NextResponse.json({ error: "propertyName is required." }, { status: 400 });
+      return NextResponse.json({ error: "원본 컬럼명을 지정해 주세요." }, { status: 400 });
     }
 
     const workbench = await upsertSourcePropertyMapping(body);

@@ -24,12 +24,12 @@ export function HabitCard({ habit, onToggle, disabled }: HabitCardProps) {
     >
       <div className="flex items-center justify-between">
         <span className="text-2xl">{habit.icon}</span>
-        <span className="tabular-nums text-xs text-muted-foreground">{habit.streak} day streak</span>
+        <span className="tabular-nums text-xs text-muted-foreground">{habit.streak}일 연속</span>
       </div>
       <h2 className="text-balance mt-3 font-display text-2xl text-foreground">{habit.title}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{habit.completedToday ? "오늘 완료" : "오늘 아직 미기록"}</p>
-      <div className="mt-4 rounded-full bg-black/10 p-1">
-        <div className={cn("h-1.5 rounded-full transition-all duration-300", habit.completedToday ? "w-full bg-primary" : "w-1/3 bg-white/15")} />
+      <div className="mt-4 rounded-md bg-black/10 p-1">
+        <div className={cn("h-1.5 rounded-sm", habit.completedToday ? "w-full bg-primary" : "w-1/3 bg-white/15")} />
       </div>
     </GlassCard>
   );

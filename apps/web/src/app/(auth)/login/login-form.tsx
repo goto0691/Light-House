@@ -33,11 +33,11 @@ export function LoginForm() {
       </label>
       {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
       <button
-        className="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-70"
+        className="w-full rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-70"
         disabled={pending}
         type="submit"
       >
-        {pending ? "인증 중..." : "Dashboard 진입"}
+        {pending ? "인증 중..." : "오늘 보기로 진입"}
       </button>
     </form>
   );

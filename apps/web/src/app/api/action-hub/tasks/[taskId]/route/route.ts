@@ -12,12 +12,12 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
     const body = (await request.json()) as RouteRequest;
 
     if (!body.projectId) {
-      return NextResponse.json({ error: "projectId is required" }, { status: 400 });
+      return NextResponse.json({ error: "프로젝트 ID가 필요합니다." }, { status: 400 });
     }
 
-    const snapshot = await routeInboxTaskToProject(taskId, body.projectId);
-    return NextResponse.json({ snapshot });
+    const delta = await routeInboxTaskToProject(taskId, body.projectId);
+    return NextResponse.json({ delta });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Route failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "라우팅에 실패했습니다." }, { status: 500 });
   }
 }

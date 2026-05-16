@@ -12,6 +12,14 @@ type SearchRow = {
   boost: number | null;
 };
 
+type SearchReadModelRow = {
+  id: string;
+  title: string;
+  snippet: string | null;
+  href: string | null;
+  score: number | null;
+};
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -258,4 +266,218 @@ export async function searchWithFTS(query: string, types?: string[]): Promise<Se
     }
     throw error;
   }
+}
+
+function wantsSearchType(types: string[] | undefined, type: SearchItem["type"]) {
+  return !types?.length || types.includes(type);
+}
+
+function textMatchSql(columns: string[]) {
+  return columns.map((column) => `lower(coalesce(${column}, '')) like lower(?)`).join(" or ");
+}
+
+function textMatchParams(query: string, columnCount: number) {
+  if (!query.trim()) return [];
+  return Array.from({ length: columnCount }, () => `%${query}%`);
+}
+
+export async function getSearchReadModelItems(query: string, types?: string[]): Promise<SearchItem[]> {
+  const user = await resolveCurrentUser();
+  const normalized = query.trim();
+  const searches: Array<Promise<SearchItem[]>> = [];
+
+  if (wantsSearchType(types, "task")) {
+    const columns = ["t.title", "t.content"];
+    const where = normalized ? ` and (${textMatchSql(columns)})` : "";
+    searches.push(
+      queryD1<SearchReadModelRow>(
+        `select
+           t.id,
+           t.title,
+           coalesce(t.content, '세부 메모가 아직 없습니다.') as snippet,
+           case when t.project_id is null then '/action-hub/inbox' else '/action-hub/' || t.project_id || '/tasks/' || t.id end as href,
+           case when ? <> '' and lower(t.title) like lower(?) then 0.95 else 0.82 end as score
+         from tasks t
+         where t.user_id = ?
+           and t.deleted_at is null${where}
+         order by t.updated_at desc, t.created_at desc
+         limit 8`,
+        [normalized, `%${normalized}%`, user.id, ...textMatchParams(normalized, columns.length)],
+      ).then((result) =>
+        result.rows.map((row) => ({
+          type: "task" as const,
+          id: row.id,
+          title: row.title,
+          snippet: row.snippet ?? "작업 검색 결과",
+          href: row.href ?? "/action-hub",
+          score: Number(row.score ?? 0.82),
+        })),
+      ),
+    );
+  }
+
+  if (wantsSearchType(types, "person")) {
+    const columns = ["p.name", "p.nickname", "p.bio", "p.core_value"];
+    const where = normalized ? ` and (${textMatchSql(columns)})` : "";
+    searches.push(
+      queryD1<SearchReadModelRow>(
+        `select
+           p.id,
+           p.name as title,
+           coalesce(p.bio, p.core_value, p.nickname, '관계 검색 결과') as snippet,
+           '/prm?detail=person:' || p.id as href,
+           case when ? <> '' and lower(p.name) like lower(?) then 0.92 else 0.78 end as score
+         from people p
+         where p.user_id = ?
+           and p.deleted_at is null${where}
+         order by p.is_favorite desc, p.dunbar_layer asc, p.name asc
+         limit 8`,
+        [normalized, `%${normalized}%`, user.id, ...textMatchParams(normalized, columns.length)],
+      ).then((result) =>
+        result.rows.map((row) => ({
+          type: "person" as const,
+          id: row.id,
+          title: row.title,
+          snippet: row.snippet ?? "관계 검색 결과",
+          href: row.href ?? "/prm",
+          score: Number(row.score ?? 0.78),
+        })),
+      ),
+    );
+  }
+
+  if (wantsSearchType(types, "zettel")) {
+    const columns = ["z.title", "z.summary", "z.content_text", "z.category"];
+    const where = normalized ? ` and (${textMatchSql(columns)})` : "";
+    searches.push(
+      queryD1<SearchReadModelRow>(
+        `select
+           z.id,
+           z.title,
+           coalesce(z.summary, substr(coalesce(z.content_text, ''), 1, 180), '지식 검색 결과') as snippet,
+           '/vault/zettels?detail=zettel:' || z.id as href,
+           case when ? <> '' and lower(z.title) like lower(?) then 0.9 else 0.74 end as score
+         from zettels z
+         where z.user_id = ?
+           and z.deleted_at is null
+           and not exists (
+             select 1
+             from taggings tg
+             inner join tags t on t.id = tg.tag_id
+             where tg.taggable_type = 'zettel'
+               and tg.taggable_id = z.id
+               and t.slug in ('archive-work', 'needs-review', 'auto-log')
+           )${where}
+         order by z.pinned desc, z.updated_at desc
+         limit 8`,
+        [normalized, `%${normalized}%`, user.id, ...textMatchParams(normalized, columns.length)],
+      ).then((result) =>
+        result.rows.map((row) => ({
+          type: "zettel" as const,
+          id: row.id,
+          title: row.title,
+          snippet: row.snippet ?? "지식 검색 결과",
+          href: row.href ?? "/vault/zettels",
+          score: Number(row.score ?? 0.74),
+        })),
+      ),
+    );
+  }
+
+  if (wantsSearchType(types, "media")) {
+    const columns = ["m.title", "m.original_title", "m.creator", "m.review", "m.genre"];
+    const where = normalized ? ` and (${textMatchSql(columns)})` : "";
+    searches.push(
+      queryD1<SearchReadModelRow>(
+        `select
+           m.id,
+           m.title,
+           trim(coalesce(m.creator, 'Unknown') || ' · ' || coalesce(m.review, '감상이 아직 없습니다.')) as snippet,
+           '/vault/media?detail=media:' || m.id as href,
+           case when ? <> '' and lower(m.title) like lower(?) then 0.82 else 0.68 end as score
+         from media_logs m
+         where m.user_id = ?
+           and m.deleted_at is null${where}
+         order by m.updated_at desc, m.created_at desc
+         limit 8`,
+        [normalized, `%${normalized}%`, user.id, ...textMatchParams(normalized, columns.length)],
+      ).then((result) =>
+        result.rows.map((row) => ({
+          type: "media" as const,
+          id: row.id,
+          title: row.title,
+          snippet: row.snippet ?? "미디어 검색 결과",
+          href: row.href ?? "/vault/media",
+          score: Number(row.score ?? 0.68),
+        })),
+      ),
+    );
+  }
+
+  if (wantsSearchType(types, "place")) {
+    const columns = ["p.name", "p.address", "p.notes", "p.category"];
+    const where = normalized ? ` and (${textMatchSql(columns)})` : "";
+    searches.push(
+      queryD1<SearchReadModelRow>(
+        `select
+           p.id,
+           p.name as title,
+           trim(coalesce(p.address, '') || case when p.notes is null or p.notes = '' then '' else ' · ' || p.notes end) as snippet,
+           '/vault/places?detail=place:' || p.id as href,
+           case when ? <> '' and lower(p.name) like lower(?) then 0.78 else 0.62 end as score
+         from places p
+         where p.user_id = ?
+           and p.deleted_at is null${where}
+         order by p.updated_at desc, p.created_at desc
+         limit 8`,
+        [normalized, `%${normalized}%`, user.id, ...textMatchParams(normalized, columns.length)],
+      ).then((result) =>
+        result.rows.map((row) => ({
+          type: "place" as const,
+          id: row.id,
+          title: row.title,
+          snippet: row.snippet?.trim() || "장소 검색 결과",
+          href: row.href ?? "/vault/places",
+          score: Number(row.score ?? 0.62),
+        })),
+      ),
+    );
+  }
+
+  if (wantsSearchType(types, "tag")) {
+    const columns = ["t.name", "t.slug"];
+    const where = normalized ? ` and (${textMatchSql(columns)})` : "";
+    searches.push(
+      queryD1<SearchReadModelRow>(
+        `select
+           t.id,
+           t.name as title,
+           ('#' || t.slug || ' · ' || coalesce(t.usage_count, 0) || '회 사용') as snippet,
+           '/vault?tag=' || t.slug as href,
+           case when ? <> '' and lower(t.name) like lower(?) then 0.74 else 0.58 end as score
+         from tags t
+         where t.user_id = ?
+           and t.deleted_at is null${where}
+         order by coalesce(t.usage_count, 0) desc, t.name asc
+         limit 10`,
+        [normalized, `%${normalized}%`, user.id, ...textMatchParams(normalized, columns.length)],
+      ).then((result) =>
+        result.rows.map((row) => ({
+          type: "tag" as const,
+          id: row.id,
+          title: row.title,
+          snippet: row.snippet ?? "태그 검색 결과",
+          href: row.href ?? "/vault",
+          score: Number(row.score ?? 0.58),
+        })),
+      ),
+    );
+  }
+
+  const groups = await Promise.all(searches);
+  return groups
+    .flat()
+    .filter((item, index, array) => array.findIndex((candidate) => candidate.type === item.type && candidate.id === item.id) === index)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 20);
 }

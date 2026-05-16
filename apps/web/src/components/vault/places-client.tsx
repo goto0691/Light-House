@@ -30,10 +30,11 @@ import {
   updateSavedViewClient,
 } from "@/lib/saved-view-client";
 import type { SavedView } from "@/lib/server/ui-state";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
+import { postJsonMutation } from "@/lib/snapshot-client";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 type PlacesClientProps = {
+  initialPlaces: PlaceMock[];
   savedViews: SavedView[];
 };
 
@@ -55,11 +56,12 @@ const PLACE_COLUMNS: CollectionColumnDefinition[] = [
   { key: "sourceDocument", label: "원본 속성" },
 ];
 
-export function PlacesClient({ savedViews }: PlacesClientProps) {
+export function PlacesClient({ initialPlaces, savedViews }: PlacesClientProps) {
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const places = useVaultStore((state) => state.places);
-  const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
+  const [places, setPlaces] = useState(initialPlaces);
+  const replacePlaces = useVaultStore((state) => state.replacePlaces);
+  const upsertPlace = useVaultStore((state) => state.upsertPlace);
   const initialActiveViewKey = searchParams.get("view") ?? getDefaultSavedViewKey(savedViews) ?? "all";
   const initialActiveView = savedViews.find((view) => getSavedViewKey(view) === initialActiveViewKey) ?? savedViews.find((view) => view.isDefault) ?? savedViews[0];
   const [localSavedViews, setLocalSavedViews] = useState(savedViews);
@@ -85,6 +87,11 @@ export function PlacesClient({ savedViews }: PlacesClientProps) {
   useEffect(() => {
     setLocalSavedViews(savedViews);
   }, [savedViews]);
+
+  useEffect(() => {
+    setPlaces(initialPlaces);
+    replacePlaces(initialPlaces);
+  }, [initialPlaces, replacePlaces]);
 
   function setPlacesLocation(viewKey: string) {
     const params = new URLSearchParams({ view: viewKey });
@@ -280,7 +287,7 @@ export function PlacesClient({ savedViews }: PlacesClientProps) {
             <>
               <CollectionColumnControls columns={PLACE_COLUMNS} onChange={setVisibleColumnKeys} visibleKeys={visibleColumnKeys} />
               <button
-                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8"
                 onClick={() => setViewManagerOpen((open) => !open)}
                 type="button"
               >
@@ -341,11 +348,11 @@ export function PlacesClient({ savedViews }: PlacesClientProps) {
                         onBlur={(event) => {
                           startTransition(async () => {
                             try {
-                              await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                                `/api/vault/places/${place.id}/review`,
-                                { review: event.target.value },
-                                replaceSnapshot,
-                              );
+                              const payload = await postJsonMutation<{ place: PlaceMock }>(`/api/vault/places/${place.id}/review`, { review: event.target.value });
+                              if (payload.place) {
+                                setPlaces((current) => upsertPlaceItem(current, payload.place));
+                                upsertPlace(payload.place);
+                              }
                               toast.success(`${place.name} 메모를 저장했습니다.`);
                             } catch (error) {
                               toast.error("장소 메모 저장에 실패했습니다.", {
@@ -376,6 +383,10 @@ export function PlacesClient({ savedViews }: PlacesClientProps) {
       </GlassCard>
     </section>
   );
+}
+
+function upsertPlaceItem(items: PlaceMock[], place: PlaceMock) {
+  return items.some((item) => item.id === place.id) ? items.map((item) => (item.id === place.id ? place : item)) : [place, ...items];
 }
 
 function placeMatchesSavedView(place: PlaceMock, view: SavedView) {

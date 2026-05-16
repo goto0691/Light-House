@@ -29,7 +29,7 @@ export function OfflineBanner() {
   if (online && queued === 0) return null;
 
   return (
-    <div className="fixed inset-x-3 top-3 z-[80] mx-auto flex max-w-2xl items-center justify-between gap-3 rounded-2xl border border-amber-300/25 bg-background/90 px-4 py-3 text-sm text-foreground shadow-2xl backdrop-blur md:top-4">
+    <div className="fixed inset-x-3 top-3 z-[80] mx-auto flex max-w-2xl items-center justify-between gap-3 rounded-lg border border-amber-300/25 bg-background/90 px-4 py-3 text-sm text-foreground shadow-2xl backdrop-blur md:top-4">
       <div className="flex min-w-0 items-center gap-3">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-amber-300/25 bg-amber-300/10 text-amber-200">
           <WifiOff className="h-4 w-4" />
@@ -41,7 +41,7 @@ export function OfflineBanner() {
           </p>
         </div>
       </div>
-      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+      <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
         PWA
       </span>
     </div>

@@ -29,7 +29,7 @@ export function PRMGraphCanvas({ people, edges, onDeleteEdge }: PRMGraphCanvasPr
                   const otherId = edge.sourcePersonId === person.id ? edge.targetPersonId : edge.sourcePersonId;
                   const other = peopleMap.get(otherId);
                   return (
-                    <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-3" key={edge.id}>
+                    <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3" key={edge.id}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm text-foreground">{other?.name ?? "알 수 없음"}</p>
@@ -37,7 +37,7 @@ export function PRMGraphCanvas({ people, edges, onDeleteEdge }: PRMGraphCanvasPr
                             {edge.relationType ?? "연결"} · 강도 {edge.strength}
                           </p>
                         </div>
-                        <button className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] tracking-[0.08em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground" onClick={() => onDeleteEdge(edge.id)} type="button">
+                        <button className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-[11px] tracking-[0.08em] text-muted-foreground hover:bg-white/8 hover:text-foreground" onClick={() => onDeleteEdge(edge.id)} type="button">
                           삭제
                         </button>
                       </div>

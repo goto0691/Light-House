@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Profile update failed." },
+      { error: error instanceof Error ? error.message : "프로필 저장에 실패했습니다." },
       { status: 400 },
     );
   }

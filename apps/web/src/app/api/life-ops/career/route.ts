@@ -5,9 +5,9 @@ import { createCareerEntry } from "@/lib/server/life-ops";
 
 export async function POST(request: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   const body = (await request.json()) as { organization?: string; role?: string; category?: string; startDate?: string; endDate?: string | null; description?: string };
-  const snapshot = await createCareerEntry({
+  const delta = await createCareerEntry({
     organization: body.organization ?? "",
     role: body.role ?? "",
     category: body.category ?? "work",
@@ -15,5 +15,5 @@ export async function POST(request: Request) {
     endDate: body.endDate,
     description: body.description,
   });
-  return NextResponse.json({ snapshot });
+  return NextResponse.json({ delta });
 }

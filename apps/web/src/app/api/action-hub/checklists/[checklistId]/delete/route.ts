@@ -5,9 +5,9 @@ import { deleteChecklistItem } from "@/lib/server/action-hub";
 
 export async function POST(_: Request, { params }: { params: Promise<{ checklistId: string }> }) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   const { checklistId } = await params;
-  const snapshot = await deleteChecklistItem(checklistId);
-  return NextResponse.json({ snapshot });
+  const delta = await deleteChecklistItem(checklistId);
+  return NextResponse.json({ delta });
 }

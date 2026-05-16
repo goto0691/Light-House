@@ -14,11 +14,11 @@ export function UpcomingBirthdaysWidget({ people }: UpcomingBirthdaysWidgetProps
   return (
     <BentoCard colSpan={6} rowSpan={2}>
       <GlassCard className="h-full" interactive>
-        <p className="text-xs uppercase tracking-[0.24em] text-primary">Upcoming Birthdays</p>
+        <p className="text-xs tracking-[0.08em] text-primary">다가오는 생일</p>
         <div className="mt-5 space-y-3">
           {people.length ? (
             people.map((person) => (
-              <div className="flex items-center justify-between gap-3 rounded-3xl border border-white/10 bg-white/5 px-4 py-3" key={person.id}>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3" key={person.id}>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <PartyPopper className="h-4 w-4 text-primary" />
@@ -26,10 +26,7 @@ export function UpcomingBirthdaysWidget({ people }: UpcomingBirthdaysWidgetProps
                   </div>
                   <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">{person.upcomingBirthday}</p>
                 </div>
-                <Link
-                  className="inline-flex items-center gap-2 rounded-full border border-primary/18 bg-primary/10 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-primary"
-                  href="/prm/gifts"
-                >
+                <Link className="inline-flex items-center gap-2 rounded-md border border-primary/18 bg-primary/10 px-3 py-1.5 text-xs tracking-[0.08em] text-primary" href="/prm/gifts">
                   <Gift className="h-3.5 w-3.5" />
                   <span>선물 제안</span>
                 </Link>
@@ -43,4 +40,3 @@ export function UpcomingBirthdaysWidget({ people }: UpcomingBirthdaysWidgetProps
     </BentoCard>
   );
 }
-

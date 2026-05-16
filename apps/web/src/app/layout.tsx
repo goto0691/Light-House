@@ -29,7 +29,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Project Light House",
-  description: "Personal second-brain workspace for action, knowledge, relationships, and life ops.",
+  description: "작업, 지식, 관계, 생활기록을 한곳에서 이어 보는 개인 작업 공간입니다.",
   applicationName: "Project Light House",
   manifest: "/manifest.webmanifest",
   icons: {

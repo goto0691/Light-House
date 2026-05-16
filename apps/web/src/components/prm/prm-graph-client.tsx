@@ -6,14 +6,35 @@ import { toast } from "sonner";
 import { PRMGraphCanvas } from "@/components/prm/prm-graph-canvas";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { usePRMStore } from "@/stores/use-prm-store";
+import { postDeltaMutation } from "@/lib/snapshot-client";
+import type { PRMSnapshot } from "@/lib/server/prm";
+import { type PRMMutationDelta, usePRMStore } from "@/stores/use-prm-store";
 
-export function PRMGraphClient() {
+function mergeNetworkEdge(edges: PRMSnapshot["networkEdges"], edge: NonNullable<PRMMutationDelta["networkEdge"]>) {
+  return edges.some((item) => item.id === edge.id) ? edges.map((item) => (item.id === edge.id ? edge : item)) : [edge, ...edges];
+}
+
+function applyDeltaToSnapshot(snapshot: PRMSnapshot, delta: PRMMutationDelta): PRMSnapshot {
+  const people = delta.person
+    ? snapshot.people.some((person) => person.id === delta.person!.id)
+      ? snapshot.people.map((person) => (person.id === delta.person!.id ? delta.person! : person))
+      : [...snapshot.people, delta.person]
+    : snapshot.people;
+  const withNetworkEdge = delta.networkEdge ? mergeNetworkEdge(snapshot.networkEdges, delta.networkEdge) : snapshot.networkEdges;
+  const networkEdges = delta.deletedNetworkEdgeId ? withNetworkEdge.filter((edge) => edge.id !== delta.deletedNetworkEdgeId) : withNetworkEdge;
+
+  return { ...snapshot, networkEdges, people };
+}
+
+export function PRMGraphClient({ initialSnapshot }: { initialSnapshot?: PRMSnapshot }) {
   const [isPending, startTransition] = useTransition();
-  const people = usePRMStore((state) => state.people);
-  const networkEdges = usePRMStore((state) => state.networkEdges);
+  const storePeople = usePRMStore((state) => state.people);
+  const storeNetworkEdges = usePRMStore((state) => state.networkEdges);
+  const applyMutationDelta = usePRMStore((state) => state.applyMutationDelta);
   const replaceSnapshot = usePRMStore((state) => state.replaceSnapshot);
+  const [localSnapshot, setLocalSnapshot] = useState(initialSnapshot ?? null);
+  const people = localSnapshot?.people ?? storePeople;
+  const networkEdges = localSnapshot?.networkEdges ?? storeNetworkEdges;
 
   const [sourcePersonId, setSourcePersonId] = useState(people[0]?.id ?? "");
   const [targetPersonId, setTargetPersonId] = useState(people[1]?.id ?? people[0]?.id ?? "");
@@ -32,9 +53,20 @@ export function PRMGraphClient() {
   });
 
   useEffect(() => {
+    if (!initialSnapshot) return;
+    setLocalSnapshot(initialSnapshot);
+    replaceSnapshot(initialSnapshot);
+  }, [initialSnapshot, replaceSnapshot]);
+
+  useEffect(() => {
     if (targetPersonId && targetPersonId !== sourcePersonId) return;
     setTargetPersonId(people.find((person) => person.id !== sourcePersonId)?.id ?? "");
   }, [people, sourcePersonId, targetPersonId]);
+
+  function applyGraphDelta(delta: PRMMutationDelta) {
+    applyMutationDelta(delta);
+    setLocalSnapshot((current) => (current ? applyDeltaToSnapshot(current, delta) : current));
+  }
 
   function submit() {
     if (isInvalidEdge) {
@@ -43,10 +75,10 @@ export function PRMGraphClient() {
     }
     startTransition(async () => {
       try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+        await postDeltaMutation<{ delta: PRMMutationDelta }, PRMMutationDelta>(
           "/api/prm/network-edges",
           { sourcePersonId, targetPersonId, relationType, strength },
-          replaceSnapshot,
+          applyGraphDelta,
         );
         setRelationType("");
         setStrength(3);
@@ -62,10 +94,10 @@ export function PRMGraphClient() {
   function removeEdge(edgeId: string) {
     startTransition(async () => {
       try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+        await postDeltaMutation<{ delta: PRMMutationDelta }, PRMMutationDelta>(
           `/api/prm/network-edges/${edgeId}/delete`,
           undefined,
-          replaceSnapshot,
+          applyGraphDelta,
         );
         toast.success("관계선을 제거했습니다.");
       } catch (error) {
@@ -85,25 +117,25 @@ export function PRMGraphClient() {
             <h1 className="mt-3 font-display text-4xl text-foreground">관계선 관리</h1>
             <p className="mt-3 max-w-2xl text-sm text-muted-foreground">사람 간 연결을 빠르게 만들고 지우면서, 레이어와 그룹을 함께 훑을 수 있는 그래프 진입점입니다.</p>
           </div>
-          <span className="rounded-full border border-white/10 bg-black/10 px-4 py-2 text-xs tracking-[0.08em] text-muted-foreground">{networkEdges.length}개 관계선</span>
+          <span className="rounded-md border border-white/10 bg-black/10 px-4 py-2 text-xs tracking-[0.08em] text-muted-foreground">{networkEdges.length}개 관계선</span>
         </div>
       </GlassCard>
 
       <FilterBar filters={[]} onChange={(state) => setQuery(state.q)} searchPlaceholder="이름, 그룹 기준으로 노드 찾기" />
 
       <section className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="glass rounded-[20px] p-5">
+        <div className="glass rounded-lg p-5">
         <p className="text-xs tracking-[0.08em] text-primary">관계 그래프</p>
         <h1 className="mt-3 font-display text-3xl text-foreground">관계선 추가</h1>
         <div className="mt-5 space-y-3">
-          <select className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setSourcePersonId(event.target.value)} value={sourcePersonId}>
+          <select className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setSourcePersonId(event.target.value)} value={sourcePersonId}>
             {people.map((person) => (
               <option key={person.id} value={person.id}>
                 출발: {person.name}
               </option>
             ))}
           </select>
-          <select className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setTargetPersonId(event.target.value)} value={targetPersonId}>
+          <select className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setTargetPersonId(event.target.value)} value={targetPersonId}>
             {people.filter((person) => person.id !== sourcePersonId).map((person) => (
               <option key={person.id} value={person.id}>
                 도착: {person.name}
@@ -111,10 +143,10 @@ export function PRMGraphClient() {
             ))}
           </select>
           {hasDuplicateEdge ? <p className="text-xs text-destructive">이미 같은 두 사람 사이의 관계선이 있습니다.</p> : null}
-          <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setRelationType(event.target.value)} placeholder="예: 교회, 업무, 창작" value={relationType} />
+          <input className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setRelationType(event.target.value)} placeholder="예: 교회, 업무, 창작" value={relationType} />
           <input className="w-full" max={5} min={1} onChange={(event) => setStrength(Number(event.target.value))} type="range" value={strength} />
           <p className="text-xs text-muted-foreground">강도 {strength}/5</p>
-          <button className="rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={isPending || isInvalidEdge} onClick={submit} type="button">
+          <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={isPending || isInvalidEdge} onClick={submit} type="button">
             {isPending ? "저장 중..." : "관계선 추가"}
           </button>
         </div>

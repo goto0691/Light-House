@@ -28,10 +28,10 @@ export function ProjectHeader({ project, currentView }: ProjectHeaderProps) {
 
   return (
     <PageHeader
-      eyebrow="Action Hub"
+      eyebrow="작업실"
       title={
         <span className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-2xl shadow-[var(--shadow-sm)]">
+          <span className="flex h-12 w-12 items-center justify-center rounded-md border border-white/10 bg-black/20 text-2xl shadow-[var(--shadow-sm)]">
             {activeProject.icon}
           </span>
           <span>{activeProject.title}</span>

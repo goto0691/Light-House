@@ -98,7 +98,7 @@ function formatEntityType(type: string) {
     tag: "태그",
     task: "작업",
     workout: "운동",
-    zettel: "제텔",
+    zettel: "지식",
   };
   return labels[type] ?? type;
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpRight, Clock3, CornerDownLeft, Sparkles, Search } from "lucide-react";
 
+import { DOMAIN_LABELS, UTILITY_LABELS } from "@/constants/display-labels";
 import { DOMAINS } from "@/constants/navigation";
 import { useSearchSuggestions } from "@/hooks/use-search-suggestions";
 import type { ContextSearchResult } from "@/lib/context/types";
@@ -13,20 +14,32 @@ import { resolveSearchPrefix } from "@/lib/utils/search-prefix";
 import { useShellStore } from "@/stores/use-shell-store";
 
 import { EmptyState } from "./empty-state";
-import { KeyHint } from "./key-hint";
+import { formatKeyHint, KeyHint } from "./key-hint";
 import { OverlayFrame } from "./overlay-frame";
 
 const RECENTS = [
-  { label: "Dashboard", href: "/dashboard" },
+  { label: DOMAIN_LABELS.dashboard, href: "/dashboard" },
   { label: "오늘의 로그", href: "/life-ops" },
-  { label: "PRM", href: "/prm" },
+  { label: DOMAIN_LABELS.prm, href: "/prm" },
 ];
 
 const ACTIONS = [
-  { label: "새 Task 만들기", href: "/action-hub/inbox?detail=task:new", type: "action" },
-  { label: "Vault로 이동", href: "/vault", type: "action" },
+  { label: "새 작업 만들기", href: "/action-hub/inbox?detail=task:new", type: "action" },
+  { label: "지식금고로 이동", href: "/vault", type: "action" },
   { label: "오늘 로그 열기", href: "/life-ops", type: "action" },
 ] as const;
+
+const PALETTE_TYPE_LABELS: Record<string, string> = {
+  action: "실행",
+  daily_log: "하루",
+  media: "미디어",
+  person: "사람",
+  place: "장소",
+  project: "프로젝트",
+  tag: "태그",
+  task: "작업",
+  zettel: "지식",
+};
 
 type PaletteItem = {
   id: string;
@@ -75,14 +88,14 @@ export function CommandPalette() {
           cache: "no-store",
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error("context search failed");
+        if (!response.ok) throw new Error("맥락 검색에 실패했습니다.");
         const payload = (await response.json()) as { results?: ContextSearchResult[] };
         setContextResults(
           (payload.results ?? []).slice(0, 20).map((item) => ({
             href: item.href,
             id: item.id,
             score: item.score,
-            snippet: item.preview ?? item.subtitle ?? item.type,
+            snippet: item.preview ?? item.subtitle ?? paletteTypeLabel(item.type),
             title: item.title,
             type: item.type,
           })),
@@ -171,10 +184,10 @@ export function CommandPalette() {
       onClose={close}
       panelClassName="max-w-[680px] overflow-hidden"
       subtitle="검색, 즉시 이동, 액션 실행을 한 번에 처리합니다."
-      title="Command Palette"
+      title={UTILITY_LABELS.commandPalette}
     >
       <div className="p-4">
-        <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+        <label className="flex items-center gap-3 rounded-md border border-white/10 bg-white/5 px-4 py-3">
           <Search className="h-4 w-4 text-muted-foreground" />
           <input
             autoFocus
@@ -185,7 +198,7 @@ export function CommandPalette() {
                 if (event.key === "Enter" && query.trim()) {
                   event.preventDefault();
                   close();
-                  openQuickCapture({ domain: "dashboard", label: "Command Palette" }, query.trim());
+                  openQuickCapture({ domain: "dashboard", label: UTILITY_LABELS.commandPalette }, query.trim());
                 }
                 if (event.key === "?" && query.trim() === "") {
                   event.preventDefault();
@@ -222,7 +235,7 @@ export function CommandPalette() {
                 }
               }
             }}
-            placeholder="검색, >액션, @사람, [[지식, #태그"
+            placeholder="검색, >액션, @사람, [[지식]], #태그"
             value={query}
           />
           <KeyHint keys="Esc" />
@@ -230,12 +243,12 @@ export function CommandPalette() {
 
         {!query ? (
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
+            <section className="rounded-lg border border-white/10 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">즉시 이동</p>
               <div className="mt-3 space-y-2">
                 {DOMAINS.map((item) => (
                   <button
-                    className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left text-sm text-muted-foreground transition hover:bg-white/6 hover:text-foreground"
+                    className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-muted-foreground hover:bg-white/6 hover:text-foreground"
                     key={item.key}
                     onClick={() => navigate(item.path)}
                     type="button"
@@ -245,11 +258,11 @@ export function CommandPalette() {
                   </button>
                 ))}
               </div>
-              <div className="mt-4 rounded-2xl border border-white/10 bg-black/10 p-3">
+              <div className="mt-4 rounded-md border border-white/10 bg-black/10 p-3">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">빠른 접두어</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {["@ 사람", "[[ 지식", "# 태그", "> 액션", "? 도움말"].map((item) => (
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground" key={item}>
+                    <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground" key={item}>
                       {item}
                     </span>
                   ))}
@@ -257,7 +270,7 @@ export function CommandPalette() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
+            <section className="rounded-lg border border-white/10 bg-white/5 p-4">
               <p className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-muted-foreground">
                 <Clock3 className="h-3.5 w-3.5" />
                 최근 항목
@@ -265,7 +278,7 @@ export function CommandPalette() {
               <div className="mt-3 space-y-2">
                 {RECENTS.map((item) => (
                   <Link
-                    className="flex items-center justify-between rounded-2xl px-3 py-2 text-sm text-muted-foreground transition hover:bg-white/6 hover:text-foreground"
+                    className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-white/6 hover:text-foreground"
                     href={item.href}
                     key={item.href}
                     onClick={close}
@@ -276,7 +289,7 @@ export function CommandPalette() {
                 ))}
               </div>
               <button
-                className="focus-ring mt-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-sm text-primary transition [@media(hover:hover)]:hover:bg-primary/15"
+                className="focus-ring mt-4 inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-4 py-2 text-sm text-primary [@media(hover:hover)]:hover:bg-primary/15"
                 onClick={() => {
                   close();
                   openQuickCapture();
@@ -284,7 +297,7 @@ export function CommandPalette() {
                 type="button"
               >
                 <Sparkles className="h-4 w-4" />
-                Quick Capture 열기
+                빠른 캡처 열기
               </button>
             </section>
           </div>
@@ -319,7 +332,7 @@ export function CommandPalette() {
                   : results
               ).map((item, index) => (
                 <button
-                  className={`flex w-full items-start justify-between rounded-3xl border px-4 py-3 text-left transition ${
+                  className={`flex w-full items-start justify-between rounded-lg border px-4 py-3 text-left ${
                     activeIndex === index
                       ? "border-primary/25 bg-primary/10"
                       : "border-white/10 bg-white/5 [@media(hover:hover)]:hover:bg-white/8"
@@ -333,22 +346,22 @@ export function CommandPalette() {
                     <p className="text-sm font-medium text-foreground">{item.title}</p>
                     <p className="mt-1 text-sm text-muted-foreground">{item.snippet}</p>
                     {"score" in item && typeof item.score === "number" ? (
-                      <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-primary">context score {(item.score * 100).toFixed(0)}</p>
+                      <p className="mt-1 text-[11px] tracking-[0.08em] text-primary">맥락 점수 {(item.score * 100).toFixed(0)}</p>
                     ) : null}
                   </div>
-                  <span className="rounded-full bg-white/8 px-2 py-1 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                    {item.type}
+                  <span className="rounded-md bg-white/8 px-2 py-1 text-[11px] tracking-[0.08em] text-muted-foreground">
+                    {paletteTypeLabel(item.type)}
                   </span>
                 </button>
               ))
             ) : (
               <EmptyState
                 cta={{
-                  label: "Quick Capture로 보내기",
+                  label: "빠른 캡처로 보내기",
                   hotkey: "Enter",
                   onClick: () => {
                     close();
-                    openQuickCapture({ domain: "dashboard", label: "Command Palette" }, query.trim());
+                    openQuickCapture({ domain: "dashboard", label: UTILITY_LABELS.commandPalette }, query.trim());
                   },
                 }}
                 description="검색 결과가 없으면 지금 입력한 문장을 바로 캡처로 던져서 분류 흐름으로 넘길 수 있습니다."
@@ -362,7 +375,7 @@ export function CommandPalette() {
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-xs text-muted-foreground">
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1"><CornerDownLeft className="h-3.5 w-3.5" /> 열기</span>
-            <span className="inline-flex items-center gap-1">⌘↵ Drawer</span>
+            <span className="inline-flex items-center gap-1">{formatKeyHint("Cmd+Enter")} 드로어</span>
             <span className="inline-flex items-center gap-1">Tab 섹션 점프</span>
           </div>
           <span className="uppercase tracking-[0.16em]">최근 · 검색 · 액션</span>
@@ -370,4 +383,8 @@ export function CommandPalette() {
       </div>
     </OverlayFrame>
   );
+}
+
+function paletteTypeLabel(type: string) {
+  return PALETTE_TYPE_LABELS[type] ?? type;
 }

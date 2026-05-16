@@ -1,29 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Tag } from "@/components/shared/tag";
+import { getPersonSummaryText } from "@/lib/display/person";
 import type { PersonMock } from "@/lib/mock/prm";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { usePRMStore } from "@/stores/use-prm-store";
+import { postDeltaMutation } from "@/lib/snapshot-client";
+import { type PRMMutationDelta, usePRMStore } from "@/stores/use-prm-store";
 
 export function HitThemUpClient({ people }: { people: PersonMock[] }) {
   const [isPending, startTransition] = useTransition();
-  const storePeople = usePRMStore((state) => state.people);
-  const replaceSnapshot = usePRMStore((state) => state.replaceSnapshot);
-  const duePeople = (storePeople.length ? storePeople : people)
+  const [localPeople, setLocalPeople] = useState(people);
+  const applyMutationDelta = usePRMStore((state) => state.applyMutationDelta);
+  const duePeople = localPeople
     .filter((person) => person.daysSinceContact > person.cadenceDays)
     .sort((left, right) => right.daysSinceContact - left.daysSinceContact);
+
+  function applyContactDelta(delta: PRMMutationDelta) {
+    applyMutationDelta(delta);
+    if (delta.person) {
+      setLocalPeople((current) => current.map((person) => (person.id === delta.person!.id ? delta.person! : person)));
+    }
+  }
 
   function markContacted(person: PersonMock) {
     startTransition(async () => {
       try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+        await postDeltaMutation<{ delta: PRMMutationDelta }, PRMMutationDelta>(
           `/api/prm/people/${person.id}/contact`,
           undefined,
-          replaceSnapshot,
+          applyContactDelta,
         );
         toast.success(`${person.name} 연락 완료로 기록했습니다.`);
       } catch (error) {
@@ -38,7 +46,7 @@ export function HitThemUpClient({ people }: { people: PersonMock[] }) {
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {duePeople.length ? (
         duePeople.map((person) => (
-          <div className="rounded-lg border border-white/10 bg-white/5 p-5 transition hover:bg-white/8" key={person.id}>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-5 hover:bg-white/8" key={person.id}>
             <Link href={`/prm?detail=person:${person.id}`} scroll={false}>
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -47,13 +55,13 @@ export function HitThemUpClient({ people }: { people: PersonMock[] }) {
                 </div>
                 <Tag value={`마지막 연락 ${person.daysSinceContact}일`} variant="status" />
               </div>
-              <p className="mt-4 text-sm leading-6 text-muted-foreground">{person.bio}</p>
+              <p className="mt-4 line-clamp-3 break-words text-sm leading-6 text-muted-foreground">{getPersonSummaryText(person)}</p>
             </Link>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <Tag value={`연락 주기 ${person.cadenceDays}일`} variant="neutral" />
               <Tag value={`레이어 ${person.layer}`} variant="dunbar" />
               <button
-                className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/15 disabled:opacity-50"
+                className="rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/15 disabled:opacity-50"
                 disabled={isPending}
                 onClick={() => markContacted(person)}
                 type="button"

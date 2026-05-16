@@ -340,7 +340,7 @@ export function SourceMappingWorkbench({ savedViews, workbench }: SourceMappingW
   return (
     <CollectionShell
       description="Notion에서 넘어온 원본 컬럼을 표준 속성 registry와 비교하고, 사용자별 매핑/숨김/검토 규칙으로 승격합니다."
-      eyebrow="Data Settings"
+      eyebrow="데이터 설정"
       metrics={[
         { label: "전체 컬럼", value: workbenchState.summary.totalProperties },
         { label: "적용 후보", value: workbenchState.summary.suggested },
@@ -354,7 +354,7 @@ export function SourceMappingWorkbench({ savedViews, workbench }: SourceMappingW
           <div className="flex flex-wrap items-center gap-2">
             <SavedViewTabs activeViewKey={activeViewKey} basePath="/settings/data/source-mapping" onSelect={selectSavedView} views={localSavedViews} />
             <button
-              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8"
               onClick={() => setViewManagerOpen((open) => !open)}
               type="button"
             >
@@ -362,7 +362,7 @@ export function SourceMappingWorkbench({ savedViews, workbench }: SourceMappingW
               뷰 관리
             </button>
             <button
-              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary transition hover:bg-primary/15"
+              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/15"
               onClick={() => createSavedViewFromCurrent()}
               type="button"
             >
@@ -481,7 +481,7 @@ function SourceMappingFilters({
           return (
             <button
               className={cn(
-                "focus-ring inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-2 text-xs transition",
+                "focus-ring inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-2 text-xs",
                 active ? "border-primary/25 bg-primary/10 text-primary" : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/8 hover:text-foreground",
               )}
               key={option.value}
@@ -524,7 +524,7 @@ function SourceMappingFilters({
           value={filters.documentRole}
         />
         <button
-          className="focus-ring min-h-9 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+          className="focus-ring min-h-9 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground"
           onClick={() => {
             onQueryChange("");
             onChange(emptyFilters());
@@ -646,7 +646,7 @@ function SourceMappingRow({
           </select>
           <div className="flex flex-wrap gap-2">
             <button
-              className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
+            className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={busy || !targetValue}
               onClick={() => onSaveRule(row, "mapped")}
               type="button"
@@ -655,7 +655,7 @@ function SourceMappingRow({
               매핑
             </button>
             <button
-              className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
               disabled={busy}
               onClick={() => onSaveRule(row, "needs_review")}
               type="button"
@@ -664,7 +664,7 @@ function SourceMappingRow({
               검토
             </button>
             <button
-              className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
               disabled={busy}
               onClick={() => onSaveRule(row, "hidden")}
               type="button"
@@ -674,10 +674,10 @@ function SourceMappingRow({
             </button>
           </div>
           <button
-            className="focus-ring inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
+            className="focus-ring inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={busy || applying || !targetValue || !row.canonicalEntityType}
             onClick={() => onApplyRule(row)}
-            title="기존 canonical 값은 유지하고 빈 값에만 적용합니다."
+            title="기존 기준 값은 유지하고 빈 값에만 적용합니다."
             type="button"
           >
             <UploadCloud className="h-4 w-4" />
@@ -698,7 +698,7 @@ function StatusBadge({ status }: { status: SourceMappingClassificationStatus }) 
   return (
     <span
       className={cn(
-        "inline-flex min-h-7 items-center rounded-full border px-2.5 py-1 text-[11px]",
+        "inline-flex min-h-7 items-center rounded-md border px-2.5 py-1 text-[11px]",
         status === "suggested" && "border-primary/25 bg-primary/10 text-primary",
         status === "unmapped" && "border-amber-300/25 bg-amber-300/10 text-amber-200",
         status === "hidden" && "border-white/10 bg-black/10 text-muted-foreground",
@@ -816,7 +816,7 @@ function formatEntityValue(value: string) {
     project: "프로젝트",
     task: "작업",
     workout: "운동",
-    zettel: "제텔",
+  zettel: "지식",
   };
   return labels[value] ?? value;
 }

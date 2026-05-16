@@ -7,8 +7,8 @@ import { buildProjectPropertyForm, projectPropertyPayload, type ProjectPropertyF
 import { PropertyPanel } from "@/components/shared/properties/property-panel";
 import type { ProjectMock } from "@/lib/mock/action-hub";
 import { PROJECT_PROPERTY_DEFINITIONS, PROJECT_PROPERTY_GROUPS } from "@/lib/properties/project";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { useActionHubStore } from "@/stores/use-action-hub-store";
+import { postDeltaMutation } from "@/lib/snapshot-client";
+import { useActionHubStore, type ActionHubProjectDelta } from "@/stores/use-action-hub-store";
 
 type ProjectPropertiesPanelProps = {
   project: ProjectMock;
@@ -17,7 +17,7 @@ type ProjectPropertiesPanelProps = {
 export function ProjectPropertiesPanel({ project }: ProjectPropertiesPanelProps) {
   const [isPending, startTransition] = useTransition();
   const activeProject = useActionHubStore((state) => state.projects.find((item) => item.id === project.id)) ?? project;
-  const replaceSnapshot = useActionHubStore((state) => state.replaceSnapshot);
+  const applyProjectDelta = useActionHubStore((state) => state.applyProjectDelta);
   const [form, setForm] = useState<ProjectPropertyForm>(() => buildProjectPropertyForm(activeProject));
   const [isDirty, setIsDirty] = useState(false);
   const [syncedProjectId, setSyncedProjectId] = useState(activeProject.id);
@@ -32,10 +32,10 @@ export function ProjectPropertiesPanel({ project }: ProjectPropertiesPanelProps)
   const saveProperties = () => {
     startTransition(async () => {
       try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+        await postDeltaMutation<{ delta: ActionHubProjectDelta }, ActionHubProjectDelta>(
           `/api/action-hub/projects/${activeProject.id}/properties`,
           projectPropertyPayload(form),
-          replaceSnapshot,
+          applyProjectDelta,
         );
         setIsDirty(false);
         toast.success("프로젝트 속성을 저장했습니다.");
@@ -53,7 +53,7 @@ export function ProjectPropertiesPanel({ project }: ProjectPropertiesPanelProps)
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs tracking-[0.08em] text-primary">프로젝트 속성</p>
-            <p className="mt-1 text-sm text-muted-foreground">프로젝트의 canonical 필드를 이 뷰에서 바로 조정합니다.</p>
+            <p className="mt-1 text-sm text-muted-foreground">프로젝트의 기준 필드를 이 뷰에서 바로 조정합니다.</p>
           </div>
           <button className="focus-ring rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50" disabled={isPending} onClick={saveProperties} type="button">
             {isPending ? "저장 중..." : "속성 저장"}

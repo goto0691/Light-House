@@ -14,5 +14,6 @@ dev-server*.log
 .codex-git-index
 .codex-git-index-*
 .codex-git-objects/
+.codex/
 *.tsbuildinfo
 apps/web/package-lock.json

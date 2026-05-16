@@ -80,7 +80,7 @@ export function getZettelSearchText(zettel: ZettelMock) {
   return [
     zettel.title,
     zettel.summary,
-    zettel.content,
+    zettel.searchText ?? zettel.content,
     zettel.type,
     zettel.category,
     zettel.tags.join(" "),
@@ -96,6 +96,7 @@ export function getZettelSearchText(zettel: ZettelMock) {
     zettel.sourceUrl ?? "",
     zettel.originalCreatedAt ?? "",
     zettel.sourceDocument?.url ?? "",
+    zettel.sourcePropertySearchText ?? "",
     zettel.outgoingLinks.map((link) => link.title).join(" "),
     zettel.backlinks.join(" "),
     sourceProperties ?? "",

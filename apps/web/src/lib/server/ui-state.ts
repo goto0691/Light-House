@@ -107,16 +107,16 @@ type SavedViewInput = {
 };
 
 export const DEFAULT_SHORTCUT_BINDINGS: ShortcutBindingInput[] = [
-  { category: "global", actionKey: "command_palette", label: "Command Palette", binding: "Cmd+K", displayOrder: 0 },
-  { category: "global", actionKey: "quick_capture", label: "Quick Capture", binding: "Cmd+Shift+N", displayOrder: 1 },
-  { category: "shell", actionKey: "toggle_lnb", label: "LNB Toggle", binding: "Cmd+\\", displayOrder: 2 },
-  { category: "shell", actionKey: "hotkey_cheatsheet", label: "Hotkey Cheatsheet", binding: "?", displayOrder: 3 },
-  { category: "navigation", actionKey: "go_dashboard", label: "Dashboard", binding: "g d", displayOrder: 4 },
-  { category: "navigation", actionKey: "go_action_hub", label: "Action Hub", binding: "g a", displayOrder: 5 },
-  { category: "navigation", actionKey: "go_vault", label: "Vault", binding: "g v", displayOrder: 6 },
-  { category: "navigation", actionKey: "go_prm", label: "PRM", binding: "g p", displayOrder: 7 },
-  { category: "navigation", actionKey: "go_life_ops", label: "Life Ops", binding: "g l", displayOrder: 8 },
-  { category: "navigation", actionKey: "go_settings", label: "Settings", binding: "g s", displayOrder: 9 },
+  { category: "global", actionKey: "command_palette", label: "빠른 실행", binding: "Cmd+K", displayOrder: 0 },
+  { category: "global", actionKey: "quick_capture", label: "빠른 캡처", binding: "Cmd+Shift+N", displayOrder: 1 },
+  { category: "shell", actionKey: "toggle_lnb", label: "왼쪽 메뉴 접기/펼치기", binding: "Cmd+\\", displayOrder: 2 },
+  { category: "shell", actionKey: "hotkey_cheatsheet", label: "단축키 도움말", binding: "?", displayOrder: 3 },
+  { category: "navigation", actionKey: "go_dashboard", label: "오늘 보기로 이동", binding: "g d", displayOrder: 4 },
+  { category: "navigation", actionKey: "go_action_hub", label: "작업실로 이동", binding: "g a", displayOrder: 5 },
+  { category: "navigation", actionKey: "go_vault", label: "지식금고로 이동", binding: "g v", displayOrder: 6 },
+  { category: "navigation", actionKey: "go_prm", label: "관계로 이동", binding: "g p", displayOrder: 7 },
+  { category: "navigation", actionKey: "go_life_ops", label: "생활기록으로 이동", binding: "g l", displayOrder: 8 },
+  { category: "navigation", actionKey: "go_settings", label: "설정으로 이동", binding: "g s", displayOrder: 9 },
 ];
 
 export const DEFAULT_DASHBOARD_LAYOUTS: WidgetLayoutInput[] = [
@@ -170,12 +170,13 @@ export const DEFAULT_SAVED_VIEWS: SavedViewInput[] = [
   { domain: "gifts", scope: "relationships", name: "받은 선물", icon: "inbox", filterState: { direction: ["received"] }, viewKey: "received", displayOrder: 2 },
   { domain: "gifts", scope: "relationships", name: "반응 기록", icon: "sparkles", filterState: { hasSatisfaction: true }, viewKey: "with-reaction", displayOrder: 3 },
 
-  { domain: "people", scope: "relationships", name: "핵심", icon: "heart", filterState: { layer: [5, 15] }, viewKey: "core", isDefault: true, displayOrder: 0 },
-  { domain: "people", scope: "relationships", name: "활성", icon: "radio", filterState: { status: ["active"] }, viewKey: "active", displayOrder: 1 },
-  { domain: "people", scope: "relationships", name: "휴면", icon: "moon", filterState: { status: ["dormant", "observing"] }, viewKey: "dormant", displayOrder: 2 },
-  { domain: "people", scope: "relationships", name: "생일", icon: "cake", sortState: { field: "birthday", direction: "asc" }, viewKey: "birthdays", displayOrder: 3 },
-  { domain: "people", scope: "relationships", name: "선물 기록", icon: "gift", filterState: { hasGifts: true }, viewKey: "gift-history", displayOrder: 4 },
-  { domain: "people", scope: "relationships", name: "일기에 등장", icon: "notebook", filterState: { linkedDailyEntries: true }, viewKey: "appears-in-journals", displayOrder: 5 },
+  { domain: "people", scope: "relationships", name: "전체", icon: "users", viewKey: "all", isDefault: true, displayOrder: 0 },
+  { domain: "people", scope: "relationships", name: "핵심", icon: "heart", filterState: { layer: [5, 15] }, viewKey: "core", displayOrder: 1 },
+  { domain: "people", scope: "relationships", name: "활성", icon: "radio", filterState: { status: ["active"] }, viewKey: "active", displayOrder: 2 },
+  { domain: "people", scope: "relationships", name: "휴면", icon: "moon", filterState: { status: ["dormant", "observing"] }, viewKey: "dormant", displayOrder: 3 },
+  { domain: "people", scope: "relationships", name: "생일", icon: "cake", sortState: { field: "birthday", direction: "asc" }, viewKey: "birthdays", displayOrder: 4 },
+  { domain: "people", scope: "relationships", name: "선물 기록", icon: "gift", filterState: { hasGifts: true }, viewKey: "gift-history", displayOrder: 5 },
+  { domain: "people", scope: "relationships", name: "일기에 등장", icon: "notebook", filterState: { linkedDailyEntries: true }, viewKey: "appears-in-journals", displayOrder: 6 },
 
   { domain: "projects", scope: "work", name: "활성", icon: "rocket", filterState: { status: ["active"] }, viewKey: "active", isDefault: true, displayOrder: 0 },
   { domain: "projects", scope: "work", name: "보류", icon: "pause-circle", filterState: { status: ["paused"] }, viewKey: "paused", displayOrder: 1 },

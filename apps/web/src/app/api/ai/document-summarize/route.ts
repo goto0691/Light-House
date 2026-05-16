@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as DocumentSummarizeRequest;
 
     if (!body.attachmentId) {
-      return NextResponse.json({ error: "attachmentId is required." }, { status: 400 });
+      return NextResponse.json({ error: "첨부 파일 ID가 필요합니다." }, { status: 400 });
     }
 
     const markdown = await summarizeAttachmentDocument({
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Document summarization failed." },
+      { error: error instanceof Error ? error.message : "문서 요약 생성에 실패했습니다." },
       { status: 500 },
     );
   }

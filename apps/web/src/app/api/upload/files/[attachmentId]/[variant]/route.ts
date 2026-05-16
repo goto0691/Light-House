@@ -13,7 +13,7 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     const { attachmentId, variant } = await context.params;
     if (variant !== "preview" && variant !== "original") {
-      return NextResponse.json({ error: "Unknown variant." }, { status: 400 });
+      return NextResponse.json({ error: "지원하지 않는 파일 형식입니다." }, { status: 400 });
     }
 
     const asset = await getAttachmentVariant(attachmentId, variant);
@@ -27,7 +27,7 @@ export async function GET(_request: Request, context: RouteContext) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch attachment." },
+      { error: error instanceof Error ? error.message : "첨부 파일을 불러오지 못했습니다." },
       { status: 500 },
     );
   }

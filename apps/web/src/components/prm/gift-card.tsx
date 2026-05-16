@@ -32,7 +32,7 @@ export function GiftCard({ gift, personName, onDelete, visibleFields = DEFAULT_V
           valueOverrides={{ personId: personName }}
         />
       </Link>
-      <button className="mt-4 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] tracking-[0.08em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground" onClick={onDelete} type="button">
+      <button className="mt-4 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-[11px] tracking-[0.08em] text-muted-foreground hover:bg-white/8 hover:text-foreground" onClick={onDelete} type="button">
         삭제
       </button>
     </GlassCard>

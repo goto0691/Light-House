@@ -8,6 +8,7 @@ type CaptureRequest = {
     domain?: string;
     projectId?: string | null;
     personId?: string | null;
+    forceDomain?: "task" | "interaction" | "zettel" | "diary_entry" | "habit_log" | "media_log" | "workout_log" | null;
   };
 };
 
@@ -17,12 +18,12 @@ export async function POST(request: Request) {
     const text = body.text?.trim() ?? "";
 
     if (!text) {
-      return NextResponse.json({ error: "Text is required" }, { status: 400 });
+      return NextResponse.json({ error: "내용을 입력해 주세요." }, { status: 400 });
     }
 
     const result = await ingestActionHubCapture(text, body.context);
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Capture failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "캡처 처리에 실패했습니다." }, { status: 500 });
   }
 }

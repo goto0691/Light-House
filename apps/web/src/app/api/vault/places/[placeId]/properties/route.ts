@@ -18,8 +18,8 @@ export async function POST(request: Request, context: { params: Promise<{ placeI
   try {
     const body = (await request.json()) as Body;
     const { placeId } = await context.params;
-    return NextResponse.json({ snapshot: await updateVaultPlaceProperties(placeId, body) });
+    return NextResponse.json({ place: await updateVaultPlaceProperties(placeId, body) });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Place properties update failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "장소 속성 저장에 실패했습니다." }, { status: 500 });
   }
 }

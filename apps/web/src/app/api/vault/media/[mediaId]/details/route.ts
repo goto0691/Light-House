@@ -33,8 +33,8 @@ export async function POST(request: Request, context: { params: Promise<{ mediaI
   try {
     const body = (await request.json()) as Body;
     const { mediaId } = await context.params;
-    return NextResponse.json({ snapshot: await updateVaultMediaDetails(mediaId, body) });
+    return NextResponse.json({ media: await updateVaultMediaDetails(mediaId, body) });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Media details update failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "미디어 세부 정보 저장에 실패했습니다." }, { status: 500 });
   }
 }

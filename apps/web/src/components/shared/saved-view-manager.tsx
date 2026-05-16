@@ -49,7 +49,7 @@ export function SavedViewManager({
           </span>
           {onCreateCurrent ? (
             <button
-              className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-foreground transition hover:bg-white/8"
+              className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-foreground hover:bg-white/8"
               onClick={onCreateCurrent}
               type="button"
             >
@@ -89,7 +89,7 @@ export function SavedViewManager({
                 {persisted ? (
                   <>
                     <button
-                      className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={busy || !draftName.trim() || draftName.trim() === view.name}
                       onClick={() => onRename(view)}
                       title="이름 저장"
@@ -99,7 +99,7 @@ export function SavedViewManager({
                       이름
                     </button>
                     <button
-                      className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={busy}
                       onClick={() => onOverwrite(view)}
                       title="현재 검색과 필터로 덮어쓰기"
@@ -109,7 +109,7 @@ export function SavedViewManager({
                       조건
                     </button>
                     <button
-                      className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                      className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={busy || view.isDefault}
                       onClick={() => onMakeDefault(view)}
                       title="기본 뷰로 설정"
@@ -118,7 +118,7 @@ export function SavedViewManager({
                       <Star className="h-4 w-4" />
                     </button>
                     <button
-                      className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                      className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={busy}
                       onClick={() => onDelete(view)}
                       title="삭제"
@@ -129,7 +129,7 @@ export function SavedViewManager({
                   </>
                 ) : (
                   <button
-                    className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={busy}
                     onClick={() => onDuplicate(view)}
                     type="button"
@@ -149,7 +149,7 @@ export function SavedViewManager({
 
 function ViewBadge({ label }: { label: string }) {
   return (
-    <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] text-muted-foreground">
+    <span className="rounded-md border border-white/10 bg-black/10 px-2.5 py-1 text-[10px] text-muted-foreground">
       {label}
     </span>
   );

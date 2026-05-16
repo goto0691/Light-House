@@ -11,6 +11,8 @@ import {
   Users,
 } from "lucide-react";
 
+import { DOMAIN_LABELS, UTILITY_LABELS } from "@/constants/display-labels";
+
 export type DomainKey =
   | "dashboard"
   | "action-hub"
@@ -28,33 +30,33 @@ export interface NavigationItem {
 }
 
 export const DOMAINS: NavigationItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: Home, path: "/dashboard", hotkey: "g d" },
-  { key: "action-hub", label: "Action Hub", icon: Rocket, path: "/action-hub", hotkey: "g a" },
-  { key: "vault", label: "The Vault", icon: Brain, path: "/vault", hotkey: "g v" },
-  { key: "prm", label: "PRM", icon: Users, path: "/prm", hotkey: "g p" },
-  { key: "life-ops", label: "Life Ops", icon: Settings2, path: "/life-ops", hotkey: "g l" },
+  { key: "dashboard", label: DOMAIN_LABELS.dashboard, icon: Home, path: "/dashboard", hotkey: "g d" },
+  { key: "action-hub", label: DOMAIN_LABELS["action-hub"], icon: Rocket, path: "/action-hub", hotkey: "g a" },
+  { key: "vault", label: DOMAIN_LABELS.vault, icon: Brain, path: "/vault", hotkey: "g v" },
+  { key: "prm", label: DOMAIN_LABELS.prm, icon: Users, path: "/prm", hotkey: "g p" },
+  { key: "life-ops", label: DOMAIN_LABELS["life-ops"], icon: Settings2, path: "/life-ops", hotkey: "g l" },
 ];
 
 export const UTILITY: NavigationItem[] = [
-  { key: "search", label: "Search", icon: Search, hotkey: "mod+k" },
-  { key: "capture", label: "Quick Capture", icon: Plus, hotkey: "mod+shift+n" },
-  { key: "notifications", label: "Notifications", icon: Bell, hotkey: "g n" },
-  { key: "user", label: "Account", icon: User, path: "/settings" },
+  { key: "search", label: UTILITY_LABELS.search, icon: Search, hotkey: "mod+k" },
+  { key: "capture", label: UTILITY_LABELS.quickCapture, icon: Plus, hotkey: "mod+shift+n" },
+  { key: "notifications", label: UTILITY_LABELS.notifications, icon: Bell, hotkey: "g n" },
+  { key: "user", label: UTILITY_LABELS.account, icon: User, path: "/settings" },
 ];
 
 export const LOCAL_NAV: Record<DomainKey, Array<{ label: string; href: string }>> = {
   dashboard: [
-    { label: "Today's Anchor", href: "/dashboard" },
-    { label: "Yesterday Review", href: "/dashboard/yesterday-review" },
-    { label: "This Week", href: "/dashboard/this-week" },
+    { label: "오늘 앵커", href: "/dashboard" },
+    { label: "어제 회고", href: "/dashboard/yesterday-review" },
+    { label: "이번 주", href: "/dashboard/this-week" },
   ],
   "action-hub": [
-    { label: "Inbox", href: "/action-hub/inbox" },
-    { label: "Active Projects", href: "/action-hub" },
-    { label: "Archive", href: "/action-hub/archive" },
+    { label: "수신함", href: "/action-hub/inbox" },
+    { label: "진행 프로젝트", href: "/action-hub" },
+    { label: "보관함", href: "/action-hub/archive" },
   ],
   vault: [
-    { label: "제텔", href: "/vault/zettels" },
+    { label: "지식", href: "/vault/zettels" },
     { label: "미디어", href: "/vault/media" },
     { label: "자산", href: "/vault/assets" },
     { label: "장소", href: "/vault/places" },
@@ -67,20 +69,20 @@ export const LOCAL_NAV: Record<DomainKey, Array<{ label: string; href: string }>
     { label: "관계 그래프", href: "/prm/graph" },
   ],
   "life-ops": [
-    { label: "Today's Log", href: "/life-ops" },
-    { label: "Daily Entries", href: "/life-ops/entries" },
-    { label: "Habits", href: "/life-ops/habits" },
-    { label: "Workouts", href: "/life-ops/workouts" },
-    { label: "Trends", href: "/life-ops/trends" },
-    { label: "Career", href: "/life-ops/career" },
+    { label: "오늘 기록", href: "/life-ops" },
+    { label: "일일 기록", href: "/life-ops/entries" },
+    { label: "습관", href: "/life-ops/habits" },
+    { label: "운동", href: "/life-ops/workouts" },
+    { label: "흐름", href: "/life-ops/trends" },
+    { label: "커리어", href: "/life-ops/career" },
   ],
   settings: [
-    { label: "Profile", href: "/settings/profile" },
-    { label: "Appearance", href: "/settings/appearance" },
-    { label: "Data", href: "/settings/data" },
+    { label: "프로필", href: "/settings/profile" },
+    { label: "화면", href: "/settings/appearance" },
+    { label: "데이터", href: "/settings/data" },
     { label: "원본 컬럼", href: "/settings/data/source-mapping" },
-    { label: "Integrations", href: "/settings/integrations" },
+    { label: "연동", href: "/settings/integrations" },
     { label: "AI", href: "/settings/ai" },
-    { label: "Shortcuts", href: "/settings/shortcuts" },
+    { label: "단축키", href: "/settings/shortcuts" },
   ],
 };

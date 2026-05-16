@@ -59,10 +59,10 @@ export function CollectionColumnControls({
 
   return (
     <details className={cn("group relative", className)}>
-      <summary className="focus-ring inline-flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8">
+      <summary className="focus-ring inline-flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8">
         <Settings2 className="h-4 w-4" />
         {title}
-        <span className="rounded-full border border-white/10 bg-black/10 px-2 py-0.5 text-[10px] text-muted-foreground">
+        <span className="rounded-md border border-white/10 bg-black/10 px-2 py-0.5 text-[10px] text-muted-foreground">
           {normalizedVisibleKeys.length}
         </span>
       </summary>
@@ -70,7 +70,7 @@ export function CollectionColumnControls({
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium text-foreground">{title}</p>
           <button
-            className="focus-ring rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+            className="focus-ring rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-muted-foreground hover:bg-white/8 hover:text-foreground"
             onClick={() => onChange(columns.filter((column) => column.defaultVisible).map((column) => column.key))}
             type="button"
           >
@@ -90,7 +90,7 @@ export function CollectionColumnControls({
                 <div className="flex items-center gap-1">
                   <button
                     aria-label={`${column.label} 위로`}
-                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:opacity-40"
+                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:opacity-40"
                     disabled={!visible || visibleIndex <= 0}
                     onClick={() => moveColumn(column.key, -1)}
                     type="button"
@@ -99,7 +99,7 @@ export function CollectionColumnControls({
                   </button>
                   <button
                     aria-label={`${column.label} 아래로`}
-                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:opacity-40"
+                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:opacity-40"
                     disabled={!visible || visibleIndex < 0 || visibleIndex >= normalizedVisibleKeys.length - 1}
                     onClick={() => moveColumn(column.key, 1)}
                     type="button"

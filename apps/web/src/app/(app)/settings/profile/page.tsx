@@ -11,12 +11,12 @@ export default async function ProfileSettingsPage() {
 
   return (
     <GlassCard className="min-h-[420px]">
-      <p className="text-xs uppercase tracking-[0.28em] text-primary">Settings</p>
+      <p className="text-xs tracking-[0.08em] text-primary">설정</p>
       <h1 className="mt-3 text-3xl font-semibold">프로필</h1>
       <p className="mt-3 max-w-2xl text-sm text-muted-foreground">계정 표시 이름, 로케일, 타임존을 확인하고 세션을 관리합니다.</p>
       <ProfileSettingsClient
         profile={{
-          displayName: overview.profile.displayName ?? session?.displayName ?? "Light Keeper",
+          displayName: overview.profile.displayName ?? session?.displayName ?? "관리자",
           email: overview.profile.email ?? session?.email ?? "keeper@lighthouse.local",
           locale: overview.profile.locale,
           timezone: overview.profile.timezone,

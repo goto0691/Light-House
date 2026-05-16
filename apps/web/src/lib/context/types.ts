@@ -70,6 +70,10 @@ export type ContextBundle = {
   focus: ContextNode;
   nodes: ContextNode[];
   edges: ContextEdge[];
+  summary?: {
+    nodeCount: number;
+    edgeCount: number;
+  };
   pages?: Partial<Record<ContextLensKey, ContextNode[]>>;
   pagination?: Partial<Record<ContextLensKey, {
     cursor: string;

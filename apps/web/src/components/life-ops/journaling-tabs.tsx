@@ -36,7 +36,8 @@ export function JournalingTabs({ journal, meditation, gratitude, meditationVerse
             ["gratitude", "감사"],
           ] as const).map(([key, label]) => (
             <button
-              className={cn("rounded-full px-3 py-2 text-xs transition", tab === key ? "bg-primary/15 text-primary" : "bg-white/6 text-muted-foreground hover:bg-white/8 hover:text-foreground")}
+              aria-pressed={tab === key}
+              className={cn("rounded-md px-3 py-2 text-xs", tab === key ? "bg-primary/15 text-primary" : "bg-white/6 text-muted-foreground hover:bg-white/8 hover:text-foreground")}
               key={key}
               onClick={() => setTab(key)}
               type="button"
@@ -48,7 +49,7 @@ export function JournalingTabs({ journal, meditation, gratitude, meditationVerse
         {tab === "meditation" ? <p className="mt-4 text-sm text-muted-foreground">본문 말씀: <span className="text-foreground">{meditationVerse}</span></p> : null}
       </GlassCard>
       <ZenEditor onChange={onChange} value={value} />
-      <button className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground" disabled={disabled} onClick={() => onSave(tab, value)} type="button">
+      <button className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground" disabled={disabled} onClick={() => onSave(tab, value)} type="button">
         {saveLabel}
       </button>
     </div>

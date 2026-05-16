@@ -8,13 +8,13 @@ import { FilterBar } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
 import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shared/page-layout";
 import { PROJECT_KIND_OPTIONS } from "@/lib/properties/project";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { useActionHubStore } from "@/stores/use-action-hub-store";
+import { postDeltaMutation } from "@/lib/snapshot-client";
+import { useActionHubStore, type ActionHubProjectDelta } from "@/stores/use-action-hub-store";
 
 export function ActionHubHomeClient() {
   const [isPending, startTransition] = useTransition();
   const projects = useActionHubStore((state) => state.projects);
-  const replaceSnapshot = useActionHubStore((state) => state.replaceSnapshot);
+  const applyProjectDelta = useActionHubStore((state) => state.applyProjectDelta);
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<"project" | "area">("project");
   const [category, setCategory] = useState("");
@@ -32,28 +32,29 @@ export function ActionHubHomeClient() {
   return (
     <PageLayout>
       <PageHeader
-        eyebrow="Action Hub"
+        eyebrow="작업실"
         title="프로젝트"
         description="프로젝트와 영역을 만들고, 작업 보드로 진입하는 시작점입니다."
         actions={
           <div className="flex flex-wrap gap-2">
-              {([
-                ["all", "전체"],
-                ["project", "프로젝트"],
-                ["area", "영역"],
-                ["archived", "보관"],
-              ] as const).map(([key, label]) => (
-                <button
-                  className={`rounded-full px-3 py-2 text-xs tracking-[0.08em] transition ${
-                    filter === key ? "border border-primary/20 bg-primary/10 text-primary" : "border border-white/10 bg-white/5 text-muted-foreground hover:bg-white/8 hover:text-foreground"
-                  }`}
-                  key={key}
-                  onClick={() => setFilter(key)}
-                  type="button"
-                >
-                  {label}
-                </button>
-              ))}
+            {([
+              ["all", "전체"],
+              ["project", "프로젝트"],
+              ["area", "영역"],
+              ["archived", "보관"],
+            ] as const).map(([key, label]) => (
+              <button
+                aria-pressed={filter === key}
+                className={`rounded-md px-3 py-2 text-xs tracking-[0.08em] ${
+                  filter === key ? "border border-primary/20 bg-primary/10 text-primary" : "border border-white/10 bg-white/5 text-muted-foreground hover:bg-white/8 hover:text-foreground"
+                }`}
+                key={key}
+                onClick={() => setFilter(key)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
           </div>
         }
       />
@@ -63,27 +64,27 @@ export function ActionHubHomeClient() {
           <GlassCard priority="secondary">
             <p className="text-xs tracking-[0.08em] text-primary">새 프로젝트</p>
             <div className="mt-3 space-y-3">
-              <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setTitle(event.target.value)} placeholder="프로젝트 이름" value={title} />
+              <input className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setTitle(event.target.value)} placeholder="프로젝트 이름" value={title} />
               <div className="grid gap-3 md:grid-cols-2">
-                <select className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setKind(event.target.value as "project" | "area")} value={kind}>
+                <select className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setKind(event.target.value as "project" | "area")} value={kind}>
                   {PROJECT_KIND_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
                 </select>
-                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setCategory(event.target.value)} placeholder="카테고리" value={category} />
+                <input className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground" onChange={(event) => setCategory(event.target.value)} placeholder="카테고리" value={category} />
               </div>
               <button
-                className="rounded-2xl bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
                 disabled={isPending}
                 onClick={() => {
                   startTransition(async () => {
                     try {
-                      await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                      await postDeltaMutation<{ delta: ActionHubProjectDelta }, ActionHubProjectDelta>(
                         "/api/action-hub/projects",
                         { title, kind, category },
-                        replaceSnapshot,
+                        applyProjectDelta,
                       );
                       setTitle("");
                       setCategory("");

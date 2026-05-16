@@ -5,7 +5,7 @@ import { linkVaultZettels } from "@/lib/server/vault";
 
 export async function POST(request: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   const body = (await request.json()) as {
     sourceId?: string;
@@ -13,11 +13,11 @@ export async function POST(request: Request) {
     context?: string;
   };
 
-  const snapshot = await linkVaultZettels({
+  const result = await linkVaultZettels({
     sourceId: body.sourceId ?? "",
     targetId: body.targetId ?? "",
     context: body.context,
   });
 
-  return NextResponse.json({ snapshot });
+  return NextResponse.json(result);
 }

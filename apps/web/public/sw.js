@@ -32,17 +32,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetched = fetch(request)
-        .then((response) => {
-          if (response.ok && ["style", "script", "image", "font"].includes(request.destination)) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached || new Response("", { status: 504, statusText: "Gateway Timeout" }));
-      return cached || fetched;
-    }),
+    fetch(request)
+      .then((response) => {
+        if (response.ok && ["style", "script", "image", "font"].includes(request.destination)) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then((cached) => cached || new Response("", { status: 504, statusText: "Gateway Timeout" }))),
   );
 });

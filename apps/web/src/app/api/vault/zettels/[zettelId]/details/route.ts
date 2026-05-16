@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSession } from "@/lib/auth/session";
-import { updateVaultZettelDetails } from "@/lib/server/vault";
+import { getVaultZettel, updateVaultZettelDetails } from "@/lib/server/vault";
 
 type Body = {
   title?: string;
@@ -21,15 +21,25 @@ type Body = {
   summary?: string;
 };
 
+export async function GET(_request: Request, context: { params: Promise<{ zettelId: string }> }) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+
+  const { zettelId } = await context.params;
+  const zettel = await getVaultZettel(zettelId);
+  if (!zettel) return NextResponse.json({ error: "지식을 찾지 못했습니다." }, { status: 404 });
+  return NextResponse.json({ zettel });
+}
+
 export async function POST(request: Request, context: { params: Promise<{ zettelId: string }> }) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   try {
     const body = (await request.json()) as Body;
     const { zettelId } = await context.params;
     return NextResponse.json({
-      snapshot: await updateVaultZettelDetails(zettelId, {
+      zettel: await updateVaultZettelDetails(zettelId, {
         title: body.title ?? "",
         content: body.content ?? "",
         tags: body.tags,
@@ -48,6 +58,6 @@ export async function POST(request: Request, context: { params: Promise<{ zettel
       }),
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Zettel details update failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "지식 세부 정보 저장에 실패했습니다." }, { status: 500 });
   }
 }

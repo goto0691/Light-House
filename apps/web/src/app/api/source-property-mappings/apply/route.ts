@@ -7,10 +7,10 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as SourcePropertyBatchApplyInput;
     if (!body.propertyName?.trim()) {
-      return NextResponse.json({ error: "propertyName is required." }, { status: 400 });
+      return NextResponse.json({ error: "원본 컬럼명을 지정해 주세요." }, { status: 400 });
     }
     if (!body.targetField?.trim()) {
-      return NextResponse.json({ error: "targetField is required." }, { status: 400 });
+      return NextResponse.json({ error: "적용할 표준 속성을 지정해 주세요." }, { status: 400 });
     }
 
     const payload = await applySourcePropertyMapping(body);

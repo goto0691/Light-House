@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ProjectListClient } from "@/components/action-hub/project-list-client";
-import { getActionHubProject, getActionHubSnapshot } from "@/lib/server/action-hub";
+import { getActionHubProjectDetail } from "@/lib/server/action-hub";
 
 export default async function ProjectListPage({
   params,
@@ -9,11 +9,8 @@ export default async function ProjectListPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const project = await getActionHubProject(projectId);
-  if (!project) notFound();
+  const detail = await getActionHubProjectDetail(projectId);
+  if (!detail) notFound();
 
-  const snapshot = await getActionHubSnapshot();
-  const tasks = snapshot.tasks.filter((task) => task.projectId === projectId);
-
-  return <ProjectListClient project={project} tasks={tasks} />;
+  return <ProjectListClient project={detail.project} tasks={detail.tasks} />;
 }

@@ -256,7 +256,7 @@ function SegmentedButtons({ onChange, options, value }: { onChange: (value: stri
       {options.map((option) => (
         <button
           className={cn(
-            "focus-ring min-h-9 rounded px-2.5 text-xs transition",
+            "focus-ring min-h-9 rounded px-2.5 text-xs",
             value === option.value ? "bg-primary/12 text-primary" : "text-muted-foreground hover:bg-white/8 hover:text-foreground",
           )}
           key={option.value}
@@ -305,7 +305,7 @@ function ChipInput({
       <div className="flex flex-wrap gap-1.5">
         {value.map((item) => (
           <button
-            className="focus-ring rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] text-primary"
+            className="focus-ring rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] text-primary"
             key={item}
             onClick={() => onChange(value.filter((valueItem) => valueItem !== item))}
             type="button"

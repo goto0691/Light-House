@@ -4,7 +4,7 @@ import { EntityContextShell } from "@/components/shared/context/entity-context-s
 import { GlassCard } from "@/components/shared/glass-card";
 import { AssetPropertiesPanel } from "@/components/vault/asset-properties-panel";
 import { getContextBundle } from "@/lib/server/context";
-import { getVaultSnapshot } from "@/lib/server/vault";
+import { getVaultAsset } from "@/lib/server/vault";
 
 export default async function AssetDetailPage({
   params,
@@ -12,8 +12,7 @@ export default async function AssetDetailPage({
   params: Promise<{ assetId: string }>;
 }) {
   const { assetId } = await params;
-  const snapshot = await getVaultSnapshot();
-  const asset = snapshot.assets.find((item) => item.id === assetId);
+  const asset = await getVaultAsset(assetId);
   if (!asset) notFound();
 
   const bundle = await getContextBundle("asset", assetId);

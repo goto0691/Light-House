@@ -34,7 +34,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ views });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Saved view update failed." },
+      { error: error instanceof Error ? error.message : "저장된 뷰 업데이트에 실패했습니다." },
       { status: 400 },
     );
   }
@@ -47,7 +47,7 @@ export async function DELETE(_: Request, context: RouteContext) {
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Saved view delete failed." },
+      { error: error instanceof Error ? error.message : "저장된 뷰 삭제에 실패했습니다." },
       { status: 400 },
     );
   }

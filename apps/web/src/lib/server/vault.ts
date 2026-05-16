@@ -18,6 +18,15 @@ export type VaultSnapshot = {
   places: PlaceMock[];
 };
 
+export type VaultZettelGraphNode = {
+  id: string;
+  title: string;
+  type: ZettelMock["type"];
+  category: string;
+  outgoingCount: number;
+  backlinkCount: number;
+};
+
 type UserRow = { id: string };
 type ZettelRow = {
   id: string;
@@ -42,6 +51,13 @@ type ZettelRow = {
 type BacklinkRow = { targetId: string; sourceTitle: string };
 type OutgoingRow = { id: string; sourceId: string; targetId: string; targetTitle: string };
 type ZettelTagRow = { zettelId: string; name: string };
+type ZettelGraphRow = {
+  id: string;
+  title: string;
+  type: ZettelMock["type"];
+  category: string | null;
+};
+type ZettelGraphCountRow = { zettelId: string; count: number | null };
 type MediaRow = {
   id: string;
   mediaType: MediaMock["mediaType"];
@@ -105,6 +121,7 @@ type SourceDocumentRow = {
   preview: string | null;
 };
 type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null; type: string | null };
+type SourcePropertySearchRow = { canonicalEntityId: string; searchText: string | null };
 
 const ZETTEL_TYPES = ["fleeting", "literature", "permanent", "moc", "reference"] as const;
 const SOURCE_RELIABILITY_VALUES = new Set(["unknown", "primary", "secondary", "tertiary", "personal", "imported", "mixed"]);
@@ -233,6 +250,269 @@ function slugify(value: string) {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .slice(0, 64);
+}
+
+function buildSourceDocumentMap(documentRows: SourceDocumentRow[], propertyRows: SourceDocumentPropertyRow[]) {
+  const sourceProperties = new Map<string, Array<{ name: string; value: string; type?: string | null }>>();
+  for (const row of propertyRows) {
+    if (!row.value) continue;
+    const properties = sourceProperties.get(row.sourceDocumentId) ?? [];
+    properties.push({ name: row.name, value: row.value, type: row.type });
+    sourceProperties.set(row.sourceDocumentId, properties);
+  }
+
+  const sourceDocuments = new Map<string, SourceDocumentInfo>();
+  for (const row of documentRows) {
+    sourceDocuments.set(`${row.canonicalEntityType}:${row.canonicalEntityId}`, {
+      id: row.id,
+      sourceDatabase: row.sourceDatabase,
+      sourceId: row.sourceId,
+      documentRole: row.documentRole,
+      status: row.status,
+      url: row.url,
+      preview: row.preview,
+      properties: sourceProperties.get(row.id) ?? [],
+    });
+  }
+  return sourceDocuments;
+}
+
+function buildSourceDocumentSummaryMap(documentRows: SourceDocumentRow[]) {
+  return buildSourceDocumentMap(documentRows, []);
+}
+
+function buildSourcePropertySearchTextMap(rows: SourcePropertySearchRow[]) {
+  return new Map(rows.map((row) => [row.canonicalEntityId, row.searchText ?? ""]));
+}
+
+function mapVaultZettels({
+  rows,
+  outgoing,
+  backlinks,
+  zettelTags,
+  sourceDocuments,
+}: {
+  rows: ZettelRow[];
+  outgoing: Map<string, ZettelMock["outgoingLinks"]>;
+  backlinks: Map<string, string[]>;
+  zettelTags: Map<string, string[]>;
+  sourceDocuments: Map<string, SourceDocumentInfo>;
+}) {
+  return rows.map((row) => {
+    const links = outgoing.get(row.id) ?? [];
+    return {
+      id: row.id,
+      title: row.title,
+      type: row.type,
+      category: row.category ?? "미분류",
+      summary: row.summary ?? "요약이 아직 없습니다.",
+      content: row.content ?? "",
+      outgoingLinks: links,
+      backlinks: backlinks.get(row.id) ?? [],
+      related: links.map((link) => link.title),
+      tags: zettelTags.get(row.id) ?? [],
+      aliases: parseAliases(row.aliases),
+      pinned: Boolean(row.pinned),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      status: row.status,
+      documentKind: row.documentKind,
+      sourceReliability: row.sourceReliability,
+      reviewCadence: row.reviewCadence,
+      reviewDueAt: row.reviewDueAt,
+      originalCreatedAt: row.originalCreatedAt,
+      source: row.source,
+      sourceUrl: row.sourceUrl,
+      sourceDocument: sourceDocuments.get(`zettel:${row.id}`) ?? null,
+    };
+  });
+}
+
+function mapVaultZettelListItems({
+  rows,
+  outgoing,
+  backlinks,
+  zettelTags,
+  sourceDocuments,
+  sourcePropertySearchText,
+}: {
+  rows: ZettelRow[];
+  outgoing: Map<string, ZettelMock["outgoingLinks"]>;
+  backlinks: Map<string, string[]>;
+  zettelTags: Map<string, string[]>;
+  sourceDocuments: Map<string, SourceDocumentInfo>;
+  sourcePropertySearchText: Map<string, string>;
+}) {
+  return rows.map((row) => {
+    const links = outgoing.get(row.id) ?? [];
+    return {
+      id: row.id,
+      title: row.title,
+      type: row.type,
+      category: row.category ?? "미분류",
+      summary: row.summary ?? "요약이 아직 없습니다.",
+      content: "",
+      outgoingLinks: links,
+      backlinks: backlinks.get(row.id) ?? [],
+      related: links.map((link) => link.title),
+      tags: zettelTags.get(row.id) ?? [],
+      aliases: parseAliases(row.aliases),
+      pinned: Boolean(row.pinned),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      status: row.status,
+      documentKind: row.documentKind,
+      sourceReliability: row.sourceReliability,
+      reviewCadence: row.reviewCadence,
+      reviewDueAt: row.reviewDueAt,
+      originalCreatedAt: row.originalCreatedAt,
+      source: row.source,
+      sourceUrl: row.sourceUrl,
+      sourceDocument: sourceDocuments.get(`zettel:${row.id}`) ?? null,
+      sourcePropertySearchText: sourcePropertySearchText.get(row.id) ?? "",
+    };
+  });
+}
+
+function mapVaultMedia(rows: MediaRow[], sourceDocuments: Map<string, SourceDocumentInfo>) {
+  return rows.map((row) => ({
+    id: row.id,
+    mediaType: row.mediaType,
+    title: row.title,
+    originalTitle: row.originalTitle,
+    subtype: row.subtype,
+    platformOrPublisher: row.platformOrPublisher,
+    creator: row.creator ?? "Unknown",
+    studio: row.studio,
+    genre: row.genre,
+    releaseYear: row.releaseYear,
+    status: row.status,
+    rating: row.rating,
+    evaluation: row.evaluation,
+    sourceDocument: sourceDocuments.get(`media:${row.id}`) ?? null,
+    review: row.review ?? "감상이 아직 없습니다.",
+    content: row.content,
+    relationNote: row.relationNote,
+    playTime: row.playTime,
+    author: row.author,
+    pages: row.pages,
+    screenKind: row.screenKind,
+    rewatchValue: Boolean(row.rewatchValue),
+    coverImageUrl: row.coverImageUrl,
+    loggedAt: row.loggedAt,
+    startedAt: row.startedAt,
+    completedAt: row.completedAt,
+  }));
+}
+
+function mapVaultAssets(rows: AssetRow[], sourceDocuments: Map<string, SourceDocumentInfo>) {
+  return rows.map((row) => ({
+    id: row.id,
+    category: row.category,
+    name: row.name,
+    brand: row.brand ?? "-",
+    condition: row.currentCondition ?? "-",
+    modelName: row.modelName,
+    acquiredDate: row.acquiredDate,
+    acquiredPrice: row.acquiredPrice,
+    notes: row.notes,
+    coverImageUrl: row.coverImageUrl,
+    sourceDocument: sourceDocuments.get(`asset:${row.id}`) ?? null,
+  }));
+}
+
+function mapVaultPlaces(rows: PlaceRow[], sourceDocuments: Map<string, SourceDocumentInfo>) {
+  return rows.map((row) => ({
+    id: row.id,
+    category: row.category,
+    name: row.name,
+    address: row.address ?? "",
+    review: row.notes ?? "",
+    mapUrl: row.mapUrl,
+    firstVisitedAt: row.firstVisitedAt,
+    lastVisitedAt: row.lastVisitedAt,
+    visitCount: row.visitCount,
+    averageRating: row.averageRating,
+    sourceDocument: sourceDocuments.get(`place:${row.id}`) ?? null,
+  }));
+}
+
+async function getSourceDocumentMapForEntity(userId: string, canonicalEntityType: "media" | "asset" | "place", canonicalEntityId: string) {
+  const [sourceDocumentResult, sourcePropertyResult] = await Promise.all([
+    queryD1<SourceDocumentRow>(
+      `select
+         id,
+         canonical_entity_type as canonicalEntityType,
+         canonical_entity_id as canonicalEntityId,
+         source_database as sourceDatabase,
+         source_id as sourceId,
+         document_role as documentRole,
+         status,
+         url,
+         raw_content_preview as preview
+       from source_documents
+       where user_id = ?
+         and deleted_at is null
+         and canonical_entity_type = ?
+         and canonical_entity_id = ?`,
+      [userId, canonicalEntityType, canonicalEntityId],
+    ),
+    queryD1<SourceDocumentPropertyRow>(
+      `select
+         sdp.source_document_id as sourceDocumentId,
+         sdp.property_name as name,
+         sdp.value_text as value,
+         sdp.property_type as type
+       from source_document_properties sdp
+       inner join source_documents sd on sd.id = sdp.source_document_id
+       where sd.user_id = ?
+         and sd.deleted_at is null
+         and sd.canonical_entity_type = ?
+         and sd.canonical_entity_id = ?
+       order by sdp.source_document_id, sdp.property_key`,
+      [userId, canonicalEntityType, canonicalEntityId],
+    ),
+  ]);
+
+  return buildSourceDocumentMap(sourceDocumentResult.rows, sourcePropertyResult.rows);
+}
+
+async function getSourceDocumentMapForEntityType(userId: string, canonicalEntityType: "media" | "asset" | "place") {
+  const [sourceDocumentResult, sourcePropertyResult] = await Promise.all([
+    queryD1<SourceDocumentRow>(
+      `select
+         id,
+         canonical_entity_type as canonicalEntityType,
+         canonical_entity_id as canonicalEntityId,
+         source_database as sourceDatabase,
+         source_id as sourceId,
+         document_role as documentRole,
+         status,
+         url,
+         raw_content_preview as preview
+       from source_documents
+       where user_id = ?
+         and deleted_at is null
+         and canonical_entity_type = ?`,
+      [userId, canonicalEntityType],
+    ),
+    queryD1<SourceDocumentPropertyRow>(
+      `select
+         sdp.source_document_id as sourceDocumentId,
+         sdp.property_name as name,
+         sdp.value_text as value,
+         sdp.property_type as type
+       from source_document_properties sdp
+       inner join source_documents sd on sd.id = sdp.source_document_id
+       where sd.user_id = ?
+         and sd.deleted_at is null
+         and sd.canonical_entity_type = ?
+       order by sdp.source_document_id, sdp.property_key`,
+      [userId, canonicalEntityType],
+    ),
+  ]);
+
+  return buildSourceDocumentMap(sourceDocumentResult.rows, sourcePropertyResult.rows);
 }
 
 export async function seedVaultSupportData() {
@@ -449,110 +729,11 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
     zettelTags.set(row.zettelId, list);
   }
 
-  const sourceProperties = new Map<string, Array<{ name: string; value: string; type?: string | null }>>();
-  for (const row of sourcePropertyResult.rows) {
-    if (!row.value) continue;
-    const properties = sourceProperties.get(row.sourceDocumentId) ?? [];
-    properties.push({ name: row.name, value: row.value, type: row.type });
-    sourceProperties.set(row.sourceDocumentId, properties);
-  }
-
-  const sourceDocuments = new Map<string, SourceDocumentInfo>();
-  for (const row of sourceDocumentResult.rows) {
-    sourceDocuments.set(`${row.canonicalEntityType}:${row.canonicalEntityId}`, {
-      id: row.id,
-      sourceDatabase: row.sourceDatabase,
-      sourceId: row.sourceId,
-      documentRole: row.documentRole,
-      status: row.status,
-      url: row.url,
-      preview: row.preview,
-      properties: sourceProperties.get(row.id) ?? [],
-    });
-  }
-
-  const zettels: ZettelMock[] = zettelResult.rows.map((row) => {
-    const links = outgoing.get(row.id) ?? [];
-    return {
-      id: row.id,
-      title: row.title,
-      type: row.type,
-      category: row.category ?? "미분류",
-      summary: row.summary ?? "요약이 아직 없습니다.",
-      content: row.content ?? "",
-      outgoingLinks: links,
-      backlinks: backlinks.get(row.id) ?? [],
-      related: links.map((link) => link.title),
-      tags: zettelTags.get(row.id) ?? [],
-      aliases: parseAliases(row.aliases),
-      pinned: Boolean(row.pinned),
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      status: row.status,
-      documentKind: row.documentKind,
-      sourceReliability: row.sourceReliability,
-      reviewCadence: row.reviewCadence,
-      reviewDueAt: row.reviewDueAt,
-      originalCreatedAt: row.originalCreatedAt,
-      source: row.source,
-      sourceUrl: row.sourceUrl,
-      sourceDocument: sourceDocuments.get(`zettel:${row.id}`) ?? null,
-    };
-  });
-  const media: MediaMock[] = mediaResult.rows.map((row) => ({
-    id: row.id,
-    mediaType: row.mediaType,
-    title: row.title,
-    originalTitle: row.originalTitle,
-    subtype: row.subtype,
-    platformOrPublisher: row.platformOrPublisher,
-    creator: row.creator ?? "Unknown",
-    studio: row.studio,
-    genre: row.genre,
-    releaseYear: row.releaseYear,
-    status: row.status,
-    rating: row.rating,
-    evaluation: row.evaluation,
-    sourceDocument: sourceDocuments.get(`media:${row.id}`) ?? null,
-    review: row.review ?? "감상이 아직 없습니다.",
-    content: row.content,
-    relationNote: row.relationNote,
-    playTime: row.playTime,
-    author: row.author,
-    pages: row.pages,
-    screenKind: row.screenKind,
-    rewatchValue: Boolean(row.rewatchValue),
-    coverImageUrl: row.coverImageUrl,
-    loggedAt: row.loggedAt,
-    startedAt: row.startedAt,
-    completedAt: row.completedAt,
-  }));
-  const assets: AssetMock[] = assetResult.rows.map((row) => ({
-    id: row.id,
-    category: row.category,
-    name: row.name,
-    brand: row.brand ?? "-",
-    condition: row.currentCondition ?? "-",
-    modelName: row.modelName,
-    acquiredDate: row.acquiredDate,
-    acquiredPrice: row.acquiredPrice,
-    notes: row.notes,
-    coverImageUrl: row.coverImageUrl,
-    sourceDocument: sourceDocuments.get(`asset:${row.id}`) ?? null,
-  }));
-  const places: PlaceMock[] = placeResult.rows.map((row) => ({
-    id: row.id,
-    category: row.category,
-    name: row.name,
-    address: row.address ?? "",
-    review: row.notes ?? "",
-    mapUrl: row.mapUrl,
-    firstVisitedAt: row.firstVisitedAt,
-    lastVisitedAt: row.lastVisitedAt,
-    visitCount: row.visitCount,
-    averageRating: row.averageRating,
-    sourceDocument: sourceDocuments.get(`place:${row.id}`) ?? null,
-  }));
+  const sourceDocuments = buildSourceDocumentMap(sourceDocumentResult.rows, sourcePropertyResult.rows);
+  const zettels: ZettelMock[] = mapVaultZettels({ rows: zettelResult.rows, outgoing, backlinks, zettelTags, sourceDocuments });
+  const media: MediaMock[] = mapVaultMedia(mediaResult.rows, sourceDocuments);
+  const assets: AssetMock[] = mapVaultAssets(assetResult.rows, sourceDocuments);
+  const places: PlaceMock[] = mapVaultPlaces(placeResult.rows, sourceDocuments);
 
   return {
     selectedZettelId: zettels[0]?.id ?? "",
@@ -563,10 +744,501 @@ export const getVaultSnapshot = cache(async function getVaultSnapshot(): Promise
   };
 });
 
-export async function getVaultZettel(zettelId: string) {
-  const snapshot = await getVaultSnapshot();
-  return snapshot.zettels.find((item) => item.id === zettelId) ?? null;
+function emptyVaultSnapshot(): VaultSnapshot {
+  return {
+    assets: [],
+    media: [],
+    places: [],
+    selectedZettelId: "",
+    zettels: [],
+  };
 }
+
+function mediaTypeFromVaultRoute(segment: string | undefined): MediaMock["mediaType"] | null {
+  if (segment === "books") return "book";
+  if (segment === "games") return "game";
+  if (segment === "screens") return "screen";
+  return null;
+}
+
+async function getVaultZettelHydrationSnapshot(zettelId?: string): Promise<VaultSnapshot> {
+  const zettels = await getVaultZettelList();
+  if (!zettelId) return { ...emptyVaultSnapshot(), selectedZettelId: zettels[0]?.id ?? "", zettels };
+
+  const zettel = await getVaultZettel(zettelId);
+  if (!zettel) return { ...emptyVaultSnapshot(), zettels };
+  const existingIds = new Set(zettels.map((item) => item.id));
+  const merged = zettels.map((item) => (item.id === zettel.id ? zettel : item));
+  return {
+    ...emptyVaultSnapshot(),
+    selectedZettelId: zettel.id,
+    zettels: existingIds.has(zettel.id) ? merged : [zettel, ...zettels],
+  };
+}
+
+export async function getVaultHydrationSnapshot(pathAndSearch = "/vault"): Promise<VaultSnapshot> {
+  const url = new URL(pathAndSearch, "http://local");
+  const segments = url.pathname.split("/").filter(Boolean);
+  const section = segments[1] ?? "";
+  const detailOrSubsection = segments[2];
+
+  if (!section) return getVaultZettelHydrationSnapshot();
+
+  if (section === "zettels") {
+    if (detailOrSubsection === "graph") return emptyVaultSnapshot();
+    if (detailOrSubsection === "new" || url.searchParams.get("new") === "1") return getVaultZettelHydrationSnapshot();
+    return getVaultZettelHydrationSnapshot(detailOrSubsection);
+  }
+
+  if (section === "media") {
+    const mediaType = mediaTypeFromVaultRoute(detailOrSubsection);
+    if (mediaType) {
+      const media = await getVaultMediaList(mediaType);
+      return { ...emptyVaultSnapshot(), media };
+    }
+
+    if (detailOrSubsection) {
+      const media = await getVaultMedia(detailOrSubsection);
+      return { ...emptyVaultSnapshot(), media: media ? [media] : [] };
+    }
+
+    const media = await getVaultMediaList();
+    return { ...emptyVaultSnapshot(), media };
+  }
+
+  if (section === "assets") {
+    if (detailOrSubsection) {
+      const asset = await getVaultAsset(detailOrSubsection);
+      return { ...emptyVaultSnapshot(), assets: asset ? [asset] : [] };
+    }
+
+    const assets = await getVaultAssetList();
+    return { ...emptyVaultSnapshot(), assets };
+  }
+
+  if (section === "places") {
+    if (detailOrSubsection) {
+      const place = await getVaultPlace(detailOrSubsection);
+      return { ...emptyVaultSnapshot(), places: place ? [place] : [] };
+    }
+
+    const places = await getVaultPlaceList();
+    return { ...emptyVaultSnapshot(), places };
+  }
+
+  return emptyVaultSnapshot();
+}
+
+export const getVaultMediaList = cache(async function getVaultMediaList(mediaType?: MediaMock["mediaType"]) {
+  const { id: userId } = await resolveUser();
+  const params: unknown[] = [userId];
+  const mediaTypeFilter = mediaType ? " and media_type = ?" : "";
+  if (mediaType) params.push(mediaType);
+
+  const [mediaResult, sourceDocuments] = await Promise.all([
+    queryD1<MediaRow>(
+      `select
+         id,
+         media_type as mediaType,
+         title,
+         original_title as originalTitle,
+         subtype,
+         platform_or_publisher as platformOrPublisher,
+         creator,
+         studio,
+         genre,
+         release_year as releaseYear,
+         status,
+         rating,
+         evaluation,
+         review,
+         content,
+         relation_note as relationNote,
+         play_time as playTime,
+         author,
+         pages,
+         screen_kind as screenKind,
+         rewatch_value as rewatchValue,
+         cover_image_url as coverImageUrl,
+         logged_at as loggedAt,
+         started_at as startedAt,
+         completed_at as completedAt
+       from media_logs
+       where user_id = ?
+         and deleted_at is null${mediaTypeFilter}
+       order by updated_at desc`,
+      params,
+    ),
+    getSourceDocumentMapForEntityType(userId, "media"),
+  ]);
+
+  return mapVaultMedia(mediaResult.rows, sourceDocuments);
+});
+
+export const getVaultAssetList = cache(async function getVaultAssetList() {
+  const { id: userId } = await resolveUser();
+  const [assetResult, sourceDocuments] = await Promise.all([
+    queryD1<AssetRow>(
+      `select
+         id,
+         category,
+         name,
+         brand,
+         model_name as modelName,
+         acquired_date as acquiredDate,
+         acquired_price as acquiredPrice,
+         current_condition as currentCondition,
+         notes,
+         cover_image_url as coverImageUrl
+       from assets
+       where user_id = ?
+         and deleted_at is null
+       order by created_at asc`,
+      [userId],
+    ),
+    getSourceDocumentMapForEntityType(userId, "asset"),
+  ]);
+
+  return mapVaultAssets(assetResult.rows, sourceDocuments);
+});
+
+export const getVaultPlaceList = cache(async function getVaultPlaceList() {
+  const { id: userId } = await resolveUser();
+  const [placeResult, sourceDocuments] = await Promise.all([
+    queryD1<PlaceRow>(
+      `select
+         id,
+         category,
+         name,
+         address,
+         map_url as mapUrl,
+         first_visited_at as firstVisitedAt,
+         last_visited_at as lastVisitedAt,
+         visit_count as visitCount,
+         average_rating as averageRating,
+         notes
+       from places
+       where user_id = ?
+         and deleted_at is null
+       order by updated_at desc`,
+      [userId],
+    ),
+    getSourceDocumentMapForEntityType(userId, "place"),
+  ]);
+
+  return mapVaultPlaces(placeResult.rows, sourceDocuments);
+});
+
+export const getVaultZettelList = cache(async function getVaultZettelList() {
+  const { id: userId } = await resolveUser();
+  const [zettelResult, backlinkResult, outgoingResult, zettelTagResult, sourceDocumentResult, sourcePropertySearchResult] = await Promise.all([
+    queryD1<ZettelRow>(
+      `select
+         id,
+         title,
+         type,
+         category,
+         status,
+         document_kind as documentKind,
+         aliases,
+         source_reliability as sourceReliability,
+         review_cadence as reviewCadence,
+         review_due_at as reviewDueAt,
+         original_created_at as originalCreatedAt,
+         source,
+         source_url as sourceUrl,
+         coalesce(summary, substr(coalesce(content, ''), 1, 180)) as summary,
+         '' as content,
+         pinned,
+         created_at as createdAt,
+         updated_at as updatedAt
+       from zettels
+       where user_id = ?
+         and deleted_at is null
+         and not exists (
+           select 1
+           from taggings tg
+           inner join tags t on t.id = tg.tag_id
+           where tg.taggable_type = 'zettel'
+             and tg.taggable_id = zettels.id
+             and t.slug in ('archive-work', 'needs-review', 'auto-log')
+         )
+       order by pinned desc, updated_at desc`,
+      [userId],
+    ),
+    queryD1<BacklinkRow>(
+      `select zl.target_id as targetId, zs.title as sourceTitle
+       from zettel_links zl
+       inner join zettels zs on zs.id = zl.source_id
+       inner join zettels zt on zt.id = zl.target_id
+       where zt.user_id = ? and zs.deleted_at is null and zt.deleted_at is null`,
+      [userId],
+    ),
+    queryD1<OutgoingRow>(
+      `select zl.id, zl.source_id as sourceId, zl.target_id as targetId, zt.title as targetTitle
+       from zettel_links zl
+       inner join zettels zs on zs.id = zl.source_id
+       inner join zettels zt on zt.id = zl.target_id
+       where zs.user_id = ? and zs.deleted_at is null and zt.deleted_at is null`,
+      [userId],
+    ),
+    queryD1<ZettelTagRow>(
+      `select tg.taggable_id as zettelId, t.name
+       from taggings tg
+       inner join tags t on t.id = tg.tag_id
+       inner join zettels z on z.id = tg.taggable_id
+       where z.user_id = ?
+         and z.deleted_at is null
+         and tg.taggable_type = 'zettel'
+       order by t.name asc`,
+      [userId],
+    ),
+    queryD1<SourceDocumentRow>(
+      `select
+         id,
+         canonical_entity_type as canonicalEntityType,
+         canonical_entity_id as canonicalEntityId,
+         source_database as sourceDatabase,
+         source_id as sourceId,
+         document_role as documentRole,
+         status,
+         url,
+         raw_content_preview as preview
+       from source_documents
+       where user_id = ?
+         and deleted_at is null
+         and canonical_entity_type = 'zettel'`,
+      [userId],
+    ),
+    queryD1<SourcePropertySearchRow>(
+      `select
+         sd.canonical_entity_id as canonicalEntityId,
+         group_concat(
+           coalesce(sdp.property_name, '') || ' ' || coalesce(sdp.value_text, '') || ' ' || coalesce(sdp.property_type, ''),
+           ' '
+         ) as searchText
+       from source_document_properties sdp
+       inner join source_documents sd on sd.id = sdp.source_document_id
+       where sd.user_id = ?
+         and sd.deleted_at is null
+         and sd.canonical_entity_type = 'zettel'
+       group by sd.canonical_entity_id`,
+      [userId],
+    ),
+  ]);
+
+  const backlinks = new Map<string, string[]>();
+  for (const row of backlinkResult.rows) {
+    const list = backlinks.get(row.targetId) ?? [];
+    list.push(row.sourceTitle);
+    backlinks.set(row.targetId, list);
+  }
+
+  const outgoing = new Map<string, ZettelMock["outgoingLinks"]>();
+  for (const row of outgoingResult.rows) {
+    const list = outgoing.get(row.sourceId) ?? [];
+    list.push({ id: row.id, targetId: row.targetId, title: row.targetTitle });
+    outgoing.set(row.sourceId, list);
+  }
+
+  const zettelTags = new Map<string, string[]>();
+  for (const row of zettelTagResult.rows) {
+    const list = zettelTags.get(row.zettelId) ?? [];
+    list.push(row.name);
+    zettelTags.set(row.zettelId, list);
+  }
+
+  const sourceDocuments = buildSourceDocumentSummaryMap(sourceDocumentResult.rows);
+  const sourcePropertySearchText = buildSourcePropertySearchTextMap(sourcePropertySearchResult.rows);
+  return mapVaultZettelListItems({ rows: zettelResult.rows, outgoing, backlinks, zettelTags, sourceDocuments, sourcePropertySearchText });
+});
+
+export const getVaultZettelGraph = cache(async function getVaultZettelGraph(): Promise<VaultZettelGraphNode[]> {
+  const { id: userId } = await resolveUser();
+  const [zettelResult, outgoingResult, backlinkResult] = await Promise.all([
+    queryD1<ZettelGraphRow>(
+      `select
+         z.id,
+         z.title,
+         z.type,
+         z.category
+       from zettels z
+       where z.user_id = ?
+         and z.deleted_at is null
+         and not exists (
+           select 1
+           from taggings tg
+           inner join tags t on t.id = tg.tag_id
+           where tg.taggable_type = 'zettel'
+             and tg.taggable_id = z.id
+             and t.slug in ('archive-work', 'needs-review', 'auto-log')
+         )
+       order by z.pinned desc, z.updated_at desc`,
+      [userId],
+    ),
+    queryD1<ZettelGraphCountRow>(
+      `select zl.source_id as zettelId, count(*) as count
+       from zettel_links zl
+       inner join zettels zs on zs.id = zl.source_id
+       inner join zettels zt on zt.id = zl.target_id
+       where zs.user_id = ?
+         and zt.user_id = ?
+         and zs.deleted_at is null
+         and zt.deleted_at is null
+       group by zl.source_id`,
+      [userId, userId],
+    ),
+    queryD1<ZettelGraphCountRow>(
+      `select zl.target_id as zettelId, count(*) as count
+       from zettel_links zl
+       inner join zettels zs on zs.id = zl.source_id
+       inner join zettels zt on zt.id = zl.target_id
+       where zs.user_id = ?
+         and zt.user_id = ?
+         and zs.deleted_at is null
+         and zt.deleted_at is null
+       group by zl.target_id`,
+      [userId, userId],
+    ),
+  ]);
+  const outgoingCountByZettelId = new Map(outgoingResult.rows.map((row) => [row.zettelId, Number(row.count ?? 0)]));
+  const backlinkCountByZettelId = new Map(backlinkResult.rows.map((row) => [row.zettelId, Number(row.count ?? 0)]));
+
+  return zettelResult.rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    category: row.category ?? "미분류",
+    outgoingCount: outgoingCountByZettelId.get(row.id) ?? 0,
+    backlinkCount: backlinkCountByZettelId.get(row.id) ?? 0,
+  }));
+});
+
+export const getVaultZettel = cache(async function getVaultZettel(zettelId: string) {
+  const { id: userId } = await resolveUser();
+  const [zettelResult, backlinkResult, outgoingResult, zettelTagResult, sourceDocumentResult, sourcePropertyResult] = await Promise.all([
+    queryD1<ZettelRow>(
+      `select
+         id,
+         title,
+         type,
+         category,
+         status,
+         document_kind as documentKind,
+         aliases,
+         source_reliability as sourceReliability,
+         review_cadence as reviewCadence,
+         review_due_at as reviewDueAt,
+         original_created_at as originalCreatedAt,
+         source,
+         source_url as sourceUrl,
+         summary,
+         content,
+         pinned,
+         created_at as createdAt,
+         updated_at as updatedAt
+       from zettels
+       where user_id = ?
+         and id = ?
+         and deleted_at is null
+         and not exists (
+           select 1
+           from taggings tg
+           inner join tags t on t.id = tg.tag_id
+           where tg.taggable_type = 'zettel'
+             and tg.taggable_id = zettels.id
+             and t.slug in ('archive-work', 'needs-review', 'auto-log')
+         )
+       limit 1`,
+      [userId, zettelId],
+    ),
+    queryD1<BacklinkRow>(
+      `select zl.target_id as targetId, zs.title as sourceTitle
+       from zettel_links zl
+       inner join zettels zs on zs.id = zl.source_id
+       inner join zettels zt on zt.id = zl.target_id
+       where zt.user_id = ? and zt.id = ? and zs.deleted_at is null and zt.deleted_at is null`,
+      [userId, zettelId],
+    ),
+    queryD1<OutgoingRow>(
+      `select zl.id, zl.source_id as sourceId, zl.target_id as targetId, zt.title as targetTitle
+       from zettel_links zl
+       inner join zettels zs on zs.id = zl.source_id
+       inner join zettels zt on zt.id = zl.target_id
+       where zs.user_id = ? and zs.id = ? and zs.deleted_at is null and zt.deleted_at is null`,
+      [userId, zettelId],
+    ),
+    queryD1<ZettelTagRow>(
+      `select tg.taggable_id as zettelId, t.name
+       from taggings tg
+       inner join tags t on t.id = tg.tag_id
+       inner join zettels z on z.id = tg.taggable_id
+       where z.user_id = ?
+         and z.id = ?
+         and z.deleted_at is null
+         and tg.taggable_type = 'zettel'
+       order by t.name asc`,
+      [userId, zettelId],
+    ),
+    queryD1<SourceDocumentRow>(
+      `select
+         id,
+         canonical_entity_type as canonicalEntityType,
+         canonical_entity_id as canonicalEntityId,
+         source_database as sourceDatabase,
+         source_id as sourceId,
+         document_role as documentRole,
+         status,
+         url,
+         raw_content_preview as preview
+       from source_documents
+       where user_id = ?
+         and deleted_at is null
+         and canonical_entity_type = 'zettel'
+         and canonical_entity_id = ?`,
+      [userId, zettelId],
+    ),
+    queryD1<SourceDocumentPropertyRow>(
+      `select
+         sdp.source_document_id as sourceDocumentId,
+         sdp.property_name as name,
+         sdp.value_text as value,
+         sdp.property_type as type
+       from source_document_properties sdp
+       inner join source_documents sd on sd.id = sdp.source_document_id
+       where sd.user_id = ?
+         and sd.deleted_at is null
+         and sd.canonical_entity_type = 'zettel'
+         and sd.canonical_entity_id = ?
+       order by sdp.source_document_id, sdp.property_key`,
+      [userId, zettelId],
+    ),
+  ]);
+
+  const backlinks = new Map<string, string[]>();
+  for (const row of backlinkResult.rows) {
+    const list = backlinks.get(row.targetId) ?? [];
+    list.push(row.sourceTitle);
+    backlinks.set(row.targetId, list);
+  }
+
+  const outgoing = new Map<string, ZettelMock["outgoingLinks"]>();
+  for (const row of outgoingResult.rows) {
+    const list = outgoing.get(row.sourceId) ?? [];
+    list.push({ id: row.id, targetId: row.targetId, title: row.targetTitle });
+    outgoing.set(row.sourceId, list);
+  }
+
+  const zettelTags = new Map<string, string[]>();
+  for (const row of zettelTagResult.rows) {
+    const list = zettelTags.get(row.zettelId) ?? [];
+    list.push(row.name);
+    zettelTags.set(row.zettelId, list);
+  }
+
+  const sourceDocuments = buildSourceDocumentMap(sourceDocumentResult.rows, sourcePropertyResult.rows);
+  return mapVaultZettels({ rows: zettelResult.rows, outgoing, backlinks, zettelTags, sourceDocuments })[0] ?? null;
+});
 
 export async function getVaultZettelsTouchedOn(date: string, limit = 4) {
   const { id: userId } = await resolveUser();
@@ -591,6 +1263,105 @@ export async function getVaultZettelsTouchedOn(date: string, limit = 4) {
   return result.rows;
 }
 
+export const getVaultMedia = cache(async function getVaultMedia(mediaId: string) {
+  const { id: userId } = await resolveUser();
+  const [mediaResult, sourceDocuments] = await Promise.all([
+    queryD1<MediaRow>(
+      `select
+         id,
+         media_type as mediaType,
+         title,
+         original_title as originalTitle,
+         subtype,
+         platform_or_publisher as platformOrPublisher,
+         creator,
+         studio,
+         genre,
+         release_year as releaseYear,
+         status,
+         rating,
+         evaluation,
+         review,
+         content,
+         relation_note as relationNote,
+         play_time as playTime,
+         author,
+         pages,
+         screen_kind as screenKind,
+         rewatch_value as rewatchValue,
+         cover_image_url as coverImageUrl,
+         logged_at as loggedAt,
+         started_at as startedAt,
+         completed_at as completedAt
+       from media_logs
+       where user_id = ?
+         and id = ?
+         and deleted_at is null
+       limit 1`,
+      [userId, mediaId],
+    ),
+    getSourceDocumentMapForEntity(userId, "media", mediaId),
+  ]);
+
+  return mapVaultMedia(mediaResult.rows, sourceDocuments)[0] ?? null;
+});
+
+export const getVaultAsset = cache(async function getVaultAsset(assetId: string) {
+  const { id: userId } = await resolveUser();
+  const [assetResult, sourceDocuments] = await Promise.all([
+    queryD1<AssetRow>(
+      `select
+         id,
+         category,
+         name,
+         brand,
+         model_name as modelName,
+         acquired_date as acquiredDate,
+         acquired_price as acquiredPrice,
+         current_condition as currentCondition,
+         notes,
+         cover_image_url as coverImageUrl
+       from assets
+       where user_id = ?
+         and id = ?
+         and deleted_at is null
+       limit 1`,
+      [userId, assetId],
+    ),
+    getSourceDocumentMapForEntity(userId, "asset", assetId),
+  ]);
+
+  return mapVaultAssets(assetResult.rows, sourceDocuments)[0] ?? null;
+});
+
+export const getVaultPlace = cache(async function getVaultPlace(placeId: string) {
+  const { id: userId } = await resolveUser();
+  const [placeResult, sourceDocuments] = await Promise.all([
+    queryD1<PlaceRow>(
+      `select
+         id,
+         category,
+         name,
+         address,
+         map_url as mapUrl,
+         first_visited_at as firstVisitedAt,
+         last_visited_at as lastVisitedAt,
+         visit_count as visitCount,
+         average_rating as averageRating,
+         notes
+       from places
+       where user_id = ?
+         and id = ?
+         and deleted_at is null
+       limit 1`,
+      [userId, placeId],
+    ),
+    getSourceDocumentMapForEntity(userId, "place", placeId),
+  ]);
+
+  return mapVaultPlaces(placeResult.rows, sourceDocuments)[0] ?? null;
+});
+
 export async function cycleVaultMediaStatus(mediaId: string) {
   const { id: userId } = await resolveUser();
   const current = await queryD1<{ status: MediaMock["status"] }>("select status from media_logs where id = ? and user_id = ? limit 1", [mediaId, userId]);
@@ -598,7 +1369,7 @@ export async function cycleVaultMediaStatus(mediaId: string) {
   const currentIndex = order.indexOf(current.rows[0]?.status ?? "backlog");
   const next = order[(currentIndex + 1) % order.length];
   await executeD1(`update media_logs set status = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [next, mediaId, userId]);
-  return getVaultSnapshot();
+  return getVaultMedia(mediaId);
 }
 
 export async function updateVaultMediaDetails(mediaId: string, input: {
@@ -694,7 +1465,7 @@ export async function updateVaultMediaDetails(mediaId: string, input: {
       userId,
     ],
   );
-  return getVaultSnapshot();
+  return getVaultMedia(mediaId);
 }
 
 export async function updateVaultZettelTitle(zettelId: string, title: string) {
@@ -702,7 +1473,7 @@ export async function updateVaultZettelTitle(zettelId: string, title: string) {
   const nextTitle = title.trim();
   if (!nextTitle) throw new Error("제목은 비워둘 수 없습니다.");
   await executeD1(`update zettels set title = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [nextTitle, zettelId, userId]);
-  return getVaultSnapshot();
+  return getVaultZettel(zettelId);
 }
 
 export async function updateVaultZettelContent(zettelId: string, content: string) {
@@ -735,7 +1506,7 @@ export async function updateVaultZettelContent(zettelId: string, content: string
     zettelId,
     content,
   });
-  return getVaultSnapshot();
+  return getVaultZettel(zettelId);
 }
 
 export async function createVaultZettel(input: ZettelDetailsInput) {
@@ -780,12 +1551,9 @@ export async function createVaultZettel(input: ZettelDetailsInput) {
     zettelId: id,
     content,
   });
-  const snapshot = await getVaultSnapshot();
   return {
-    snapshot: {
-      ...snapshot,
-      selectedZettelId: id,
-    },
+    selectedZettelId: id,
+    zettel: await getVaultZettel(id),
   };
 }
 
@@ -847,14 +1615,14 @@ export async function updateVaultZettelDetails(zettelId: string, input: ZettelDe
     content,
   });
 
-  return getVaultSnapshot();
+  return getVaultZettel(zettelId);
 }
 
 export async function deleteVaultZettel(zettelId: string) {
   const { id: userId } = await resolveUser();
   await executeD1(`delete from zettel_links where source_id = ? or target_id = ?`, [zettelId, zettelId]);
   await executeD1(`update zettels set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [zettelId, userId]);
-  return getVaultSnapshot();
+  return { deletedId: zettelId };
 }
 
 export async function linkVaultZettels(input: { sourceId: string; targetId: string; context?: string }) {
@@ -877,12 +1645,25 @@ export async function linkVaultZettels(input: { sourceId: string; targetId: stri
      values (?, ?, ?, ?, datetime('now'))`,
     [ulid(), input.sourceId, input.targetId, input.context?.trim() || null],
   );
-  return getVaultSnapshot();
+  const [source, target] = await Promise.all([getVaultZettel(input.sourceId), getVaultZettel(input.targetId)]);
+  return { zettels: [source, target].filter((item): item is NonNullable<typeof item> => Boolean(item)) };
 }
 
 export async function unlinkVaultZettels(linkId: string) {
+  const { id: userId } = await resolveUser();
+  const existing = await queryD1<{ sourceId: string; targetId: string }>(
+    `select zl.source_id as sourceId, zl.target_id as targetId
+     from zettel_links zl
+     inner join zettels zs on zs.id = zl.source_id
+     where zl.id = ? and zs.user_id = ? and zs.deleted_at is null
+     limit 1`,
+    [linkId, userId],
+  );
+  const relation = existing.rows[0] ?? null;
   await executeD1(`delete from zettel_links where id = ?`, [linkId]);
-  return getVaultSnapshot();
+  if (!relation) return { zettels: [] };
+  const [source, target] = await Promise.all([getVaultZettel(relation.sourceId), getVaultZettel(relation.targetId)]);
+  return { zettels: [source, target].filter((item): item is NonNullable<typeof item> => Boolean(item)) };
 }
 
 export async function updateVaultAssetProperties(assetId: string, input: {
@@ -924,7 +1705,7 @@ export async function updateVaultAssetProperties(assetId: string, input: {
       userId,
     ],
   );
-  return getVaultSnapshot();
+  return getVaultAsset(assetId);
 }
 
 export async function updateVaultPlaceProperties(placeId: string, input: {
@@ -969,11 +1750,11 @@ export async function updateVaultPlaceProperties(placeId: string, input: {
       userId,
     ],
   );
-  return getVaultSnapshot();
+  return getVaultPlace(placeId);
 }
 
 export async function updateVaultPlaceReview(placeId: string, review: string) {
   const { id: userId } = await resolveUser();
   await executeD1(`update places set notes = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [review, placeId, userId]);
-  return getVaultSnapshot();
+  return getVaultPlace(placeId);
 }

@@ -40,7 +40,7 @@ function openQueueDb() {
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed"));
+    request.onerror = () => reject(request.error ?? new Error("오프라인 저장소를 열지 못했습니다."));
   });
 }
 
@@ -56,7 +56,7 @@ async function withStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStor
     };
     tx.onerror = () => {
       db.close();
-      reject(tx.error ?? new Error("IndexedDB transaction failed"));
+      reject(tx.error ?? new Error("오프라인 저장소 처리에 실패했습니다."));
     };
   });
 }

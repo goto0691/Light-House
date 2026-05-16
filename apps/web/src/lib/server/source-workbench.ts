@@ -131,7 +131,7 @@ const ENTITY_LABELS: Record<string, string> = {
   project: "프로젝트",
   task: "작업",
   workout: "운동",
-  zettel: "제텔",
+  zettel: "지식",
 };
 
 const BATCH_APPLY_ENTITIES: Record<string, BatchApplyEntityConfig> = {

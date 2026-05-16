@@ -88,12 +88,12 @@ export function ZenEditor({
   };
 
   return (
-    <div className="glass rounded-[24px] p-5">
+    <div className="glass rounded-lg p-5">
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Markdown Editor</p>
+        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">마크다운 편집기</p>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{currentValue.length} chars</span>
-          {suggestionContext.mode ? <span>{suggestionContext.mode} lookup</span> : null}
+          <span>{currentValue.length}자</span>
+          {suggestionContext.mode ? <span>연결 검색</span> : null}
           <KeyHint keys="Cmd+/" />
         </div>
       </div>
@@ -125,12 +125,12 @@ export function ZenEditor({
         value={currentValue}
       />
       {suggestions.length ? (
-        <div className="mt-3 rounded-2xl border border-white/10 bg-black/10 p-3">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Suggestion</p>
+        <div className="mt-3 rounded-md border border-white/10 bg-black/10 p-3">
+          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">추천 연결</p>
           <div className="mt-3 flex flex-wrap gap-2">
           {suggestions.map((suggestion) => (
             <button
-              className={`focus-ring rounded-full border px-3 py-1 text-xs transition ${
+              className={`focus-ring rounded-md border px-3 py-1 text-xs ${
                 suggestions[selectedSuggestionIndex] === suggestion
                   ? "border-primary/30 bg-primary/12 text-primary"
                   : "border-white/10 bg-white/8 text-primary [@media(hover:hover)]:hover:bg-primary/12"

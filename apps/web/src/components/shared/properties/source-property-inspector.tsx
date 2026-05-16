@@ -130,13 +130,13 @@ export function SourcePropertyInspector<TForm extends object>({
     {
       key: "suggested",
       title: "적용 후보",
-      description: "registry alias나 사용자가 고른 대상과 연결된 원본 속성입니다.",
+      description: "속성 별칭이나 사용자가 고른 대상과 연결된 원본 속성입니다.",
       rows: propertyRows.filter((row) => row.classification.status === "suggested"),
     },
     {
       key: "unmapped",
       title: "검토 필요",
-      description: "아직 canonical 속성으로 연결되지 않은 원본 속성입니다.",
+      description: "아직 표준 속성으로 연결되지 않은 원본 속성입니다.",
       rows: propertyRows.filter((row) => row.classification.status === "unmapped"),
     },
     {
@@ -159,7 +159,7 @@ export function SourcePropertyInspector<TForm extends object>({
         <div className="flex flex-wrap items-center gap-2">
           {activeDocument.url ? (
             <a
-              className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+              className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground hover:bg-white/8 hover:text-foreground"
               href={activeDocument.url}
               rel="noreferrer"
               target="_blank"
@@ -218,7 +218,7 @@ export function SourcePropertyInspector<TForm extends object>({
                     <h3 className="text-sm font-medium text-foreground">{group.title}</h3>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground/80">{group.description}</p>
                   </div>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground">{group.rows.length}</span>
+                  <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground">{group.rows.length}</span>
                 </div>
                 {content}
               </section>
@@ -287,7 +287,7 @@ function SourcePropertyRow<TForm extends object>({
       </select>
       <button
         className={cn(
-          "focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-3 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
+          "focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-3 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50",
           applicable ? "border-primary/25 bg-primary/10 text-primary hover:bg-primary/15" : "border-white/10 bg-white/5 text-muted-foreground",
           compact && "w-full",
         )}

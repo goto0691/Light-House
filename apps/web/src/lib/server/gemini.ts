@@ -125,12 +125,12 @@ export async function generateGeminiText(input: GenerateGeminiTextInput): Promis
   const payload = (await response.json()) as GeminiResponse;
 
   if (!response.ok || payload.error?.message) {
-    throw new Error(payload.error?.message || `Gemini request failed with status ${response.status}.`);
+    throw new Error(payload.error?.message || `Gemini 요청에 실패했습니다. 상태 코드: ${response.status}`);
   }
 
   const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
   if (!text) {
-    throw new Error("Gemini returned an empty response.");
+    throw new Error("Gemini 응답이 비어 있습니다.");
   }
 
   const promptText = input.parts

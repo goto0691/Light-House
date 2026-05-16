@@ -56,7 +56,7 @@ type SemanticSearchItem = {
 function getRequiredEnv(name: string) {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`${name} is not configured.`);
+    throw new Error(`${name} 환경 변수가 설정되지 않았습니다.`);
   }
   return value;
 }
@@ -94,13 +94,13 @@ async function createEmbedding(text: string) {
 
   const payload = (await response.json()) as EmbeddingResponse;
   if (!response.ok) {
-    const message = payload.errors?.map((error) => error.message).filter(Boolean).join(" | ") || "Workers AI embedding failed.";
+    const message = payload.errors?.map((error) => error.message).filter(Boolean).join(" | ") || "Workers AI 임베딩 생성에 실패했습니다.";
     throw new Error(message);
   }
 
   const result = payload.data?.[0]?.embedding ?? (Array.isArray(payload.result?.data?.[0]) ? (payload.result?.data?.[0] as number[]) : payload.result?.data?.[0]?.embedding);
   if (!result?.length) {
-    throw new Error("Embedding result was empty.");
+    throw new Error("임베딩 응답이 비어 있습니다.");
   }
 
   return result;
@@ -124,7 +124,7 @@ async function upsertVectors(vectors: Array<{ id: string; values: number[]; meta
 
   const payload = (await response.json().catch(() => null)) as { errors?: Array<{ message?: string }> } | null;
   if (!response.ok) {
-    const message = payload?.errors?.map((error) => error.message).filter(Boolean).join(" | ") || "Vectorize upsert failed.";
+    const message = payload?.errors?.map((error) => error.message).filter(Boolean).join(" | ") || "Vectorize 색인 저장에 실패했습니다.";
     throw new Error(message);
   }
 }
@@ -146,7 +146,7 @@ async function queryVectors(vector: number[], topK: number) {
 
   const payload = (await response.json()) as VectorizeQueryResponse;
   if (!response.ok || payload.success === false) {
-    const message = payload.errors?.map((error) => error.message).filter(Boolean).join(" | ") || "Vectorize query failed.";
+    const message = payload.errors?.map((error) => error.message).filter(Boolean).join(" | ") || "Vectorize 검색에 실패했습니다.";
     throw new Error(message);
   }
 

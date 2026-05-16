@@ -18,12 +18,12 @@ export function WorkoutCard({ workout, onDelete }: WorkoutCardProps) {
           <p className="font-display text-2xl text-foreground">{workout.date}</p>
           <div className="flex items-center gap-2">
             <Tag value={`강도 ${workout.intensity}`} variant="custom" />
-            <button className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/8 hover:text-foreground" onClick={onDelete} type="button">
+            <button className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground" onClick={onDelete} type="button">
               삭제
             </button>
           </div>
         </div>
-        <Link className="mt-2 block text-sm text-foreground transition hover:text-primary" href={`/life-ops/workouts/${workout.id}`} scroll={false}>
+        <Link className="mt-2 block text-sm text-foreground hover:text-primary" href={`/life-ops/workouts/${workout.id}`} scroll={false}>
           {workout.categories}
         </Link>
         <p className="mt-1 text-sm text-muted-foreground">{workout.duration}분</p>

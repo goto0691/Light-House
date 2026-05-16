@@ -33,13 +33,13 @@ export function BentoLayoutEditor({ items, onChange }: BentoLayoutEditorProps) {
   const visible = ordered.filter((item) => !item.isHidden);
 
   return (
-    <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-5">
+    <div className="space-y-4 rounded-lg border border-white/10 bg-white/5 p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-primary">Bento Layout Editor</p>
+          <p className="text-xs tracking-[0.08em] text-primary">대시보드 배치</p>
           <p className="mt-2 text-sm text-muted-foreground">위젯 표시 여부와 순서를 조정하는 저장형 레이아웃 편집기입니다.</p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-foreground">{visible.length} visible</div>
+        <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-foreground">표시 {visible.length}개</div>
       </div>
 
       <BentoGrid>
@@ -65,13 +65,13 @@ export function BentoLayoutEditor({ items, onChange }: BentoLayoutEditorProps) {
 
       <div className="space-y-3">
         {ordered.map((item, index) => (
-          <div className="grid gap-3 rounded-3xl border border-white/10 bg-black/10 p-4 md:grid-cols-[1fr_auto_auto_auto]" key={item.id}>
+          <div className="grid gap-3 rounded-lg border border-white/10 bg-black/10 p-4 md:grid-cols-[1fr_auto_auto_auto]" key={item.id}>
             <div>
               <p className="text-sm font-medium text-foreground">{item.widgetKey}</p>
               <p className="mt-1 text-xs text-muted-foreground">{JSON.stringify(item.layout)}</p>
             </div>
             <button
-              className="rounded-2xl border border-white/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/8"
+              className="rounded-md border border-white/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/8"
               disabled={index === 0}
               onClick={() => onChange(moveItem(ordered, item.id, -1))}
               type="button"
@@ -79,7 +79,7 @@ export function BentoLayoutEditor({ items, onChange }: BentoLayoutEditorProps) {
               위로
             </button>
             <button
-              className="rounded-2xl border border-white/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/8"
+              className="rounded-md border border-white/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/8"
               onClick={() =>
                 onChange(ordered.map((entry) => (entry.id === item.id ? { ...entry, isHidden: !entry.isHidden } : entry)))
               }
@@ -88,7 +88,7 @@ export function BentoLayoutEditor({ items, onChange }: BentoLayoutEditorProps) {
               {item.isHidden ? "표시" : "숨김"}
             </button>
             <button
-              className="rounded-2xl border border-white/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/8"
+              className="rounded-md border border-white/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/8"
               disabled={index === ordered.length - 1}
               onClick={() => onChange(moveItem(ordered, item.id, 1))}
               type="button"

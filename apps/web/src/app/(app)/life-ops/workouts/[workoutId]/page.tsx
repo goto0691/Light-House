@@ -5,7 +5,7 @@ import { EntityContextShell } from "@/components/shared/context/entity-context-s
 import { GlassCard } from "@/components/shared/glass-card";
 import { Tag } from "@/components/shared/tag";
 import { getContextBundle } from "@/lib/server/context";
-import { getLifeOpsSnapshot } from "@/lib/server/life-ops";
+import { getLifeOpsWorkout } from "@/lib/server/life-ops";
 
 export default async function WorkoutDetailPage({
   params,
@@ -13,8 +13,7 @@ export default async function WorkoutDetailPage({
   params: Promise<{ workoutId: string }>;
 }) {
   const { workoutId } = await params;
-  const snapshot = await getLifeOpsSnapshot();
-  const workout = snapshot.workouts.find((item) => item.id === workoutId);
+  const workout = await getLifeOpsWorkout(workoutId);
   if (!workout) notFound();
 
   const bundle = await getContextBundle("workout", workout.id);
@@ -36,7 +35,7 @@ export default async function WorkoutDetailPage({
                 <Tag value={`강도 ${workout.intensity}`} variant="custom" />
               </div>
             </div>
-            <p className="mt-5 rounded-lg border border-white/10 bg-white/5 p-4 text-sm leading-6 text-muted-foreground">{workout.notes || "운동 메모가 아직 없습니다."}</p>
+            <p className="mt-5 rounded-lg border border-white/10 bg-white/5 p-4 text-sm leading-6 text-muted-foreground">{workout.notes || "운동 기록이 아직 없습니다."}</p>
           </GlassCard>
           <WorkoutPropertiesPanel workout={workout} />
         </div>

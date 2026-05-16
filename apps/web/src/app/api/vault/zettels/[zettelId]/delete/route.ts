@@ -5,9 +5,8 @@ import { deleteVaultZettel } from "@/lib/server/vault";
 
 export async function POST(_: Request, { params }: { params: Promise<{ zettelId: string }> }) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   const { zettelId } = await params;
-  const snapshot = await deleteVaultZettel(zettelId);
-  return NextResponse.json({ snapshot });
+  return NextResponse.json(await deleteVaultZettel(zettelId));
 }

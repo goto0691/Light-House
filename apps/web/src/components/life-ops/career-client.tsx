@@ -8,13 +8,13 @@ import { buildCareerPropertyForm, careerPropertyPayload, type CareerPropertyForm
 import { FilterBar } from "@/components/shared/filter-bar";
 import { PropertyPanel } from "@/components/shared/properties/property-panel";
 import { CAREER_CATEGORY_OPTIONS, CAREER_PROPERTY_DEFINITIONS, CAREER_PROPERTY_GROUPS } from "@/lib/properties/career";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { useLifeOpsStore } from "@/stores/use-life-ops-store";
+import { postDeltaMutation } from "@/lib/snapshot-client";
+import { useLifeOpsStore, type LifeOpsMutationDelta } from "@/stores/use-life-ops-store";
 
 export function CareerClient() {
   const [isPending, startTransition] = useTransition();
   const career = useLifeOpsStore((state) => state.career);
-  const replaceSnapshot = useLifeOpsStore((state) => state.replaceSnapshot);
+  const applyMutationDelta = useLifeOpsStore((state) => state.applyMutationDelta);
   const [careerForm, setCareerForm] = useState<CareerPropertyForm>(() => buildCareerPropertyForm());
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -47,10 +47,10 @@ export function CareerClient() {
             startTransition(async () => {
               try {
                 const payload = careerPropertyPayload(careerForm);
-                await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                await postDeltaMutation<{ delta: LifeOpsMutationDelta }, LifeOpsMutationDelta>(
                   "/api/life-ops/career",
                   payload,
-                  replaceSnapshot,
+                  applyMutationDelta,
                 );
                 setCareerForm({ ...buildCareerPropertyForm(), startDate: careerForm.startDate });
                 toast.success("커리어 이력을 추가했습니다.");
@@ -90,10 +90,10 @@ export function CareerClient() {
             onDelete={() => {
               startTransition(async () => {
                 try {
-                  await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                  await postDeltaMutation<{ delta: LifeOpsMutationDelta }, LifeOpsMutationDelta>(
                     `/api/life-ops/career/${item.id}/delete`,
                     undefined,
-                    replaceSnapshot,
+                    applyMutationDelta,
                   );
                 } catch (error) {
                   toast.error("커리어 삭제에 실패했습니다.", {

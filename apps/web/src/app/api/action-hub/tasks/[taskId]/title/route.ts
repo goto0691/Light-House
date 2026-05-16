@@ -12,12 +12,12 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
     const body = (await request.json()) as TitleRequest;
 
     if (!body.title) {
-      return NextResponse.json({ error: "title is required" }, { status: 400 });
+      return NextResponse.json({ error: "제목을 입력해 주세요." }, { status: 400 });
     }
 
-    const snapshot = await updateActionHubTaskTitle(taskId, body.title);
-    return NextResponse.json({ snapshot });
+    const delta = await updateActionHubTaskTitle(taskId, body.title);
+    return NextResponse.json({ delta });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Title update failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "제목 저장에 실패했습니다." }, { status: 500 });
   }
 }

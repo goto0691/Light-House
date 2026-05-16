@@ -6,7 +6,7 @@ import { resolveSourceRelation } from "@/lib/server/context";
 
 export async function POST(request: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   const body = (await request.json()) as {
     sourceRelationId?: string;
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   };
 
   if (!body.sourceRelationId || !body.targetType || !body.targetId) {
-    return NextResponse.json({ error: "sourceRelationId, targetType, targetId are required" }, { status: 400 });
+    return NextResponse.json({ error: "원본 관계와 연결 대상을 모두 지정해 주세요." }, { status: 400 });
   }
 
   const bundle = await resolveSourceRelation({

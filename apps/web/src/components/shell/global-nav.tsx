@@ -15,6 +15,24 @@ function isActive(pathname: string, href?: string) {
   return pathname.startsWith(href);
 }
 
+function formatHotkey(hotkey?: string) {
+  if (!hotkey) return "";
+  return hotkey
+    .split("+")
+    .map((part) => {
+      const trimmed = part.trim();
+      if (trimmed === "mod") return "컨트롤/⌘";
+      if (trimmed === "shift") return "시프트";
+      return trimmed.toUpperCase();
+    })
+    .join("+");
+}
+
+function navTitle(label: string, hotkey?: string) {
+  const formatted = formatHotkey(hotkey);
+  return formatted ? `${label} · 단축키 ${formatted}` : label;
+}
+
 export function GlobalNav() {
   const pathname = usePathname();
   const openCommandPalette = useShellStore((state) => state.openCommandPalette);
@@ -46,8 +64,8 @@ export function GlobalNav() {
     <aside className="glass-elevated fixed inset-x-3 bottom-3 z-40 flex h-[68px] items-center justify-between border border-white/10 px-3 py-2 lg:sticky lg:inset-auto lg:top-0 lg:h-screen lg:w-[68px] lg:shrink-0 lg:flex-col lg:border-y-0 lg:border-l-0 lg:px-2 lg:py-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-full lg:flex-none lg:flex-col lg:items-center lg:gap-3">
         <Link
-          aria-label="Go to dashboard"
-          className="focus-ring group relative hidden h-11 w-11 items-center justify-center rounded-lg border border-primary/35 bg-primary/12 text-sm font-semibold text-primary shadow-[0_0_28px_rgba(251,191,36,0.16)] transition hover:bg-primary/18 lg:flex"
+          aria-label="오늘 보기로 이동"
+          className="focus-ring group relative hidden h-11 w-11 items-center justify-center rounded-lg border border-primary/35 bg-primary/12 text-sm font-semibold text-primary shadow-[0_0_28px_rgba(251,191,36,0.16)] hover:bg-primary/18 lg:flex"
           href="/dashboard"
         >
           <span className="font-display text-base tracking-[0.08em]">LH</span>
@@ -56,7 +74,7 @@ export function GlobalNav() {
           </span>
         </Link>
 
-        <nav aria-label="Global navigation" className="grid flex-1 grid-cols-5 gap-1 lg:flex lg:w-full lg:flex-none lg:flex-col lg:items-center lg:gap-2 lg:pt-2">
+        <nav aria-label="전역 메뉴" className="grid flex-1 grid-cols-5 gap-1 lg:flex lg:w-full lg:flex-none lg:flex-col lg:items-center lg:gap-2 lg:pt-2">
           {DOMAINS.map((item) => {
             const Icon = item.icon;
             const active = isActive(pathname, item.path);
@@ -67,15 +85,15 @@ export function GlobalNav() {
                 aria-current={active ? "page" : undefined}
                 aria-label={item.label}
                 className={cn(
-                  "focus-ring relative flex h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-lg px-2 text-muted-foreground transition hover:bg-white/6 hover:text-foreground lg:w-11 lg:px-0",
+                  "focus-ring relative flex h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-lg px-2 text-muted-foreground hover:bg-white/6 hover:text-foreground lg:w-11 lg:px-0",
                   active && "bg-white/8 text-primary shadow-[0_0_18px_rgba(251,191,36,0.12)]",
                 )}
                 href={item.path ?? "#"}
-                title={`${item.label}${item.hotkey ? ` (${item.hotkey})` : ""}`}
+                title={navTitle(item.label, item.hotkey)}
               >
                 {active ? <span className="absolute bottom-0 h-0.5 w-6 rounded-full bg-primary shadow-[0_0_12px_rgba(251,191,36,0.6)] lg:left-0 lg:top-2 lg:h-7 lg:w-0.5" /> : null}
                 <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
-                <span className="max-w-full truncate text-[10px] leading-none lg:hidden">{item.label.replace("Action Hub", "Action").replace("The Vault", "Vault")}</span>
+                <span className="max-w-full truncate text-[10px] leading-none lg:hidden">{item.label}</span>
               </Link>
             );
           })}
@@ -91,7 +109,7 @@ export function GlobalNav() {
             return (
               <button
                 aria-label={item.label}
-                className="focus-ring relative flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-white/6 hover:text-foreground"
+                className="focus-ring relative flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/6 hover:text-foreground"
                 key={item.key}
                 onClick={
                   item.key === "search"
@@ -100,7 +118,7 @@ export function GlobalNav() {
                       ? () => openQuickCapture()
                       : openNotificationCenter
                 }
-                title={`${item.label}${item.hotkey ? ` (${item.hotkey})` : ""}`}
+                title={navTitle(item.label, item.hotkey)}
                 type="button"
               >
                 <Icon className="h-5 w-5" strokeWidth={1.75} />
@@ -117,11 +135,11 @@ export function GlobalNav() {
               aria-current={active ? "page" : undefined}
               aria-label={item.label}
               className={cn(
-                "focus-ring hidden h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-white/6 hover:text-foreground lg:flex",
+                "focus-ring hidden h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/6 hover:text-foreground lg:flex",
                 active && "bg-white/8 text-primary",
               )}
               href={item.path ?? "#"}
-              title={`${item.label}${item.hotkey ? ` (${item.hotkey})` : ""}`}
+              title={navTitle(item.label, item.hotkey)}
             >
               <Icon className="h-5 w-5" strokeWidth={1.75} />
             </Link>

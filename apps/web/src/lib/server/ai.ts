@@ -2,19 +2,44 @@ import "server-only";
 
 import { ulid } from "ulidx";
 
-import { getActionHubSnapshot, seedActionHubSupportData } from "@/lib/server/action-hub";
-import { executeD1 } from "@/lib/server/cloudflare-d1";
+import { seedActionHubSupportData } from "@/lib/server/action-hub";
+import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
 import { createInlineDataPart, generateGeminiJson, generateGeminiText, getGeminiModel, type GeminiExecution } from "@/lib/server/gemini";
 import { getLifeOpsLog, seedLifeOpsSupportData } from "@/lib/server/life-ops";
-import { getPRMSnapshot, seedPRMSupportData } from "@/lib/server/prm";
+import { seedPRMSupportData } from "@/lib/server/prm";
 import { getAttachmentVariant } from "@/lib/server/r2";
 import { resolveCurrentUser } from "@/lib/server/session-user";
-import { getVaultSnapshot, seedVaultSupportData } from "@/lib/server/vault";
+import { seedVaultSupportData } from "@/lib/server/vault";
 
 export type SummaryInput =
   | { type: "daily"; date?: string }
   | { type: "weekly"; date?: string }
   | { type: "project"; id: string };
+
+export type AISummarySourceMaterial = {
+  date: string;
+  markdown: string;
+  projectId?: string;
+  purpose: string;
+};
+
+type CountRow = { count: number | null };
+type RecentZettelRow = { title: string };
+type OverduePersonRow = {
+  name: string;
+  daysSinceContact: number | null;
+  cadenceDays: number | null;
+};
+type ProjectSummaryRow = {
+  id: string;
+  title: string;
+  progress: number | null;
+};
+type ProjectTaskSummaryRow = {
+  title: string;
+  status: string;
+  priority: string;
+};
 
 function formatDateLabel(date: string) {
   return new Date(`${date}T00:00:00+09:00`).toLocaleDateString("ko-KR", {
@@ -26,7 +51,16 @@ function formatDateLabel(date: string) {
 }
 
 function getTodayDateString() {
-  return new Date().toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "1970";
+  const month = parts.find((part) => part.type === "month")?.value ?? "01";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
 }
 
 async function persistConversation(userId: string, purpose: string, input: string, execution: { markdown: string; model: string; inputTokens: number; outputTokens: number; latencyMs: number }) {
@@ -73,21 +107,108 @@ async function summarizeWithGeminiOrFallback(prompt: string, fallbackMarkdown: s
   }
 }
 
-async function buildDailySummary(date: string) {
+async function countRows(sql: string, params: unknown[]) {
+  const result = await queryD1<CountRow>(sql, params);
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+async function countActiveTasks(userId: string) {
+  return countRows(
+    `select count(*) as count
+     from tasks
+     where user_id = ?
+       and deleted_at is null
+       and status in ('todo', 'in_progress', 'review', 'blocked')`,
+    [userId],
+  );
+}
+
+async function countCompletedTasks(userId: string) {
+  return countRows(
+    `select count(*) as count
+     from tasks
+     where user_id = ?
+       and deleted_at is null
+       and status = 'done'`,
+    [userId],
+  );
+}
+
+async function countOverduePeople(userId: string) {
+  return countRows(
+    `with contact_stats as (
+       select
+         coalesce(cast(julianday('now') - julianday(date(last_contacted_at)) as integer), 999) as daysSinceContact,
+         coalesce(contact_cadence_days, 30) as cadenceDays
+       from people
+       where user_id = ?
+         and deleted_at is null
+     )
+     select count(*) as count
+     from contact_stats
+     where daysSinceContact > cadenceDays`,
+    [userId],
+  );
+}
+
+async function listRecentZettels(userId: string, limit: number) {
+  const result = await queryD1<RecentZettelRow>(
+    `select title
+     from zettels
+     where user_id = ?
+       and deleted_at is null
+     order by pinned desc, updated_at desc, created_at desc
+     limit ?`,
+    [userId, limit],
+  );
+
+  return result.rows;
+}
+
+async function countZettels(userId: string) {
+  return countRows(
+    `select count(*) as count
+     from zettels
+     where user_id = ?
+       and deleted_at is null`,
+    [userId],
+  );
+}
+
+async function listOverduePeople(userId: string, limit: number) {
+  const result = await queryD1<OverduePersonRow>(
+    `with contact_stats as (
+       select
+         name,
+         coalesce(cast(julianday('now') - julianday(date(last_contacted_at)) as integer), 999) as daysSinceContact,
+         coalesce(contact_cadence_days, 30) as cadenceDays
+       from people
+       where user_id = ?
+         and deleted_at is null
+     )
+     select name, daysSinceContact, cadenceDays
+     from contact_stats
+     where daysSinceContact > cadenceDays
+     order by daysSinceContact desc, name asc
+     limit ?`,
+    [userId, limit],
+  );
+
+  return result.rows;
+}
+
+async function buildDailySummary(userId: string, date: string) {
   await Promise.all([seedActionHubSupportData(), seedLifeOpsSupportData(), seedPRMSupportData(), seedVaultSupportData()]);
-  const [log, actionHub, prm, vault] = await Promise.all([
+  const [log, overdue, activeTasks, recentZettels] = await Promise.all([
     getLifeOpsLog(date),
-    getActionHubSnapshot(),
-    getPRMSnapshot(),
-    getVaultSnapshot(),
+    countOverduePeople(userId),
+    countActiveTasks(userId),
+    listRecentZettels(userId, 2),
   ]);
 
   if (!log) {
     return `# Daily Summary\n\n${formatDateLabel(date)}의 Life Ops 기록이 아직 없습니다.`;
   }
-
-  const overdue = prm.people.filter((person) => person.daysSinceContact > person.cadenceDays).length;
-  const activeTasks = actionHub.tasks.filter((task) => ["todo", "in_progress", "review", "blocked"].includes(task.status)).length;
 
   return [
     `# Daily Summary`,
@@ -106,11 +227,11 @@ async function buildDailySummary(date: string) {
     ``,
     `## 크로스 도메인 메모`,
     ...log.timeline.map((item) => `- ${item.time} · [${item.type}] ${item.label}`),
-    ...(vault.zettels.slice(0, 2).map((zettel) => `- 최근 참고 메모: ${zettel.title}`) || []),
+    ...recentZettels.map((zettel) => `- 최근 참고 메모: ${zettel.title}`),
   ].join("\n");
 }
 
-async function buildWeeklySummary(referenceDate: string) {
+async function buildWeeklySummary(userId: string, referenceDate: string) {
   await Promise.all([seedActionHubSupportData(), seedLifeOpsSupportData(), seedPRMSupportData(), seedVaultSupportData()]);
   const dates = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(`${referenceDate}T00:00:00+09:00`);
@@ -118,19 +239,17 @@ async function buildWeeklySummary(referenceDate: string) {
     return date.toISOString().slice(0, 10);
   }).reverse();
 
-  const [logs, actionHub, prm, vault] = await Promise.all([
+  const [logs, completedTasks, zettelCount, overduePeople] = await Promise.all([
     Promise.all(dates.map((date) => getLifeOpsLog(date))),
-    getActionHubSnapshot(),
-    getPRMSnapshot(),
-    getVaultSnapshot(),
+    countCompletedTasks(userId),
+    countZettels(userId),
+    listOverduePeople(userId, 5),
   ]);
 
   const existingLogs = logs.filter(Boolean);
   const avgMood = existingLogs.length ? (existingLogs.reduce((sum, log) => sum + (log?.mood ?? 0), 0) / existingLogs.length).toFixed(1) : "0.0";
   const avgEnergy = existingLogs.length ? (existingLogs.reduce((sum, log) => sum + (log?.energy ?? 0), 0) / existingLogs.length).toFixed(1) : "0.0";
   const completedHabits = existingLogs.reduce((sum, log) => sum + (log?.habits.filter((habit) => habit.completedToday).length ?? 0), 0);
-  const completedTasks = actionHub.tasks.filter((task) => task.status === "done").length;
-  const overduePeople = prm.people.filter((person) => person.daysSinceContact > person.cadenceDays).slice(0, 5);
 
   return [
     `# Weekly Review`,
@@ -140,7 +259,7 @@ async function buildWeeklySummary(referenceDate: string) {
     `- 평균 Energy: ${avgEnergy}`,
     `- 완료 습관 체크: ${completedHabits}회`,
     `- 완료된 Task 누적: ${completedTasks}개`,
-    `- 최근 메모 자산: ${vault.zettels.length}개`,
+    `- 최근 메모 자산: ${zettelCount}개`,
     ``,
     `## 이번 주 회고`,
     `- 흐름상 Action Hub와 Life Ops가 함께 움직이기 시작했고, 관계/지식/라이프 로그가 하나의 홈 대시보드에서 집계된다.`,
@@ -153,16 +272,35 @@ async function buildWeeklySummary(referenceDate: string) {
   ].join("\n");
 }
 
-async function buildProjectSummary(projectId: string) {
+async function buildProjectSummary(userId: string, projectId: string) {
   await seedActionHubSupportData();
-  const snapshot = await getActionHubSnapshot();
-  const project = snapshot.projects.find((item) => item.id === projectId);
+  const [projectResult, taskResult] = await Promise.all([
+    queryD1<ProjectSummaryRow>(
+      `select id, title, progress
+       from projects
+       where user_id = ?
+         and id = ?
+         and deleted_at is null
+       limit 1`,
+      [userId, projectId],
+    ),
+    queryD1<ProjectTaskSummaryRow>(
+      `select title, status, priority
+       from tasks
+       where user_id = ?
+         and project_id = ?
+         and deleted_at is null
+       order by display_order asc, created_at asc`,
+      [userId, projectId],
+    ),
+  ]);
+  const project = projectResult.rows[0];
 
   if (!project) {
     throw new Error("프로젝트를 찾지 못했습니다.");
   }
 
-  const tasks = snapshot.tasks.filter((task) => task.projectId === projectId);
+  const tasks = taskResult.rows;
   const done = tasks.filter((task) => task.status === "done").length;
   const blocked = tasks.filter((task) => task.status === "blocked").length;
   const inFlight = tasks.filter((task) => ["todo", "in_progress", "review"].includes(task.status)).length;
@@ -171,7 +309,7 @@ async function buildProjectSummary(projectId: string) {
     `# Project Summary`,
     ``,
     `## ${project.title}`,
-    `- Progress: ${project.progress}%`,
+    `- Progress: ${Number(project.progress ?? 0)}%`,
     `- In Flight: ${inFlight}개`,
     `- Done: ${done}개`,
     `- Blocked: ${blocked}개`,
@@ -181,27 +319,42 @@ async function buildProjectSummary(projectId: string) {
   ].join("\n");
 }
 
-export async function generateAISummary(input: SummaryInput) {
-  const user = await resolveCurrentUser();
+async function buildAISummarySourceMaterialForUser(userId: string, input: SummaryInput): Promise<AISummarySourceMaterial> {
   const date = "date" in input && input.date ? input.date : getTodayDateString();
 
-  let fallbackMarkdown = "";
-  let purpose = "";
-
   if (input.type === "daily") {
-    purpose = `summarize:daily:${date}`;
-    fallbackMarkdown = await buildDailySummary(date);
+    return {
+      date,
+      markdown: await buildDailySummary(userId, date),
+      purpose: `summarize:daily:${date}`,
+    };
   }
 
   if (input.type === "weekly") {
-    purpose = `summarize:weekly:${date}`;
-    fallbackMarkdown = await buildWeeklySummary(date);
+    return {
+      date,
+      markdown: await buildWeeklySummary(userId, date),
+      purpose: `summarize:weekly:${date}`,
+    };
   }
 
-  if (input.type === "project") {
-    purpose = `summarize:project:${input.id}`;
-    fallbackMarkdown = await buildProjectSummary(input.id);
-  }
+  return {
+    date,
+    markdown: await buildProjectSummary(userId, input.id),
+    projectId: input.id,
+    purpose: `summarize:project:${input.id}`,
+  };
+}
+
+export async function buildAISummarySourceMaterial(input: SummaryInput) {
+  const user = await resolveCurrentUser();
+  return buildAISummarySourceMaterialForUser(user.id, input);
+}
+
+export async function generateAISummary(input: SummaryInput) {
+  const user = await resolveCurrentUser();
+  const sourceMaterial = await buildAISummarySourceMaterialForUser(user.id, input);
+  const fallbackMarkdown = sourceMaterial.markdown;
 
   const prompt = [
     `Target summary type: ${input.type}`,
@@ -218,11 +371,11 @@ export async function generateAISummary(input: SummaryInput) {
   if (input.type === "daily") {
     await executeD1(
       `update daily_logs set ai_summary = ?, updated_at = datetime('now') where user_id = ? and date = ?`,
-      [execution.markdown, user.id, date],
+      [execution.markdown, user.id, sourceMaterial.date],
     );
   }
 
-  await persistConversation(user.id, purpose, JSON.stringify(input), execution);
+  await persistConversation(user.id, sourceMaterial.purpose, JSON.stringify(input), execution);
 
   return execution.markdown;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Settings2 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import { PageBody, PageHeader, PageLayout, PageToolbar } from "@/components/shar
 import { SavedViewManager } from "@/components/shared/saved-view-manager";
 import { SavedViewTabs } from "@/components/shared/saved-view-tabs";
 import type { PersonMock } from "@/lib/mock/prm";
+import type { PRMSnapshot } from "@/lib/server/prm";
 import {
   createSavedViewClient,
   deleteSavedViewClient,
@@ -31,9 +32,10 @@ import {
   updateSavedViewClient,
 } from "@/lib/saved-view-client";
 import type { SavedView } from "@/lib/server/ui-state";
-import { usePRMStore } from "@/stores/use-prm-store";
+import { type PRMMutationDelta, usePRMStore } from "@/stores/use-prm-store";
 
 type PRMClientProps = {
+  initialSnapshotJson?: string;
   savedViews: SavedView[];
 };
 
@@ -50,15 +52,58 @@ const PERSON_CARD_COLUMNS: CollectionColumnDefinition[] = [
   { key: "lastContact", label: "마지막 연락", defaultVisible: true },
   { key: "birthday", label: "생일", defaultVisible: true },
   { key: "gifts", label: "선물 수" },
-  { key: "tasks", label: "태스크 수" },
+  { key: "tasks", label: "작업 수" },
   { key: "sourceDocument", label: "원본 속성" },
 ];
 
-export function PRMClient({ savedViews }: PRMClientProps) {
+const ALL_PEOPLE_VIEW: SavedView = {
+  id: "default-people-relationships-all",
+  domain: "people",
+  scope: "relationships",
+  name: "전체",
+  icon: "users",
+  searchQuery: "",
+  filterState: {},
+  sortState: {},
+  viewKey: "all",
+  isDefault: true,
+  displayOrder: 0,
+};
+
+function withAllPeopleView(views: SavedView[]) {
+  const hasAllView = views.some((view) => getSavedViewKey(view) === "all");
+  const normalizedViews = views.map((view) => ({
+    ...view,
+    isDefault: hasAllView ? getSavedViewKey(view) === "all" : false,
+    displayOrder: hasAllView ? view.displayOrder : view.displayOrder + 1,
+  }));
+
+  return hasAllView ? normalizedViews : [ALL_PEOPLE_VIEW, ...normalizedViews];
+}
+
+function parseInitialSnapshot(value?: string): PRMSnapshot | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as PRMSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+export function PRMClient({ initialSnapshotJson, savedViews }: PRMClientProps) {
   const searchParams = useSearchParams();
-  const people = usePRMStore((state) => state.people);
-  const [localSavedViews, setLocalSavedViews] = useState(savedViews);
-  const [activeViewKeyState, setActiveViewKeyState] = useState(() => searchParams.get("view") ?? getDefaultSavedViewKey(savedViews) ?? "core");
+  const initialSnapshot = useMemo(() => parseInitialSnapshot(initialSnapshotJson), [initialSnapshotJson]);
+  const storePeople = usePRMStore((state) => state.people);
+  const storeGifts = usePRMStore((state) => state.gifts);
+  const storeNetworkEdges = usePRMStore((state) => state.networkEdges);
+  const replaceSnapshot = usePRMStore((state) => state.replaceSnapshot);
+  const [localSnapshot, setLocalSnapshot] = useState<PRMSnapshot | null>(initialSnapshot ?? null);
+  const skipNextStoreSync = useRef(Boolean(initialSnapshot));
+  const hasLocalSnapshot = localSnapshot !== null;
+  const people = localSnapshot?.people ?? storePeople;
+  const initialSavedViews = useMemo(() => withAllPeopleView(savedViews), [savedViews]);
+  const [localSavedViews, setLocalSavedViews] = useState(initialSavedViews);
+  const [activeViewKeyState, setActiveViewKeyState] = useState(() => searchParams.get("view") ?? getDefaultSavedViewKey(initialSavedViews) ?? "all");
   const [filter, setFilter] = useState<PersonFilterKey>("all");
   const [query, setQuery] = useState("");
   const [groupTags, setGroupTags] = useState<string[]>([]);
@@ -69,22 +114,65 @@ export function PRMClient({ savedViews }: PRMClientProps) {
   const activeViewKey = getSavedViewKey(activeView) ?? activeViewKeyState;
   const activeViewIsPersisted = isPersistedSavedView(activeView);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => savedViewColumnKeys(activeView?.sortState.columns, PERSON_CARD_COLUMNS));
-  const needsContact = people
+  const groupFilterTerms = useMemo(() => groupTags.map((tag) => tag.toLowerCase()), [groupTags]);
+  const queryTerm = query.toLowerCase();
+  const needsContact = useMemo(() => people
     .filter((person) => person.daysSinceContact > person.cadenceDays)
-    .sort((a, b) => b.daysSinceContact - a.daysSinceContact);
-  const viewPeople = activeView ? people.filter((person) => personMatchesSavedView(person, activeView)) : people;
-  const visiblePeople = viewPeople.filter((person) => {
+    .sort((a, b) => b.daysSinceContact - a.daysSinceContact), [people]);
+  const viewPeople = useMemo(() => (activeView ? people.filter((person) => personMatchesSavedView(person, activeView)) : people), [activeView, people]);
+  const visiblePeople = useMemo(() => viewPeople.filter((person) => {
     if (filter === "needs-contact" && person.daysSinceContact <= person.cadenceDays) return false;
     if (filter === "favorites" && !person.favorite) return false;
     if ((filter === "5" || filter === "15" || filter === "50" || filter === "150") && `${person.layer}` !== filter) return false;
-    if (groupTags.length && !groupTags.some((tag) => person.groups.some((group) => group.toLowerCase().includes(tag.toLowerCase())))) return false;
-    if (query && !`${person.name} ${person.nickname ?? ""} ${person.bio} ${person.groups.join(" ")}`.toLowerCase().includes(query.toLowerCase())) return false;
+    if (groupFilterTerms.length && !groupFilterTerms.some((tag) => person.groups.some((group) => group.toLowerCase().includes(tag)))) return false;
+    if (queryTerm && !`${person.name} ${person.nickname ?? ""} ${person.bio} ${person.groups.join(" ")}`.toLowerCase().includes(queryTerm)) return false;
     return true;
-  });
+  }), [filter, groupFilterTerms, queryTerm, viewPeople]);
 
   useEffect(() => {
-    setLocalSavedViews(savedViews);
-  }, [savedViews]);
+    setLocalSavedViews(initialSavedViews);
+  }, [initialSavedViews]);
+
+  useEffect(() => {
+    if (!initialSnapshot) return;
+    skipNextStoreSync.current = true;
+    setLocalSnapshot(initialSnapshot);
+    replaceSnapshot(initialSnapshot);
+  }, [initialSnapshot, replaceSnapshot]);
+
+  useEffect(() => {
+    if (!hasLocalSnapshot) return;
+    if (skipNextStoreSync.current) {
+      skipNextStoreSync.current = false;
+      return;
+    }
+
+    setLocalSnapshot({ gifts: storeGifts, networkEdges: storeNetworkEdges, people: storePeople });
+  }, [hasLocalSnapshot, storeGifts, storeNetworkEdges, storePeople]);
+
+  function applyPRMDelta(delta: PRMMutationDelta) {
+    setLocalSnapshot((current) => {
+      if (!current) return current;
+      const people = delta.person
+        ? current.people.some((person) => person.id === delta.person!.id)
+          ? current.people.map((person) => (person.id === delta.person!.id ? delta.person! : person))
+          : [...current.people, delta.person]
+        : current.people;
+      const withGift = delta.gift
+        ? current.gifts.some((gift) => gift.id === delta.gift!.id)
+          ? current.gifts.map((gift) => (gift.id === delta.gift!.id ? delta.gift! : gift))
+          : [delta.gift, ...current.gifts]
+        : current.gifts;
+      const gifts = delta.deletedGiftId ? withGift.filter((gift) => gift.id !== delta.deletedGiftId) : withGift;
+      const withNetworkEdge = delta.networkEdge
+        ? current.networkEdges.some((edge) => edge.id === delta.networkEdge!.id)
+          ? current.networkEdges.map((edge) => (edge.id === delta.networkEdge!.id ? delta.networkEdge! : edge))
+          : [delta.networkEdge, ...current.networkEdges]
+        : current.networkEdges;
+      const networkEdges = delta.deletedNetworkEdgeId ? withNetworkEdge.filter((edge) => edge.id !== delta.deletedNetworkEdgeId) : withNetworkEdge;
+      return { gifts, networkEdges, people };
+    });
+  }
 
   function setPrmLocation(viewKey: string) {
     const params = new URLSearchParams({ view: viewKey });
@@ -128,7 +216,7 @@ export function PRMClient({ savedViews }: PRMClientProps) {
         viewKey,
         displayOrder: localSavedViews.length,
       });
-      setLocalSavedViews(views);
+      setLocalSavedViews(withAllPeopleView(views));
       setActiveViewKeyState(viewKey);
       setPrmLocation(viewKey);
       toast.success("관계 뷰를 저장했습니다.");
@@ -153,7 +241,7 @@ export function PRMClient({ savedViews }: PRMClientProps) {
         isDefault: input.isDefault ?? view.isDefault,
         displayOrder: input.displayOrder ?? view.displayOrder,
       });
-      setLocalSavedViews(views);
+      setLocalSavedViews(withAllPeopleView(views));
       toast.success(successMessage);
     } catch (error) {
       toast.error("관계 뷰 업데이트에 실패했습니다.", {
@@ -205,7 +293,7 @@ export function PRMClient({ savedViews }: PRMClientProps) {
         viewKey,
         displayOrder: localSavedViews.length,
       });
-      setLocalSavedViews(views);
+      setLocalSavedViews(withAllPeopleView(views));
       setActiveViewKeyState(viewKey);
       setVisibleColumnKeys(savedViewColumnKeys(view.sortState.columns, PERSON_CARD_COLUMNS));
       setGroupTags(asStringArray(view.filterState.group));
@@ -227,9 +315,10 @@ export function PRMClient({ savedViews }: PRMClientProps) {
     try {
       await deleteSavedViewClient(view.id);
       const views = await listSavedViewsClient(view.domain, view.scope);
-      const nextViewKey = activeViewKey === getSavedViewKey(view) ? getDefaultSavedViewKey(views) ?? "core" : activeViewKey;
-      const nextView = views.find((item) => getSavedViewKey(item) === nextViewKey);
-      setLocalSavedViews(views);
+      const nextViews = withAllPeopleView(views);
+      const nextViewKey = activeViewKey === getSavedViewKey(view) ? getDefaultSavedViewKey(nextViews) ?? "all" : activeViewKey;
+      const nextView = nextViews.find((item) => getSavedViewKey(item) === nextViewKey);
+      setLocalSavedViews(nextViews);
       setActiveViewKeyState(nextViewKey);
       setVisibleColumnKeys(savedViewColumnKeys(nextView?.sortState.columns, PERSON_CARD_COLUMNS));
       setGroupTags(asStringArray(nextView?.filterState.group));
@@ -248,15 +337,15 @@ export function PRMClient({ savedViews }: PRMClientProps) {
   return (
     <PageLayout>
       <PageHeader
-        eyebrow="PRM"
+        eyebrow="관계"
         title="관계"
         description="연락 리듬, 친밀도, 선물과 관계선을 한 화면에서 정리합니다."
         actions={
           <>
-            <Link className="rounded-md border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-muted-foreground transition hover:bg-white/8 hover:text-foreground" href="/prm/gifts" scroll={false}>
+            <Link className="rounded-md border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-white/8 hover:text-foreground" href="/prm/gifts" scroll={false}>
               선물
             </Link>
-            <Link className="rounded-md border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-muted-foreground transition hover:bg-white/8 hover:text-foreground" href="/prm/graph" scroll={false}>
+            <Link className="rounded-md border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-white/8 hover:text-foreground" href="/prm/graph" scroll={false}>
               관계 그래프
             </Link>
           </>
@@ -279,7 +368,7 @@ export function PRMClient({ savedViews }: PRMClientProps) {
             <>
               <CollectionColumnControls columns={PERSON_CARD_COLUMNS} onChange={setVisibleColumnKeys} visibleKeys={visibleColumnKeys} />
               <button
-                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8"
                 onClick={() => setViewManagerOpen((open) => !open)}
                 type="button"
               >
@@ -289,7 +378,7 @@ export function PRMClient({ savedViews }: PRMClientProps) {
               <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground">{visiblePeople.length}명</span>
             </>
           }
-          searchPlaceholder="이름, 그룹, 메모 키워드 검색"
+          searchPlaceholder="이름, 그룹, 설명 키워드 검색"
           syncUrl={false}
         />
         {viewManagerOpen ? (
@@ -310,7 +399,7 @@ export function PRMClient({ savedViews }: PRMClientProps) {
         ) : null}
       </PageToolbar>
 
-      <PageBody aside={<HitThemUpPanel people={needsContact} />} asideWidth="md">
+      <PageBody aside={<HitThemUpPanel onMutationDelta={applyPRMDelta} people={needsContact} />} asideWidth="md">
         <div className="app-grid app-grid-cards">
           {visiblePeople.length ? visiblePeople.map((person) => (
             <PersonCard key={person.id} person={person} visibleFields={visibleColumnKeys} />

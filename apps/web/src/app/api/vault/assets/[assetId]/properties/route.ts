@@ -17,8 +17,8 @@ export async function POST(request: Request, context: { params: Promise<{ assetI
   try {
     const body = (await request.json()) as Body;
     const { assetId } = await context.params;
-    return NextResponse.json({ snapshot: await updateVaultAssetProperties(assetId, body) });
+    return NextResponse.json({ asset: await updateVaultAssetProperties(assetId, body) });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Asset properties update failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "자산 속성 저장에 실패했습니다." }, { status: 500 });
   }
 }

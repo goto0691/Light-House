@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as SummarizeRequest;
 
     if (body.type === "project" && !body.id) {
-      return NextResponse.json({ error: "Project summary requires an id." }, { status: 400 });
+      return NextResponse.json({ error: "프로젝트 요약에는 프로젝트 ID가 필요합니다." }, { status: 400 });
     }
 
     const markdown = await generateAISummary(
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "AI summarize failed." },
+      { error: error instanceof Error ? error.message : "AI 요약 생성에 실패했습니다." },
       { status: 500 },
     );
   }

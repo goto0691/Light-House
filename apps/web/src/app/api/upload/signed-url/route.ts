@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as SignedUrlRequest;
 
     if (!body.ownerType || !body.ownerId || !body.kind || !body.filename || !body.mimeType || typeof body.sizeBytes !== "number") {
-      return NextResponse.json({ error: "ownerType, ownerId, kind, filename, mimeType, sizeBytes are required." }, { status: 400 });
+      return NextResponse.json({ error: "업로드 소유자, 파일 이름, 형식, 크기 정보를 모두 지정해 주세요." }, { status: 400 });
     }
 
     const target = await createSignedUploadTarget({
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json(target);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to create signed upload URL." },
+      { error: error instanceof Error ? error.message : "업로드 URL 생성에 실패했습니다." },
       { status: 500 },
     );
   }

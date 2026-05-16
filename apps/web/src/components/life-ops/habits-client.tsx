@@ -7,13 +7,13 @@ import { HabitConfigForm } from "@/components/life-ops/habit-config-form";
 import { HabitPropertiesPanel } from "@/components/life-ops/habit-properties-panel";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { useLifeOpsStore } from "@/stores/use-life-ops-store";
+import { postDeltaMutation } from "@/lib/snapshot-client";
+import { useLifeOpsStore, type LifeOpsMutationDelta } from "@/stores/use-life-ops-store";
 
 export function HabitsClient() {
   const [isPending, startTransition] = useTransition();
   const habits = useLifeOpsStore((state) => state.habits);
-  const replaceSnapshot = useLifeOpsStore((state) => state.replaceSnapshot);
+  const applyMutationDelta = useLifeOpsStore((state) => state.applyMutationDelta);
   const [query, setQuery] = useState("");
   const visibleHabits = habits.filter((habit) => {
     if (query && !`${habit.title} ${habit.description} ${habit.schedule}`.toLowerCase().includes(query.toLowerCase())) return false;
@@ -25,11 +25,11 @@ export function HabitsClient() {
       <GlassCard className="p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <p className="text-xs text-primary">Life Ops · 습관</p>
+            <p className="text-xs text-primary">생활기록 · 습관</p>
             <h1 className="mt-3 font-display text-4xl text-foreground">활성 습관 관리</h1>
             <p className="mt-3 max-w-2xl text-sm text-muted-foreground">활성 습관, 스케줄, 설명을 한 번에 보고 켜고 끄는 설정 레이어입니다.</p>
           </div>
-          <span className="rounded-full border border-white/10 bg-black/10 px-4 py-2 text-xs text-muted-foreground">{visibleHabits.length}개</span>
+        <span className="rounded-md border border-white/10 bg-black/10 px-4 py-2 text-xs text-muted-foreground">{visibleHabits.length}개</span>
         </div>
       </GlassCard>
 
@@ -41,10 +41,10 @@ export function HabitsClient() {
           onSubmit={({ title, description, icon, schedule }) => {
             startTransition(async () => {
               try {
-                await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                await postDeltaMutation<{ delta: LifeOpsMutationDelta }, LifeOpsMutationDelta>(
                   "/api/life-ops/habits",
                   { title, description, icon, schedule },
-                  replaceSnapshot,
+                  applyMutationDelta,
                 );
                 toast.success("습관을 추가했습니다.");
               } catch (error) {
@@ -63,15 +63,15 @@ export function HabitsClient() {
                 <div className="flex items-center justify-between">
                   <span className="text-2xl">{habit.icon}</span>
                   <button
-                    className="rounded-md border border-white/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/8 hover:text-foreground disabled:opacity-60"
+                    className="rounded-md border border-white/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:opacity-60"
                     disabled={isPending}
                     onClick={() => {
                       startTransition(async () => {
                         try {
-                          await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                          await postDeltaMutation<{ delta: LifeOpsMutationDelta }, LifeOpsMutationDelta>(
                             `/api/life-ops/habits/${habit.id}/toggle-active`,
                             undefined,
-                            replaceSnapshot,
+                            applyMutationDelta,
                           );
                         } catch (error) {
                           toast.error("습관 상태 변경에 실패했습니다.", {

@@ -35,14 +35,14 @@ export function ContextBundlePanel({
     setError(null);
     void fetch(`/api/context/${entityType}/${encodeURIComponent(entityId)}`, { cache: "no-store" })
       .then((response) => {
-        if (!response.ok) throw new Error("context load failed");
+        if (!response.ok) throw new Error("맥락을 불러오지 못했습니다.");
         return response.json() as Promise<{ bundle: ContextBundle }>;
       })
       .then((payload) => {
         if (!cancelled) setBundle(payload.bundle);
       })
       .catch((reason: unknown) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : "context load failed");
+        if (!cancelled) setError(reason instanceof Error ? reason.message : "맥락을 불러오지 못했습니다.");
       });
     return () => {
       cancelled = true;
@@ -66,17 +66,17 @@ export function ContextBundlePanel({
       `/api/context/edges/${encodeURIComponent(edge.id)}?${new URLSearchParams({ focusType: entityType, focusId: entityId }).toString()}`,
       { method: "DELETE" },
     );
-    if (!response.ok) throw new Error("relation detach failed");
+    if (!response.ok) throw new Error("관계 해제에 실패했습니다.");
     const payload = (await response.json()) as { bundle: ContextBundle };
     setBundle(payload.bundle);
   }
 
   if (error) {
-    return <div className="rounded-lg border border-dashed border-white/15 bg-white/5 p-4 text-sm text-muted-foreground">Context를 불러오지 못했습니다. {error}</div>;
+    return <div className="rounded-lg border border-dashed border-white/15 bg-white/5 p-4 text-sm text-muted-foreground">{error}</div>;
   }
 
   if (!bundle) {
-    return <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-muted-foreground">Context를 불러오는 중입니다.</div>;
+    return <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-muted-foreground">맥락을 불러오는 중입니다.</div>;
   }
 
   return (

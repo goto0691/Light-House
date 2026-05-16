@@ -17,7 +17,7 @@ import { GlassCard } from "@/components/shared/glass-card";
 import { PropertyPanel } from "@/components/shared/properties/property-panel";
 import { SavedViewManager } from "@/components/shared/saved-view-manager";
 import { SavedViewTabs } from "@/components/shared/saved-view-tabs";
-import type { GiftMock } from "@/lib/mock/prm";
+import type { GiftMock, PersonMock } from "@/lib/mock/prm";
 import { GIFT_DIRECTION_OPTIONS, GIFT_PROPERTY_DEFINITIONS, GIFT_PROPERTY_GROUPS } from "@/lib/properties/gift";
 import {
   createSavedViewClient,
@@ -30,8 +30,8 @@ import {
   updateSavedViewClient,
 } from "@/lib/saved-view-client";
 import type { SavedView } from "@/lib/server/ui-state";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { usePRMStore } from "@/stores/use-prm-store";
+import { postDeltaMutation } from "@/lib/snapshot-client";
+import { type PRMMutationDelta, usePRMStore } from "@/stores/use-prm-store";
 
 type GiftForm = {
   personId: string;
@@ -43,6 +43,8 @@ type GiftForm = {
 };
 
 type GiftsBoardClientProps = {
+  gifts: GiftMock[];
+  people: PersonMock[];
   savedViews: SavedView[];
 };
 
@@ -55,25 +57,26 @@ const GIFT_COLUMNS: CollectionColumnDefinition[] = [
       label: definition.label,
       defaultVisible: true,
     })),
-  { key: "notes", label: "메모" },
+  { key: "notes", label: "선물 기록" },
 ];
 
-export function GiftsBoardClient({ savedViews }: GiftsBoardClientProps) {
+export function GiftsBoardClient({ gifts, people, savedViews }: GiftsBoardClientProps) {
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const gifts = usePRMStore((state) => state.gifts);
-  const people = usePRMStore((state) => state.people);
+  const [localGifts, setLocalGifts] = useState(gifts);
+  const [localPeople, setLocalPeople] = useState(people);
+  const applyMutationDelta = usePRMStore((state) => state.applyMutationDelta);
   const replaceSnapshot = usePRMStore((state) => state.replaceSnapshot);
   const [form, setForm] = useState<GiftForm>({
-    personId: people[0]?.id ?? "",
+    personId: localPeople[0]?.id ?? "",
     title: "",
     direction: "given",
     occurredAt: new Date().toISOString().slice(0, 10),
     satisfaction: "",
     notes: "",
   });
-  const peopleMap = useMemo(() => new Map(people.map((person) => [person.id, person.name])), [people]);
-  const peopleOptions = useMemo(() => people.map((person) => ({ value: person.id, label: person.name })), [people]);
+  const peopleMap = useMemo(() => new Map(localPeople.map((person) => [person.id, person.name])), [localPeople]);
+  const peopleOptions = useMemo(() => localPeople.map((person) => ({ value: person.id, label: person.name })), [localPeople]);
   const initialActiveViewKey = searchParams.get("view") ?? getDefaultSavedViewKey(savedViews) ?? "all";
   const initialActiveView = savedViews.find((view) => getSavedViewKey(view) === initialActiveViewKey) ?? savedViews.find((view) => view.isDefault) ?? savedViews[0];
   const [localSavedViews, setLocalSavedViews] = useState(savedViews);
@@ -88,7 +91,7 @@ export function GiftsBoardClient({ savedViews }: GiftsBoardClientProps) {
   const activeViewKey = getSavedViewKey(activeView) ?? activeViewKeyState;
   const activeViewIsPersisted = isPersistedSavedView(activeView);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => savedViewColumnKeys(initialActiveView?.sortState.columns, GIFT_COLUMNS));
-  const viewGifts = activeView ? gifts.filter((gift) => giftMatchesSavedView(gift, activeView, peopleMap)) : gifts;
+  const viewGifts = activeView ? localGifts.filter((gift) => giftMatchesSavedView(gift, activeView, peopleMap)) : localGifts;
   const filteredGifts = viewGifts.filter((gift) => {
     if (directionFilter.length && !directionFilter.includes(gift.direction)) return false;
     if (reactionFilter === "with-reaction" && !gift.satisfaction?.trim()) return false;
@@ -99,6 +102,25 @@ export function GiftsBoardClient({ savedViews }: GiftsBoardClientProps) {
   useEffect(() => {
     setLocalSavedViews(savedViews);
   }, [savedViews]);
+
+  useEffect(() => {
+    setLocalGifts(gifts);
+    setLocalPeople(people);
+    replaceSnapshot({ gifts, networkEdges: [], people });
+  }, [gifts, people, replaceSnapshot]);
+
+  function applyGiftDelta(delta: PRMMutationDelta) {
+    applyMutationDelta(delta);
+    if (delta.person) {
+      setLocalPeople((current) => (current.some((person) => person.id === delta.person!.id) ? current.map((person) => (person.id === delta.person!.id ? delta.person! : person)) : [...current, delta.person!]));
+    }
+    if (delta.gift) {
+      setLocalGifts((current) => (current.some((gift) => gift.id === delta.gift!.id) ? current.map((gift) => (gift.id === delta.gift!.id ? delta.gift! : gift)) : [delta.gift!, ...current]));
+    }
+    if (delta.deletedGiftId) {
+      setLocalGifts((current) => current.filter((gift) => gift.id !== delta.deletedGiftId));
+    }
+  }
 
   function setGiftsLocation(viewKey: string) {
     const params = new URLSearchParams({ view: viewKey });
@@ -263,7 +285,7 @@ export function GiftsBoardClient({ savedViews }: GiftsBoardClientProps) {
   function submit() {
     startTransition(async () => {
       try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+        await postDeltaMutation<{ delta: PRMMutationDelta }, PRMMutationDelta>(
           `/api/prm/people/${form.personId}/gifts`,
           {
             title: form.title,
@@ -272,7 +294,7 @@ export function GiftsBoardClient({ savedViews }: GiftsBoardClientProps) {
             satisfaction: form.satisfaction,
             notes: form.notes,
           },
-          replaceSnapshot,
+          applyGiftDelta,
         );
         setForm((current) => ({
           ...current,
@@ -293,10 +315,10 @@ export function GiftsBoardClient({ savedViews }: GiftsBoardClientProps) {
   function removeGift(giftId: string) {
     startTransition(async () => {
       try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+        await postDeltaMutation<{ delta: PRMMutationDelta }, PRMMutationDelta>(
           `/api/prm/gifts/${giftId}/delete`,
           undefined,
-          replaceSnapshot,
+          applyGiftDelta,
         );
         toast.success("선물을 목록에서 제거했습니다.");
       } catch (error) {
@@ -317,7 +339,7 @@ export function GiftsBoardClient({ savedViews }: GiftsBoardClientProps) {
             <p className="mt-3 max-w-2xl text-sm text-muted-foreground">준 선물과 받은 선물을 한 화면에서 보고, 인물별 선물 기록을 바로 남길 수 있도록 구성했습니다.</p>
           </div>
           <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground">
-            표시 {filteredGifts.length}개 / 전체 {gifts.length}개
+            표시 {filteredGifts.length}개 / 전체 {localGifts.length}개
           </span>
         </div>
       </GlassCard>
@@ -341,7 +363,7 @@ export function GiftsBoardClient({ savedViews }: GiftsBoardClientProps) {
           <>
             <CollectionColumnControls columns={GIFT_COLUMNS} onChange={setVisibleColumnKeys} visibleKeys={visibleColumnKeys} />
             <button
-              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8"
               onClick={() => setViewManagerOpen((open) => !open)}
               type="button"
             >

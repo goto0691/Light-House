@@ -26,9 +26,10 @@ export function PersonFilterTabs({ value, onChange }: PersonFilterTabsProps) {
       {FILTERS.map((filter) => (
         <button
           className={cn(
-            "rounded-full border px-3 py-2 text-xs font-medium transition",
+            "rounded-md border px-3 py-2 text-xs font-medium",
             value === filter.key ? "border-primary/20 bg-primary/10 text-primary" : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/8 hover:text-foreground",
           )}
+          aria-pressed={value === filter.key}
           key={filter.key}
           onClick={() => onChange(filter.key)}
           type="button"

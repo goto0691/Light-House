@@ -54,20 +54,20 @@ const ENTITY_LABELS: Array<{ key: keyof DataSettingsClientProps["initial"]["enti
   { key: "projects", label: "프로젝트" },
   { key: "tasks", label: "작업" },
   { key: "people", label: "사람" },
-  { key: "zettels", label: "제텔" },
+  { key: "zettels", label: "지식" },
   { key: "media", label: "미디어" },
   { key: "workouts", label: "운동" },
   { key: "dailyLogs", label: "일일 로그" },
 ];
 
 const RELATION_LABELS: Array<{ key: keyof DataSettingsClientProps["initial"]["relationHealth"]; label: string }> = [
-  { key: "taskProjects", label: "작업 -> 프로젝트" },
-  { key: "taskPeople", label: "작업 -> 사람" },
-  { key: "taskZettels", label: "작업 -> 제텔" },
-  { key: "zettelPeople", label: "제텔 -> 사람" },
-  { key: "zettelMedia", label: "제텔 -> 미디어" },
-  { key: "mediaPeople", label: "미디어 -> 사람" },
-  { key: "dailyPeople", label: "일일 로그 -> 사람" },
+  { key: "taskProjects", label: "작업 → 프로젝트" },
+  { key: "taskPeople", label: "작업 → 사람" },
+  { key: "taskZettels", label: "작업 → 지식" },
+  { key: "zettelPeople", label: "지식 → 사람" },
+  { key: "zettelMedia", label: "지식 → 미디어" },
+  { key: "mediaPeople", label: "미디어 → 사람" },
+  { key: "dailyPeople", label: "일일 로그 → 사람" },
 ];
 
 export function DataSettingsClient({ initial }: DataSettingsClientProps) {
@@ -103,7 +103,7 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {ENTITY_LABELS.map(({ key, label }) => (
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-4" key={key}>
+                <div className="rounded-md border border-white/10 bg-white/5 p-4" key={key}>
                   <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
                   <p className="mt-2 text-2xl font-semibold text-foreground">{initial.entityCounts[key]}</p>
                 </div>
@@ -159,7 +159,7 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
           <p className="text-xs text-primary">저장된 뷰</p>
           <h2 className="mt-3 font-display text-3xl text-foreground">저장된 뷰</h2>
           <Link
-            className="focus-ring mt-4 inline-flex min-h-10 items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary transition hover:bg-primary/15"
+            className="focus-ring mt-4 inline-flex min-h-10 items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/15"
             href="/settings/data/source-mapping"
           >
             <Map className="h-4 w-4" />
@@ -168,12 +168,12 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
           <div className="mt-5 space-y-3">
             {initial.savedViews.length ? (
               initial.savedViews.map((view) => (
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3" key={view.id}>
+                <div className="rounded-md border border-white/10 bg-white/5 p-3" key={view.id}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-medium text-foreground">{view.name}</h3>
                     <Tag value={`${view.domain}/${view.scope}`} variant="neutral" />
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{view.query ?? "No query"}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{view.query ?? "검색어 없음"}</p>
                 </div>
               ))
             ) : (
@@ -188,7 +188,7 @@ export function DataSettingsClient({ initial }: DataSettingsClientProps) {
           <div className="mt-5 space-y-3">
             {initial.duplicateMedia.length ? (
               initial.duplicateMedia.map((item) => (
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 p-3" key={`${item.mediaType}:${item.title}`}>
+                <div className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 p-3" key={`${item.mediaType}:${item.title}`}>
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-medium text-foreground">{item.title}</h3>
                     <p className="mt-1 text-xs text-muted-foreground">{item.mediaType}</p>

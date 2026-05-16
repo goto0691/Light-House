@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils/cn";
 
 const KIND_LABELS: Record<ContextEdge["kind"], string> = {
   explicit: "확정",
-  source: "레코드",
+  source: "원본",
   mention: "멘션",
   inferred: "검토 필요",
   semantic: "추천",
@@ -19,7 +19,7 @@ const KIND_TONES: Record<ContextEdge["kind"], string> = {
 
 export function RelationKindBadge({ kind, className }: { kind: ContextEdge["kind"]; className?: string }) {
   return (
-    <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]", KIND_TONES[kind], className)}>
+    <span className={cn("inline-flex rounded-md border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]", KIND_TONES[kind], className)}>
       {KIND_LABELS[kind]}
     </span>
   );
@@ -30,8 +30,8 @@ export function RelationEvidenceCard({ edge, className }: { edge: ContextEdge; c
     <section className={cn("rounded-md border border-white/10 bg-black/10 p-3", className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-xs uppercase tracking-[0.16em] text-primary">{edge.label}</p>
-          <p className="mt-1 text-xs text-muted-foreground">confidence {(edge.confidence * 100).toFixed(0)}%</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-primary">{displayRelationLabel(edge.label)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">신뢰도 {(edge.confidence * 100).toFixed(0)}%</p>
         </div>
         <RelationKindBadge kind={edge.kind} />
       </div>
@@ -52,13 +52,62 @@ export function RelationEvidenceCard({ edge, className }: { edge: ContextEdge; c
   );
 }
 
+export function displayRelationLabel(label: string) {
+  const labels: Record<string, string> = {
+    asset: "자산",
+    career: "커리어",
+    daily_entry: "개별 기록",
+    daily_log: "하루",
+    "daily context query": "하루 맥락",
+    "due date": "마감일",
+    "gift person": "선물 대상",
+    gift: "선물",
+    interaction: "상호작용",
+    "linked note": "연결 지식",
+    "linked person": "연결 사람",
+    media: "미디어",
+    "contains task": "포함 작업",
+    outgoing: "나가는 링크",
+    backlink: "역링크",
+    person: "사람",
+    place: "장소",
+    project: "프로젝트",
+    "record review": "레코드 검토",
+    "record trace": "레코드 추적",
+    source_document: "원본 문서",
+    tag: "태그",
+    task: "작업",
+    workout: "운동",
+    zettel: "지식",
+  };
+  return labels[label] ?? label;
+}
+
 function displayEvidenceSource(source: ContextEdge["evidence"][number]["source"]) {
-  return source === "source_document" ? "record" : source;
+  if (source === "source_document") return "원본";
+  if (source === "editor") return "편집기";
+  if (source === "search") return "검색";
+  if (source === "table") return "테이블";
+  return source.toUpperCase();
 }
 
 function displayEvidenceTable(table: string) {
+  const labels: Record<string, string> = {
+    daily_log_people_relations: "하루-사람 연결",
+    "gifts.person_id": "선물 대상",
+    media_people_relations: "미디어-사람 연결",
+    migration_review_items: "마이그레이션 검토",
+    "tasks.project_id": "프로젝트 작업",
+    task_people_relations: "작업-사람 연결",
+    task_zettel_relations: "작업-지식 연결",
+    zettel_links: "지식 링크",
+    zettel_media_relations: "지식-미디어 연결",
+    zettel_people_relations: "지식-사람 연결",
+    zettels: "지식",
+  };
+  if (labels[table]) return labels[table];
   return table
-    .replaceAll("source_document", "record")
-    .replaceAll("migration_review", "review")
-    .replaceAll("source_documents", "records");
+    .replaceAll("source_document", "원본")
+    .replaceAll("migration_review", "마이그레이션 검토")
+    .replaceAll("source_documents", "원본");
 }

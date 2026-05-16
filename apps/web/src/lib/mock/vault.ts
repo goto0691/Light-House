@@ -16,6 +16,7 @@ export type ZettelMock = {
   category: string;
   summary: string;
   content: string;
+  searchText?: string | null;
   outgoingLinks: Array<{ id: string; targetId: string; title: string }>;
   backlinks: string[];
   related: string[];
@@ -33,6 +34,7 @@ export type ZettelMock = {
   source?: string | null;
   sourceUrl?: string | null;
   sourceDocument?: SourceDocumentInfo | null;
+  sourcePropertySearchText?: string | null;
 };
 
 export type MediaMock = {

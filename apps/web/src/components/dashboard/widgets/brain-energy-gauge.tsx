@@ -23,7 +23,7 @@ export function BrainEnergyGauge({ energyScore, last7Days }: BrainEnergyGaugePro
   return (
     <BentoCard colSpan={4} rowSpan={2}>
       <GlassCard className="h-full" interactive>
-        <p className="text-xs uppercase tracking-[0.24em] text-primary">Brain Energy</p>
+        <p className="text-xs tracking-[0.08em] text-primary">집중 에너지</p>
         <div className="mt-5 flex items-center gap-5">
           <div className="relative h-28 w-28 shrink-0">
             <svg className="h-28 w-28 -rotate-90" viewBox="0 0 100 100">
@@ -54,4 +54,3 @@ export function BrainEnergyGauge({ energyScore, last7Days }: BrainEnergyGaugePro
     </BentoCard>
   );
 }
-

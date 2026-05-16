@@ -13,7 +13,7 @@ type ViewSwitcherProps = {
 
 export function ViewSwitcher({ views, current, onSwitch, className }: ViewSwitcherProps) {
   return (
-    <div className={cn("inline-flex rounded-full border border-white/10 bg-white/5 p-1", className)}>
+    <div className={cn("inline-flex rounded-md border border-white/10 bg-white/5 p-1", className)}>
       {views.map((view) => {
         const Icon = view.icon;
         const active = current === view.key;
@@ -21,7 +21,7 @@ export function ViewSwitcher({ views, current, onSwitch, className }: ViewSwitch
         return (
           <button
             className={cn(
-              "inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs uppercase tracking-[0.18em] transition",
+              "inline-flex items-center gap-2 rounded px-3 py-2 text-xs tracking-[0.08em]",
               active ? "bg-primary/12 text-primary" : "text-muted-foreground hover:bg-white/6 hover:text-foreground",
             )}
             key={view.key}
@@ -36,4 +36,3 @@ export function ViewSwitcher({ views, current, onSwitch, className }: ViewSwitch
     </div>
   );
 }
-

@@ -30,11 +30,12 @@ import {
   slugifySavedViewKey,
   updateSavedViewClient,
 } from "@/lib/saved-view-client";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
+import { postJsonMutation } from "@/lib/snapshot-client";
 import type { SavedView } from "@/lib/server/ui-state";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 type MediaClientProps = {
+  initialMedia: MediaMock[];
   savedViews: SavedView[];
 };
 
@@ -50,11 +51,12 @@ const MEDIA_CARD_COLUMNS: CollectionColumnDefinition[] = [
   { key: "sourceDocument", label: "원본 속성", defaultVisible: true },
 ];
 
-export function MediaClient({ savedViews }: MediaClientProps) {
+export function MediaClient({ initialMedia, savedViews }: MediaClientProps) {
   const [isPending, startTransition] = useTransition();
   const searchParams = useSearchParams();
-  const media = useVaultStore((state) => state.media);
-  const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
+  const [media, setMedia] = useState(initialMedia);
+  const replaceMedia = useVaultStore((state) => state.replaceMedia);
+  const upsertMedia = useVaultStore((state) => state.upsertMedia);
   const [localSavedViews, setLocalSavedViews] = useState(savedViews);
   const [activeViewKeyState, setActiveViewKeyState] = useState(() => searchParams.get("view") ?? getDefaultSavedViewKey(savedViews) ?? "all");
   const [query, setQuery] = useState("");
@@ -71,6 +73,11 @@ export function MediaClient({ savedViews }: MediaClientProps) {
   useEffect(() => {
     setLocalSavedViews(savedViews);
   }, [savedViews]);
+
+  useEffect(() => {
+    setMedia(initialMedia);
+    replaceMedia(initialMedia);
+  }, [initialMedia, replaceMedia]);
 
   const viewItems = activeView ? media.filter((item) => mediaMatchesSavedView(item, activeView)) : media;
   const visibleItems = viewItems.filter((item) => {
@@ -235,9 +242,9 @@ export function MediaClient({ savedViews }: MediaClientProps) {
       <GlassCard className="p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <p className="text-xs tracking-[0.08em] text-primary">Vault Media</p>
+            <p className="text-xs tracking-[0.08em] text-primary">지식금고 미디어</p>
             <h1 className="mt-3 font-display text-4xl text-foreground">통합 미디어 갤러리</h1>
-            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">게임, 책, 영상 기록을 하나의 서가처럼 모아두고 상태 전환과 상세 Drawer를 바로 이어갑니다.</p>
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">게임, 책, 영상 기록을 하나의 서가처럼 모아두고 상태 전환과 상세 드로어를 바로 이어갑니다.</p>
           </div>
           <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3 xl:min-w-[360px]">
             <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2">표시 {visibleItems.length}개</span>
@@ -273,7 +280,7 @@ export function MediaClient({ savedViews }: MediaClientProps) {
           <>
             <CollectionColumnControls columns={MEDIA_CARD_COLUMNS} onChange={setVisibleColumnKeys} visibleKeys={visibleColumnKeys} />
             <button
-              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8"
               onClick={() => setViewManagerOpen((open) => !open)}
               type="button"
             >
@@ -314,11 +321,11 @@ export function MediaClient({ savedViews }: MediaClientProps) {
               onCycleStatus={() => {
                 startTransition(async () => {
                   try {
-                    await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-                      `/api/vault/media/${item.id}/cycle-status`,
-                      undefined,
-                      replaceSnapshot,
-                    );
+                    const payload = await postJsonMutation<{ media: MediaMock }>(`/api/vault/media/${item.id}/cycle-status`);
+                    if (payload.media) {
+                      setMedia((current) => upsertMediaItem(current, payload.media));
+                      upsertMedia(payload.media);
+                    }
                     toast.success(`${item.title} 상태를 변경했습니다.`);
                   } catch (error) {
                     toast.error("미디어 상태 변경에 실패했습니다.", {
@@ -335,6 +342,10 @@ export function MediaClient({ savedViews }: MediaClientProps) {
       )}
     </section>
   );
+}
+
+function upsertMediaItem(items: MediaMock[], media: MediaMock) {
+  return items.some((item) => item.id === media.id) ? items.map((item) => (item.id === media.id ? media : item)) : [media, ...items];
 }
 
 function asStringArray(value: unknown) {

@@ -10,13 +10,13 @@ import { PropertyPanel } from "@/components/shared/properties/property-panel";
 import { WorkoutCard } from "@/components/life-ops/workout-card";
 import { buildWorkoutPropertyForm, workoutPropertyPayload, type WorkoutPropertyForm } from "@/components/life-ops/workout-property-form";
 import { WORKOUT_PROPERTY_DEFINITIONS, WORKOUT_PROPERTY_GROUPS } from "@/lib/properties/workout";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { useLifeOpsStore } from "@/stores/use-life-ops-store";
+import { postDeltaMutation } from "@/lib/snapshot-client";
+import { useLifeOpsStore, type LifeOpsMutationDelta } from "@/stores/use-life-ops-store";
 
 export function WorkoutsClient() {
   const [isPending, startTransition] = useTransition();
   const workouts = useLifeOpsStore((state) => state.workouts);
-  const replaceSnapshot = useLifeOpsStore((state) => state.replaceSnapshot);
+  const applyMutationDelta = useLifeOpsStore((state) => state.applyMutationDelta);
   const [workoutForm, setWorkoutForm] = useState<WorkoutPropertyForm>(() => buildWorkoutPropertyForm());
   const [query, setQuery] = useState("");
   const visibleWorkouts = workouts.filter((workout) => {
@@ -29,11 +29,11 @@ export function WorkoutsClient() {
       <GlassCard className="p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <p className="text-xs text-primary">Life Ops · 운동</p>
+            <p className="text-xs text-primary">생활기록 · 운동</p>
             <h1 className="mt-3 font-display text-4xl text-foreground">운동 로그</h1>
             <p className="mt-3 max-w-2xl text-sm text-muted-foreground">운동 기록 추가와 목록 확인을 하나의 레이아웃 안에서 처리하는 기본 보드입니다.</p>
           </div>
-          <span className="rounded-full border border-white/10 bg-black/10 px-4 py-2 text-xs text-muted-foreground">{visibleWorkouts.length}개</span>
+        <span className="rounded-md border border-white/10 bg-black/10 px-4 py-2 text-xs text-muted-foreground">{visibleWorkouts.length}개</span>
         </div>
       </GlassCard>
 
@@ -59,10 +59,10 @@ export function WorkoutsClient() {
               startTransition(async () => {
                 try {
                   const payload = workoutPropertyPayload(workoutForm);
-                  await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                  await postDeltaMutation<{ delta: LifeOpsMutationDelta }, LifeOpsMutationDelta>(
                     "/api/life-ops/workouts",
                     payload,
-                    replaceSnapshot,
+                    applyMutationDelta,
                   );
                   setWorkoutForm({ ...buildWorkoutPropertyForm(), date: workoutForm.date });
                   toast.success("운동 로그를 추가했습니다.");
@@ -86,10 +86,10 @@ export function WorkoutsClient() {
               onDelete={() => {
                 startTransition(async () => {
                   try {
-                    await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+                    await postDeltaMutation<{ delta: LifeOpsMutationDelta }, LifeOpsMutationDelta>(
                       `/api/life-ops/workouts/${workout.id}/delete`,
                       undefined,
-                      replaceSnapshot,
+                      applyMutationDelta,
                     );
                   } catch (error) {
                     toast.error("운동 삭제에 실패했습니다.", {

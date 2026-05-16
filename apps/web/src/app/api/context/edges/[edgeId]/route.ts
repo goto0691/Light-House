@@ -6,7 +6,7 @@ import { deleteContextEdge } from "@/lib/server/context";
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ edgeId: string }> }) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   const { edgeId } = await params;
   const { searchParams } = new URL(request.url);
@@ -14,7 +14,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ e
   const focusId = searchParams.get("focusId");
 
   if (!focusType || !focusId) {
-    return NextResponse.json({ error: "focusType and focusId are required" }, { status: 400 });
+    return NextResponse.json({ error: "기준 엔티티를 지정해 주세요." }, { status: 400 });
   }
 
   const bundle = await deleteContextEdge({

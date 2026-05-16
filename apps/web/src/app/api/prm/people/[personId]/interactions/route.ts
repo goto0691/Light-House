@@ -5,7 +5,7 @@ import { createPersonInteraction } from "@/lib/server/prm";
 
 export async function POST(request: Request, { params }: { params: Promise<{ personId: string }> }) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   const { personId } = await params;
   const body = (await request.json()) as {
@@ -15,12 +15,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ per
     content?: string;
   };
 
-  const snapshot = await createPersonInteraction(personId, {
+  const delta = await createPersonInteraction(personId, {
     summary: body.summary ?? "",
     type: body.type,
     occurredAt: body.occurredAt,
     content: body.content,
   });
 
-  return NextResponse.json({ snapshot });
+  return NextResponse.json({ delta });
 }

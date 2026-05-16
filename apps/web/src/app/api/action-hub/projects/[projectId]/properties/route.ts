@@ -18,9 +18,9 @@ export async function POST(request: Request, context: { params: Promise<{ projec
   try {
     const { projectId } = await context.params;
     const body = (await request.json()) as PropertiesRequest;
-    const snapshot = await updateActionHubProjectProperties(projectId, body);
-    return NextResponse.json({ snapshot });
+    const delta = await updateActionHubProjectProperties(projectId, body);
+    return NextResponse.json({ delta });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Project properties update failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "프로젝트 속성 저장에 실패했습니다." }, { status: 500 });
   }
 }

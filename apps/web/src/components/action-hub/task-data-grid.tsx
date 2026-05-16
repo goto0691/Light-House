@@ -12,7 +12,7 @@ type TaskDataGridProps = {
 export function TaskDataGrid({ projectId, tasks }: TaskDataGridProps) {
   return (
     <GlassCard>
-      <div className="overflow-x-auto rounded-3xl border border-white/10">
+      <div className="overflow-x-auto rounded-lg border border-white/10">
         <table className="min-w-[760px] w-full border-collapse text-left text-sm">
           <thead className="bg-white/5 text-muted-foreground">
             <tr>
@@ -28,7 +28,7 @@ export function TaskDataGrid({ projectId, tasks }: TaskDataGridProps) {
             {tasks.map((task) => (
               <tr className="border-t border-white/10" key={task.id}>
                 <td className="px-4 py-3">
-                  <Link className="text-foreground transition hover:text-primary" href={`/action-hub/${projectId}/tasks/${task.id}`} scroll={false}>
+                  <Link className="text-foreground hover:text-primary" href={`/action-hub/${projectId}/tasks/${task.id}`} scroll={false}>
                     {task.title}
                   </Link>
                 </td>

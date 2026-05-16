@@ -103,7 +103,7 @@ export const TASKS_MOCK: TaskMock[] = [
     checklistItems: [
       { id: "check-task-p1-shell-1", content: "쉘 라우트 점검", completed: true },
       { id: "check-task-p1-shell-2", content: "Hotkey 테스트", completed: true },
-      { id: "check-task-p1-shell-3", content: "Drawer 링크 점검", completed: true },
+      { id: "check-task-p1-shell-3", content: "드로어 링크 점검", completed: true },
       { id: "check-task-p1-shell-4", content: "Toast 검증", completed: true },
       { id: "check-task-p1-shell-5", content: "Palette 검색 테스트", completed: true },
       { id: "check-task-p1-shell-6", content: "문서 반영", completed: false },
@@ -135,7 +135,7 @@ export const TASKS_MOCK: TaskMock[] = [
   {
     id: "task-prm",
     projectId: "project-modu-works",
-    title: "PRM Card Grid와 Drawer 연결",
+    title: "PRM 카드 그리드와 드로어 연결",
     kind: "development",
     status: "done",
     priority: "P2",
@@ -144,7 +144,7 @@ export const TASKS_MOCK: TaskMock[] = [
     checklist: { total: 5, completed: 5 },
     checklistItems: [
       { id: "check-task-prm-1", content: "Person grid", completed: true },
-      { id: "check-task-prm-2", content: "Drawer 연결", completed: true },
+      { id: "check-task-prm-2", content: "드로어 연결", completed: true },
       { id: "check-task-prm-3", content: "Timeline 카드", completed: true },
       { id: "check-task-prm-4", content: "Graph 진입점", completed: true },
       { id: "check-task-prm-5", content: "Gift 보드", completed: true },

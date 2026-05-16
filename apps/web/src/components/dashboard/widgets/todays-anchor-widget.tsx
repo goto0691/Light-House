@@ -39,14 +39,14 @@ export function TodaysAnchorWidget({ date, dailyLog }: TodaysAnchorWidgetProps) 
             차분하게 고정합니다.
           </h2>
           <p className="relative mt-4 max-w-3xl text-sm leading-6 text-muted-foreground">
-            {dailyLog?.journal || "아직 오늘의 의도가 비어 있습니다. Life Ops에서 오늘의 감정과 에너지를 먼저 잡아보세요."}
+            {dailyLog?.journal || "아직 오늘의 의도가 비어 있습니다. 생활기록에서 오늘의 감정과 에너지를 먼저 잡아보세요."}
           </p>
           <div className="relative mt-6 flex flex-wrap gap-2">
-            <Pill label={`Mood ${dailyLog?.mood ?? "-"}`} />
-            <Pill label={`Energy ${dailyLog?.energy ?? "-"}`} />
-            <Link className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-primary" href="/life-ops">
+            <Pill label={`기분 ${dailyLog?.mood ?? "-"}`} />
+            <Pill label={`에너지 ${dailyLog?.energy ?? "-"}`} />
+            <Link className="inline-flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-primary" href="/life-ops">
               <Compass className="h-3.5 w-3.5" />
-              <span>Open Life Ops</span>
+              <span>생활기록 열기</span>
             </Link>
           </div>
         </div>
@@ -56,5 +56,5 @@ export function TodaysAnchorWidget({ date, dailyLog }: TodaysAnchorWidgetProps) 
 }
 
 function Pill({ label }: { label: string }) {
-  return <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</span>;
+  return <span className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs tracking-[0.08em] text-muted-foreground">{label}</span>;
 }

@@ -9,6 +9,7 @@ import { TaskCalendar } from "@/components/action-hub/task-calendar";
 import { FilterBar } from "@/components/shared/filter-bar";
 import type { ProjectMock, TaskMock } from "@/lib/mock/action-hub";
 import { TASK_PRIORITY_OPTIONS } from "@/lib/properties/task";
+import { useShellStore } from "@/stores/use-shell-store";
 
 type ProjectCalendarClientProps = {
   project: ProjectMock;
@@ -18,6 +19,7 @@ type ProjectCalendarClientProps = {
 export function ProjectCalendarClient({ project, tasks }: ProjectCalendarClientProps) {
   const [query, setQuery] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
+  const openQuickCapture = useShellStore((state) => state.openQuickCapture);
 
   const visibleTasks = tasks.filter((task) => {
     if (priorityFilter && task.priority !== priorityFilter) return false;
@@ -43,16 +45,24 @@ export function ProjectCalendarClient({ project, tasks }: ProjectCalendarClientP
           setPriorityFilter(typeof state.filters.priority === "string" ? state.filters.priority : "");
         }}
         rightSlot={
-          <span className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs tracking-[0.08em] text-muted-foreground">
+          <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs tracking-[0.08em] text-muted-foreground">
             마감 {visibleTasks.length}개
           </span>
         }
-        searchPlaceholder="캘린더 태스크 검색"
+        searchPlaceholder="캘린더 작업 검색"
       />
       {visibleTasks.length ? (
         <TaskCalendar projectId={project.id} tasks={visibleTasks} />
       ) : (
-        <EmptyState description="우선순위 필터를 풀거나 마감일이 있는 태스크를 추가해보세요." illustration="task" title="캘린더에 놓일 일정이 아직 없습니다" />
+        <EmptyState
+          cta={{
+            label: "빠른 입력",
+            onClick: () => openQuickCapture({ domain: "action-hub", label: project.title, projectId: project.id }),
+          }}
+          description="우선순위 필터를 풀거나 마감일이 있는 작업을 추가해보세요."
+          illustration="task"
+          title="캘린더에 놓일 일정이 아직 없습니다"
+        />
       )}
     </section>
   );

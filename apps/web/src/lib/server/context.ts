@@ -16,14 +16,11 @@ import type {
   SourceTraceRelation,
   SourceTraceReviewItem,
 } from "@/lib/context/types";
-import { getActionHubSnapshot } from "@/lib/server/action-hub";
+import { getPersonSummaryText } from "@/lib/display/person";
 import { executeD1, queryD1 } from "@/lib/server/cloudflare-d1";
-import { getLifeOpsSnapshot } from "@/lib/server/life-ops";
-import { getPRMSnapshot } from "@/lib/server/prm";
 import { resolveCurrentUser } from "@/lib/server/session-user";
-import { searchWithFTS } from "@/lib/server/search";
+import { getSearchReadModelItems, searchWithFTS } from "@/lib/server/search";
 import { seedSemanticZettelIndex, semanticSearchZettels } from "@/lib/server/vectorize";
-import { getVaultSnapshot } from "@/lib/server/vault";
 
 type SourceDocumentRow = {
   id: string;
@@ -83,6 +80,8 @@ type SourceTracePropertyRow = {
   valueJson: string | null;
   normalizedValue: string | null;
 };
+
+const CONTEXT_SEARCH_ENTITY_TYPES = new Set<EntityType>(["person", "task", "zettel", "media", "place", "tag"]);
 
 type SourceTraceRelationRow = {
   id: string;
@@ -172,6 +171,144 @@ type BridgeRow = {
   createdAt: string | null;
 };
 
+type ContextTaskRow = {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  dueAt: string | null;
+  content: string | null;
+  projectId: string | null;
+  projectTitle: string | null;
+  projectCategory: string | null;
+  projectDescription: string | null;
+};
+
+type ContextProjectRow = {
+  id: string;
+  title: string;
+  status: string;
+  category: string | null;
+  description: string | null;
+  updatedAt: string | null;
+};
+
+type ContextProjectTaskRow = {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  content: string | null;
+};
+
+type ContextPersonRow = {
+  id: string;
+  name: string;
+  groups: string | null;
+  bio: string | null;
+  sourceDocumentId: string | null;
+};
+
+type ContextDailyEntryRow = {
+  id: string;
+  date: string;
+  title: string;
+};
+
+type ContextZettelRow = {
+  id: string;
+  title: string;
+  category: string | null;
+  summary: string | null;
+  sourceDocumentId: string | null;
+};
+
+type ContextZettelOutgoingRow = {
+  id: string;
+  targetId: string;
+  targetTitle: string;
+};
+
+type ContextZettelBacklinkRow = {
+  sourceId: string;
+  sourceTitle: string;
+};
+
+type ContextMediaRow = {
+  id: string;
+  mediaType: string;
+  title: string;
+  status: string;
+  review: string | null;
+  sourceDocumentId: string | null;
+};
+
+type ContextPlaceRow = {
+  id: string;
+  category: string | null;
+  name: string;
+  address: string | null;
+  review: string | null;
+  sourceDocumentId: string | null;
+};
+
+type ContextWorkoutRow = {
+  id: string;
+  title: string | null;
+  date: string;
+  categories: string;
+  durationMinutes: number | null;
+  intensity: number | null;
+  notes: string | null;
+};
+
+type ContextCareerRow = {
+  id: string;
+  sourceDocumentId: string | null;
+  organization: string;
+  role: string;
+  startDate: string;
+  endDate: string | null;
+  description: string | null;
+};
+
+type ContextDailyLogRow = {
+  id: string;
+  date: string;
+  mood: number | null;
+  energyLevel: number | null;
+  journal: string | null;
+  meditation: string | null;
+  sourceDocumentId: string | null;
+};
+
+type ContextDailyTimelineRow = {
+  date: string;
+  time: string;
+  label: string;
+  type: string;
+};
+
+type ContextGiftRow = {
+  id: string;
+  direction: string;
+  title: string;
+  occurredAt: string;
+  satisfaction: string | null;
+  notes: string | null;
+  personId: string | null;
+  personName: string | null;
+  personGroups: string | null;
+  personBio: string | null;
+  personSourceDocumentId: string | null;
+};
+
+type ContextSeed = {
+  focus: ContextNode | null;
+  nodes: ContextNode[];
+  edges: ContextEdge[];
+};
+
 const EMPTY_GROUPS: ContextBundle["grouped"] = {
   people: [],
   projects: [],
@@ -221,13 +358,20 @@ function hrefFor(type: EntityType, id: string) {
 }
 
 function node(type: EntityType, id: string, title: string, patch: Partial<ContextNode> = {}): ContextNode {
+  const normalizedPatch =
+    type === "person" && patch.preview ? { ...patch, preview: getPersonSummaryText({ bio: patch.preview }, { maxLength: 180 }) } : patch;
+
   return {
     type,
     id,
     title,
     href: hrefFor(type, id),
-    ...patch,
+    ...normalizedPatch,
   };
+}
+
+function dailyLogSubtitle(mood: number, energy: number) {
+  return `기분 ${mood} · 에너지 ${energy}`;
 }
 
 function edge(input: {
@@ -693,7 +837,7 @@ async function getExplicitBridgeRows(userId: string, type: EntityType, id: strin
     await collect(
       `select 'daily_log_people_relations' as tableName, null as relationId,
               'person' as fromType, p.id as fromId, p.name as fromTitle, p.groups as fromSubtitle, p.bio as fromPreview,
-              'daily_log' as toType, d.date as toId, d.date as toTitle, d.mood || ' · ' || d.energy as toSubtitle, d.journal as toPreview,
+              'daily_log' as toType, d.date as toId, d.date as toTitle, '기분 ' || d.mood || ' · 에너지 ' || d.energy as toSubtitle, d.journal as toPreview,
               coalesce(dlpr.context, 'daily log') as label, dlpr.created_at as createdAt
        from daily_log_people_relations dlpr
        inner join people p on p.id = dlpr.person_id
@@ -819,7 +963,7 @@ async function getExplicitBridgeRows(userId: string, type: EntityType, id: strin
   if (type === "daily_log") {
     await collect(
       `select 'daily_log_people_relations' as tableName, null as relationId,
-              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, d.mood || ' · ' || d.energy as fromSubtitle, d.journal as fromPreview,
+              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, '기분 ' || d.mood || ' · 에너지 ' || d.energy as fromSubtitle, d.journal as fromPreview,
               'person' as toType, p.id as toId, p.name as toTitle, p.groups as toSubtitle, p.bio as toPreview,
               coalesce(dlpr.context, 'person') as label, dlpr.created_at as createdAt
        from daily_log_people_relations dlpr
@@ -830,7 +974,7 @@ async function getExplicitBridgeRows(userId: string, type: EntityType, id: strin
     );
     await collect(
       `select 'workouts' as tableName, w.id as relationId,
-              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, d.mood || ' · ' || d.energy as fromSubtitle, d.journal as fromPreview,
+              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, '기분 ' || d.mood || ' · 에너지 ' || d.energy as fromSubtitle, d.journal as fromPreview,
               'workout' as toType, w.id as toId, w.categories as toTitle, w.date as toSubtitle, w.notes as toPreview,
               'workout' as label, w.created_at as createdAt
        from daily_logs d
@@ -840,7 +984,7 @@ async function getExplicitBridgeRows(userId: string, type: EntityType, id: strin
     );
     await collect(
       `select 'tasks' as tableName, t.id as relationId,
-              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, d.mood || ' · ' || d.energy as fromSubtitle, d.journal as fromPreview,
+              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, '기분 ' || d.mood || ' · 에너지 ' || d.energy as fromSubtitle, d.journal as fromPreview,
               'task' as toType, t.id as toId, t.title as toTitle,
               coalesce(t.completed_at, t.due_at, t.updated_at, t.created_at) as toSubtitle,
               t.content as toPreview,
@@ -862,7 +1006,7 @@ async function getExplicitBridgeRows(userId: string, type: EntityType, id: strin
     );
     await collect(
       `select 'interactions' as tableName, i.id as relationId,
-              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, d.mood || ' · ' || d.energy as fromSubtitle, d.journal as fromPreview,
+              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, '기분 ' || d.mood || ' · 에너지 ' || d.energy as fromSubtitle, d.journal as fromPreview,
               'interaction' as toType, i.id as toId, coalesce(i.summary, i.type) as toTitle, i.occurred_at as toSubtitle, i.content as toPreview,
               i.type as label, i.created_at as createdAt
        from daily_logs d
@@ -874,7 +1018,7 @@ async function getExplicitBridgeRows(userId: string, type: EntityType, id: strin
     );
     await collect(
       `select 'gifts' as tableName, g.id as relationId,
-              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, d.mood || ' · ' || d.energy as fromSubtitle, d.journal as fromPreview,
+              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, '기분 ' || d.mood || ' · 에너지 ' || d.energy as fromSubtitle, d.journal as fromPreview,
               'gift' as toType, g.id as toId, g.title as toTitle, g.direction || ' · ' || g.occurred_at as toSubtitle, coalesce(g.notes, g.reason) as toPreview,
               'gift' as label, g.created_at as createdAt
        from daily_logs d
@@ -886,7 +1030,7 @@ async function getExplicitBridgeRows(userId: string, type: EntityType, id: strin
     );
     await collect(
       `select 'zettels' as tableName, z.id as relationId,
-              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, d.mood || ' · ' || d.energy as fromSubtitle, d.journal as fromPreview,
+              'daily_log' as fromType, d.date as fromId, d.date as fromTitle, '기분 ' || d.mood || ' · 에너지 ' || d.energy as fromSubtitle, d.journal as fromPreview,
               'zettel' as toType, z.id as toId, z.title as toTitle, coalesce(z.updated_at, z.created_at) as toSubtitle, z.summary as toPreview,
               'note activity' as label, coalesce(z.updated_at, z.created_at) as createdAt
        from daily_logs d
@@ -904,7 +1048,7 @@ async function getExplicitBridgeRows(userId: string, type: EntityType, id: strin
     await collect(
       `select 'workouts' as tableName, w.id as relationId,
               'workout' as fromType, w.id as fromId, w.categories as fromTitle, w.date as fromSubtitle, w.notes as fromPreview,
-              'daily_log' as toType, d.date as toId, d.date as toTitle, d.mood || ' · ' || d.energy as toSubtitle, d.journal as toPreview,
+              'daily_log' as toType, d.date as toId, d.date as toTitle, '기분 ' || d.mood || ' · 에너지 ' || d.energy as toSubtitle, d.journal as toPreview,
               'daily anchor' as label, w.created_at as createdAt
        from workouts w
        inner join daily_logs d on d.user_id = w.user_id and d.date = w.date and d.deleted_at is null
@@ -962,24 +1106,6 @@ async function getReviewItems(userId: string, type: EntityType, id: string) {
   }
 }
 
-async function baseIndexes() {
-  const [actionHub, prm, vault, lifeOps] = await Promise.all([
-    getActionHubSnapshot(),
-    getPRMSnapshot(),
-    getVaultSnapshot(),
-    getLifeOpsSnapshot().catch(() => null),
-  ]);
-
-  return {
-    actionHub,
-    prm,
-    vault,
-    lifeOps,
-    peopleByName: new Map(prm.people.map((person) => [person.name, person])),
-    zettelsByTitle: new Map(vault.zettels.map((zettel) => [zettel.title, zettel])),
-  };
-}
-
 function parseJsonList(value: string | null) {
   if (!value) return [];
   try {
@@ -1009,165 +1135,598 @@ async function personIdentityLabels(userId: string, ids: string[]) {
     rows.rows.map((row) => {
       const groups = parseJsonList(row.groups).slice(0, 2).join(" · ");
       const parts = [row.birthDate ? `생일 ${row.birthDate}` : null, groups || null].filter(Boolean);
-      const label = nameCounts.get(row.name)! > 1 ? parts.join(" · ") || `ID ${row.id}` : parts.slice(0, 2).join(" · ");
-      return [row.id, label || `ID ${row.id}`];
+      const label = nameCounts.get(row.name)! > 1 ? parts.join(" · ") || "동명 인물" : parts.slice(0, 2).join(" · ");
+      return [row.id, label || "인물 정보 정리 중"];
     }),
   );
 }
 
-export async function getContextBundle(type: EntityType, id: string, options: ContextBundleOptions = {}): Promise<ContextBundle> {
-  const user = await resolveCurrentUser();
-  const indexes = await baseIndexes();
+async function getProjectContextSeed(userId: string, id: string): Promise<ContextSeed> {
+  const [projectResult, taskResult] = await Promise.all([
+    queryD1<ContextProjectRow>(
+      `select
+         id,
+         title,
+         status,
+         category,
+         description,
+         updated_at as updatedAt
+       from projects
+       where user_id = ?
+         and id = ?
+         and deleted_at is null
+       limit 1`,
+      [userId, id],
+    ),
+    queryD1<ContextProjectTaskRow>(
+      `select
+         id,
+         title,
+         status,
+         priority,
+         content
+       from tasks
+       where user_id = ?
+         and project_id = ?
+         and deleted_at is null
+       order by display_order asc, created_at asc`,
+      [userId, id],
+    ),
+  ]);
+  const project = projectResult.rows[0];
+  if (!project) return { focus: null, nodes: [], edges: [] };
+
+  const focus = node("project", project.id, project.title, {
+    subtitle: `${project.category ?? "미분류"} · ${project.status}`,
+    preview: project.description ?? (project.updatedAt ? `${project.updatedAt.slice(0, 10)} 업데이트` : undefined),
+    tone: "gold",
+  });
   const nodes: ContextNode[] = [];
   const edges: ContextEdge[] = [];
-  let focus: ContextNode | null = null;
 
-  if (type === "task") {
-    const task = indexes.actionHub.tasks.find((item) => item.id === id);
-    if (task) {
-      focus = node("task", task.id, task.title, { subtitle: `${task.status} · ${task.priority}`, preview: task.content, tone: "gold" });
-      for (const personName of task.linkedPeople) {
-        const person = indexes.peopleByName.get(personName);
-        const target = node("person", person?.id ?? `person-name:${personName}`, personName, {
-          subtitle: person ? person.groups.join(" · ") : "관계 후보",
-          tone: person ? "info" : "warning",
-        });
-        nodes.push(target);
-        edges.push(edge({ from: focus, to: target, label: "linked person", evidence: [{ source: "table", table: "task_people_relations" }] }));
-      }
-      for (const title of task.linkedZettels) {
-        const zettel = indexes.zettelsByTitle.get(title);
-        const target = node("zettel", zettel?.id ?? `zettel-title:${title}`, title, {
-          subtitle: zettel?.category ?? "관계 후보",
-          preview: zettel?.summary,
-          tone: zettel ? "gold" : "warning",
-        });
-        nodes.push(target);
-        edges.push(edge({ from: focus, to: target, label: "linked note", evidence: [{ source: "table", table: "task_zettel_relations" }] }));
-      }
-      const project = indexes.actionHub.projects.find((item) => item.id === task.projectId);
-      if (project) {
-        const target = node("project", project.id, project.title, { subtitle: project.category, preview: project.recentActivity, tone: "gold" });
-        nodes.push(target);
-        edges.push(edge({ from: target, to: focus, label: "contains task", evidence: [{ source: "table", table: "tasks.project_id" }] }));
-      }
-      for (const dateNode of [
-        task.dueAt ? { date: task.dueAt.slice(0, 10), label: "due date" } : null,
-      ].filter(Boolean) as Array<{ date: string; label: string }>) {
-        const target = node("daily_log", dateNode.date, dateNode.date, { subtitle: dateNode.date, tone: "gold" });
-        nodes.push(target);
-        edges.push(edge({ from: focus, to: target, label: dateNode.label, evidence: [{ source: "table", table: "tasks" }] }));
-      }
-    }
+  for (const task of taskResult.rows) {
+    const target = node("task", task.id, task.title, {
+      subtitle: `${task.status} · ${task.priority}`,
+      preview: task.content ?? undefined,
+      tone: "gold",
+    });
+    nodes.push(target);
+    edges.push(edge({ from: focus, to: target, label: "작업", evidence: [{ source: "table", table: "tasks.project_id" }] }));
   }
 
-  if (type === "person") {
-    const person = indexes.prm.people.find((item) => item.id === id);
-    if (person) {
-      focus = node("person", person.id, person.name, { subtitle: person.groups.join(" · "), preview: person.bio, tone: "info", sourceDocumentId: person.sourceDocument?.id });
-      for (const gift of indexes.prm.gifts.filter((item) => item.personId === person.id)) {
-        const target = node("gift", gift.id, gift.title, { subtitle: `${gift.direction} · ${gift.occurredAt}`, preview: gift.satisfaction ?? undefined, tone: "success" });
-        nodes.push(target);
-        edges.push(edge({ from: focus, to: target, label: "gift", evidence: [{ source: "table", table: "gifts.person_id" }] }));
-      }
-      for (const item of person.timeline) {
-        const targetType = item.kind === "zettel" ? "zettel" : item.kind === "task" ? "task" : item.kind;
-        const target = node(targetType, item.id, item.title, { subtitle: item.date, tone: item.kind === "interaction" ? "info" : "gold" });
-        nodes.push(target);
-        edges.push(edge({ from: focus, to: target, label: item.kind, evidence: [{ source: "table", table: `${item.kind}_relations` }] }));
-      }
-    }
+  return { focus, nodes, edges };
+}
+
+async function getTaskContextSeed(userId: string, id: string): Promise<ContextSeed> {
+  const result = await queryD1<ContextTaskRow>(
+    `select
+       t.id,
+       t.title,
+       t.status,
+       t.priority,
+       t.due_at as dueAt,
+       t.content,
+       p.id as projectId,
+       p.title as projectTitle,
+       p.category as projectCategory,
+       p.description as projectDescription
+     from tasks t
+     left join projects p on p.id = t.project_id and p.user_id = t.user_id and p.deleted_at is null
+     where t.user_id = ?
+       and t.id = ?
+       and t.deleted_at is null
+     limit 1`,
+    [userId, id],
+  );
+  const task = result.rows[0];
+  if (!task) return { focus: null, nodes: [], edges: [] };
+
+  const focus = node("task", task.id, task.title, {
+    subtitle: `${task.status} · ${task.priority}`,
+    preview: task.content ?? "세부 메모가 아직 없습니다.",
+    tone: "gold",
+  });
+  const nodes: ContextNode[] = [];
+  const edges: ContextEdge[] = [];
+
+  if (task.projectId && task.projectTitle) {
+    const target = node("project", task.projectId, task.projectTitle, {
+      subtitle: task.projectCategory ?? "프로젝트",
+      preview: task.projectDescription ?? undefined,
+      tone: "gold",
+    });
+    nodes.push(target);
+    edges.push(edge({ from: target, to: focus, label: "contains task", evidence: [{ source: "table", table: "tasks.project_id" }] }));
   }
 
-  if (type === "zettel") {
-    const zettel = indexes.vault.zettels.find((item) => item.id === id);
-    if (zettel) {
-      focus = node("zettel", zettel.id, zettel.title, { subtitle: zettel.category, preview: zettel.summary, tone: "gold", sourceDocumentId: zettel.sourceDocument?.id });
-      for (const link of zettel.outgoingLinks) {
-        const target = node("zettel", link.targetId, link.title, { subtitle: "Outgoing link", tone: "gold" });
-        nodes.push(target);
-        edges.push(edge({ from: focus, to: target, label: "outgoing", evidence: [{ source: "table", table: "zettel_links" }] }));
-      }
-      for (const title of zettel.backlinks) {
-        const source = indexes.zettelsByTitle.get(title);
-        const target = node("zettel", source?.id ?? `backlink:${title}`, title, { subtitle: "Backlink", tone: source ? "gold" : "warning" });
-        nodes.push(target);
-        edges.push(edge({ from: target, to: focus, label: "backlink", evidence: [{ source: "table", table: "zettel_links" }] }));
-      }
-    }
+  if (task.dueAt) {
+    const date = task.dueAt.slice(0, 10);
+    const target = node("daily_log", date, date, { subtitle: date, tone: "gold" });
+    nodes.push(target);
+    edges.push(edge({ from: focus, to: target, label: "due date", evidence: [{ source: "table", table: "tasks" }] }));
   }
 
-  if (type === "media") {
-    const media = indexes.vault.media.find((item) => item.id === id);
-    if (media) {
-      focus = node("media", media.id, media.title, { subtitle: `${media.mediaType} · ${media.status}`, preview: media.review, tone: "info", sourceDocumentId: media.sourceDocument?.id });
-    }
+  return { focus, nodes, edges };
+}
+
+async function getPersonContextSeed(userId: string, id: string): Promise<ContextSeed> {
+  const [personResult, dailyEntryResult] = await Promise.all([
+    queryD1<ContextPersonRow>(
+      `select
+         p.id,
+         p.name,
+         p.groups,
+         p.bio,
+         (
+           select sd.id
+           from source_documents sd
+           where sd.user_id = p.user_id
+             and sd.deleted_at is null
+             and sd.canonical_entity_type = 'person'
+             and sd.canonical_entity_id = p.id
+           order by sd.updated_at desc, sd.created_at desc
+           limit 1
+         ) as sourceDocumentId
+       from people p
+       where p.user_id = ?
+         and p.id = ?
+         and p.deleted_at is null
+       limit 1`,
+      [userId, id],
+    ),
+    queryD1<ContextDailyEntryRow>(
+      `select
+         dle.id,
+         dle.date,
+         coalesce(dle.title, 'Daily Entry') as title
+       from daily_entry_people_relations depr
+       inner join daily_log_entries dle on dle.id = depr.daily_entry_id
+       where dle.user_id = ?
+         and dle.deleted_at is null
+         and depr.person_id = ?
+       order by dle.date desc, dle.created_at desc
+       limit 12`,
+      [userId, id],
+    ).catch(() => ({ rows: [] })),
+  ]);
+  const person = personResult.rows[0];
+  if (!person) return { focus: null, nodes: [], edges: [] };
+
+  const focus = node("person", person.id, person.name, {
+    subtitle: parseJsonList(person.groups).join(" · "),
+    preview: person.bio ?? "설명이 아직 없습니다.",
+    tone: "info",
+    sourceDocumentId: person.sourceDocumentId ?? undefined,
+  });
+  const nodes: ContextNode[] = [];
+  const edges: ContextEdge[] = [];
+
+  for (const item of dailyEntryResult.rows) {
+    const target = node("daily_entry", item.id, item.title, { subtitle: item.date, tone: "info" });
+    nodes.push(target);
+    edges.push(edge({ from: focus, to: target, label: "daily_entry", evidence: [{ source: "table", table: "daily_entry_people_relations" }] }));
   }
 
-  if (type === "place") {
-    const place = indexes.vault.places.find((item) => item.id === id);
-    if (place) {
-      focus = node("place", place.id, place.name, { subtitle: place.address, preview: place.review, tone: "success" });
-    }
+  return { focus, nodes, edges };
+}
+
+async function getGiftContextSeed(userId: string, id: string): Promise<ContextSeed> {
+  const result = await queryD1<ContextGiftRow>(
+    `select
+       g.id,
+       g.direction,
+       g.title,
+       g.occurred_at as occurredAt,
+       g.satisfaction,
+       g.notes,
+       p.id as personId,
+       p.name as personName,
+       p.groups as personGroups,
+       p.bio as personBio,
+       (
+         select sd.id
+         from source_documents sd
+         where sd.user_id = g.user_id
+           and sd.deleted_at is null
+           and sd.canonical_entity_type = 'person'
+           and sd.canonical_entity_id = p.id
+         order by sd.updated_at desc, sd.created_at desc
+         limit 1
+       ) as personSourceDocumentId
+     from gifts g
+     left join people p on p.id = g.person_id and p.deleted_at is null
+     where g.user_id = ?
+       and g.id = ?
+       and g.deleted_at is null
+     limit 1`,
+    [userId, id],
+  );
+  const gift = result.rows[0];
+  if (!gift) return { focus: null, nodes: [], edges: [] };
+
+  const focus = node("gift", gift.id, gift.title, {
+    subtitle: `${gift.direction} · ${gift.occurredAt}`,
+    preview: gift.notes ?? gift.satisfaction ?? undefined,
+    tone: "success",
+  });
+  const nodes: ContextNode[] = [];
+  const edges: ContextEdge[] = [];
+
+  if (gift.personId && gift.personName) {
+    const target = node("person", gift.personId, gift.personName, {
+      subtitle: parseJsonList(gift.personGroups).join(" · "),
+      preview: gift.personBio ?? undefined,
+      tone: "info",
+      sourceDocumentId: gift.personSourceDocumentId ?? undefined,
+    });
+    nodes.push(target);
+    edges.push(edge({ from: focus, to: target, label: "gift person", evidence: [{ source: "table", table: "gifts.person_id" }] }));
   }
 
-  if (type === "workout") {
-    const workout = indexes.lifeOps?.workouts.find((item) => item.id === id);
-    if (workout) {
-      focus = node("workout", workout.id, workout.categories, {
-        subtitle: `${workout.date} · ${workout.duration} min · intensity ${workout.intensity}`,
-        preview: workout.notes,
-        tone: "success",
-      });
-      const daily = indexes.lifeOps?.logs[workout.date];
-      if (daily) {
-        const target = node("daily_log", daily.date, daily.date, { subtitle: `mood ${daily.mood} · energy ${daily.energy}`, preview: daily.journal || daily.meditation, tone: "gold" });
-        nodes.push(target);
-        edges.push(edge({ from: target, to: focus, label: "daily anchor", evidence: [{ source: "table", table: "workouts.date" }] }));
-      }
-    }
+  return { focus, nodes, edges };
+}
+
+async function getZettelContextSeed(userId: string, id: string): Promise<ContextSeed> {
+  const [zettelResult, outgoingResult, backlinkResult] = await Promise.all([
+    queryD1<ContextZettelRow>(
+      `select
+         z.id,
+         z.title,
+         z.category,
+         z.summary,
+         (
+           select sd.id
+           from source_documents sd
+           where sd.user_id = z.user_id
+             and sd.deleted_at is null
+             and sd.canonical_entity_type = 'zettel'
+             and sd.canonical_entity_id = z.id
+           order by sd.updated_at desc, sd.created_at desc
+           limit 1
+         ) as sourceDocumentId
+       from zettels z
+       where z.user_id = ?
+         and z.id = ?
+         and z.deleted_at is null
+       limit 1`,
+      [userId, id],
+    ),
+    queryD1<ContextZettelOutgoingRow>(
+      `select zl.id, zl.target_id as targetId, zt.title as targetTitle
+       from zettel_links zl
+       inner join zettels zs on zs.id = zl.source_id
+       inner join zettels zt on zt.id = zl.target_id
+       where zs.user_id = ?
+         and zs.deleted_at is null
+         and zt.deleted_at is null
+         and zl.source_id = ?`,
+      [userId, id],
+    ),
+    queryD1<ContextZettelBacklinkRow>(
+      `select zs.id as sourceId, zs.title as sourceTitle
+       from zettel_links zl
+       inner join zettels zs on zs.id = zl.source_id
+       inner join zettels zt on zt.id = zl.target_id
+       where zt.user_id = ?
+         and zs.deleted_at is null
+         and zt.deleted_at is null
+         and zl.target_id = ?`,
+      [userId, id],
+    ),
+  ]);
+  const zettel = zettelResult.rows[0];
+  if (!zettel) return { focus: null, nodes: [], edges: [] };
+
+  const focus = node("zettel", zettel.id, zettel.title, {
+    subtitle: zettel.category ?? "지식",
+    preview: zettel.summary ?? undefined,
+    tone: "gold",
+    sourceDocumentId: zettel.sourceDocumentId ?? undefined,
+  });
+  const nodes: ContextNode[] = [];
+  const edges: ContextEdge[] = [];
+
+  for (const link of outgoingResult.rows) {
+    const target = node("zettel", link.targetId, link.targetTitle, { subtitle: "나가는 링크", tone: "gold" });
+    nodes.push(target);
+    edges.push(edge({ from: focus, to: target, label: "outgoing", evidence: [{ source: "table", table: "zettel_links" }] }));
   }
 
-  if (type === "gift") {
-    const gift = indexes.prm.gifts.find((item) => item.id === id);
-    if (gift) {
-      focus = node("gift", gift.id, gift.title, {
-        subtitle: `${gift.direction} · ${gift.occurredAt}`,
-        preview: gift.notes ?? gift.satisfaction ?? undefined,
-        tone: "success",
-      });
-      const person = indexes.prm.people.find((item) => item.id === gift.personId);
-      if (person) {
-        const target = node("person", person.id, person.name, { subtitle: person.groups.join(" · "), preview: person.bio, tone: "info", sourceDocumentId: person.sourceDocument?.id });
-        nodes.push(target);
-        edges.push(edge({ from: focus, to: target, label: "gift person", evidence: [{ source: "table", table: "gifts.person_id" }] }));
-      }
-    }
+  for (const link of backlinkResult.rows) {
+    const target = node("zettel", link.sourceId, link.sourceTitle, { subtitle: "역링크", tone: "gold" });
+    nodes.push(target);
+    edges.push(edge({ from: target, to: focus, label: "backlink", evidence: [{ source: "table", table: "zettel_links" }] }));
   }
 
-  if (type === "career") {
-    const career = indexes.lifeOps?.career.find((item) => item.id === id);
-    if (career) {
-      focus = node("career", career.id, career.organization, {
-        subtitle: `${career.role} · ${career.period}`,
-        preview: career.description,
+  return { focus, nodes, edges };
+}
+
+async function getMediaContextSeed(userId: string, id: string): Promise<ContextSeed> {
+  const result = await queryD1<ContextMediaRow>(
+    `select
+       m.id,
+       m.media_type as mediaType,
+       m.title,
+       m.status,
+       m.review,
+       (
+         select sd.id
+         from source_documents sd
+         where sd.user_id = m.user_id
+           and sd.deleted_at is null
+           and sd.canonical_entity_type = 'media'
+           and sd.canonical_entity_id = m.id
+         order by sd.updated_at desc, sd.created_at desc
+         limit 1
+       ) as sourceDocumentId
+     from media_logs m
+     where m.user_id = ?
+       and m.id = ?
+       and m.deleted_at is null
+     limit 1`,
+    [userId, id],
+  );
+  const media = result.rows[0];
+  if (!media) return { focus: null, nodes: [], edges: [] };
+
+  return {
+    focus: node("media", media.id, media.title, {
+      subtitle: `${media.mediaType} · ${media.status}`,
+      preview: media.review ?? undefined,
+      tone: "info",
+      sourceDocumentId: media.sourceDocumentId ?? undefined,
+    }),
+    nodes: [],
+    edges: [],
+  };
+}
+
+async function getPlaceContextSeed(userId: string, id: string): Promise<ContextSeed> {
+  const result = await queryD1<ContextPlaceRow>(
+    `select
+       pl.id,
+       pl.category,
+       pl.name,
+       pl.address,
+       pl.notes as review,
+       (
+         select sd.id
+         from source_documents sd
+         where sd.user_id = pl.user_id
+           and sd.deleted_at is null
+           and sd.canonical_entity_type = 'place'
+           and sd.canonical_entity_id = pl.id
+         order by sd.updated_at desc, sd.created_at desc
+         limit 1
+       ) as sourceDocumentId
+     from places pl
+     where pl.user_id = ?
+       and pl.id = ?
+       and pl.deleted_at is null
+     limit 1`,
+    [userId, id],
+  );
+  const place = result.rows[0];
+  if (!place) return { focus: null, nodes: [], edges: [] };
+
+  return {
+    focus: node("place", place.id, place.name, {
+      subtitle: place.address ?? place.category ?? "장소",
+      preview: place.review ?? undefined,
+      tone: "success",
+      sourceDocumentId: place.sourceDocumentId ?? undefined,
+    }),
+    nodes: [],
+    edges: [],
+  };
+}
+
+async function getWorkoutContextSeed(userId: string, id: string): Promise<ContextSeed> {
+  const workoutResult = await queryD1<ContextWorkoutRow>(
+    `select
+       id,
+       title,
+       date,
+       categories,
+       duration_minutes as durationMinutes,
+       intensity,
+       notes
+     from workouts
+     where user_id = ?
+       and id = ?
+       and deleted_at is null
+     limit 1`,
+    [userId, id],
+  );
+  const workout = workoutResult.rows[0];
+  if (!workout) return { focus: null, nodes: [], edges: [] };
+
+  const focus = node("workout", workout.id, workout.title ?? workout.categories, {
+    subtitle: `${workout.date} · ${Number(workout.durationMinutes ?? 0)} min · intensity ${Number(workout.intensity ?? 0)}`,
+    preview: workout.notes ?? undefined,
+    tone: "success",
+  });
+  const nodes: ContextNode[] = [];
+  const edges: ContextEdge[] = [];
+  const daily = await getDailyLogContextRow(userId, workout.date);
+
+  if (daily) {
+    const target = dailyLogNodeFromRow(daily);
+    nodes.push(target);
+    edges.push(edge({ from: target, to: focus, label: "daily anchor", evidence: [{ source: "table", table: "workouts.date" }] }));
+  }
+
+  return { focus, nodes, edges };
+}
+
+async function getCareerContextSeed(userId: string, id: string): Promise<ContextSeed> {
+  const result = await queryD1<ContextCareerRow>(
+    `select
+       id,
+       source_document_id as sourceDocumentId,
+       organization,
+       role,
+       start_date as startDate,
+       end_date as endDate,
+       description
+     from career_history
+     where user_id = ?
+       and id = ?
+       and deleted_at is null
+     limit 1`,
+    [userId, id],
+  );
+  const career = result.rows[0];
+  if (!career) return { focus: null, nodes: [], edges: [] };
+  const period = career.endDate ? `${career.startDate.slice(0, 4)} - ${career.endDate.slice(0, 4)}` : `${career.startDate.slice(0, 4)} - 현재`;
+
+  return {
+    focus: node("career", career.id, career.organization, {
+      subtitle: `${career.role} · ${period}`,
+      preview: career.description ?? undefined,
+      tone: "gold",
+      sourceDocumentId: career.sourceDocumentId ?? undefined,
+    }),
+    nodes: [],
+    edges: [],
+  };
+}
+
+async function getDailyLogContextRow(userId: string, date: string) {
+  const result = await queryD1<ContextDailyLogRow>(
+    `select
+       dl.id,
+       dl.date,
+       dl.mood,
+       dl.energy_level as energyLevel,
+       dl.journal,
+       dl.meditation,
+       (
+         select sd.id
+         from source_documents sd
+         where sd.user_id = dl.user_id
+           and sd.deleted_at is null
+           and sd.canonical_entity_type = 'daily_log'
+           and sd.canonical_entity_id = dl.id
+         order by sd.updated_at desc, sd.created_at desc
+         limit 1
+       ) as sourceDocumentId
+     from daily_logs dl
+     where dl.user_id = ?
+       and dl.date = ?
+       and dl.deleted_at is null
+     limit 1`,
+    [userId, date],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+function dailyLogNodeFromRow(row: ContextDailyLogRow) {
+  return node("daily_log", row.date, row.date, {
+    subtitle: dailyLogSubtitle(Number(row.mood ?? 3), Number(row.energyLevel ?? 3)),
+    preview: row.journal || row.meditation || undefined,
+    tone: "gold",
+    sourceDocumentId: row.sourceDocumentId ?? undefined,
+  });
+}
+
+async function getDailyLogTimelineRows(userId: string, date: string) {
+  const [taskTimeline, interactionTimeline, zettelTimeline, dailyPeopleTimeline] = await Promise.all([
+    queryD1<ContextDailyTimelineRow>(
+      `select date(coalesce(updated_at, created_at)) as date, time(coalesce(updated_at, created_at)) as time, title as label, 'task' as type
+       from tasks
+       where user_id = ?
+         and date(coalesce(updated_at, created_at)) = ?
+         and deleted_at is null
+       order by updated_at desc
+       limit 4`,
+      [userId, date],
+    ),
+    queryD1<ContextDailyTimelineRow>(
+      `select occurred_at as date, '14:00' as time, summary as label, 'interaction' as type
+       from interactions
+       where user_id = ?
+         and occurred_at = ?
+         and deleted_at is null
+       order by created_at desc
+       limit 4`,
+      [userId, date],
+    ),
+    queryD1<ContextDailyTimelineRow>(
+      `select date(coalesce(updated_at, created_at)) as date, time(coalesce(updated_at, created_at)) as time, title as label, 'zettel' as type
+       from zettels
+       where user_id = ?
+         and date(coalesce(updated_at, created_at)) = ?
+         and deleted_at is null
+       order by updated_at desc
+       limit 4`,
+      [userId, date],
+    ),
+    queryD1<ContextDailyTimelineRow>(
+      `select dl.date as date, '12:00' as time, p.name as label, 'person' as type
+       from daily_logs dl
+       inner join daily_log_people_relations dlpr on dlpr.daily_log_id = dl.id
+       inner join people p on p.id = dlpr.person_id
+       where dl.user_id = ?
+         and dl.date = ?
+         and dl.deleted_at is null
+         and p.deleted_at is null
+       order by p.name asc
+       limit 6`,
+      [userId, date],
+    ),
+  ]);
+
+  return [...taskTimeline.rows, ...interactionTimeline.rows, ...zettelTimeline.rows, ...dailyPeopleTimeline.rows]
+    .sort((left, right) => `${right.date} ${right.time}`.localeCompare(`${left.date} ${left.time}`))
+    .slice(0, 6);
+}
+
+async function getDailyLogContextSeed(userId: string, id: string): Promise<ContextSeed> {
+  const daily = await getDailyLogContextRow(userId, id);
+  const focus = daily
+    ? dailyLogNodeFromRow(daily)
+    : node("daily_log", id, id, {
+        subtitle: dailyLogSubtitle(3, 3),
         tone: "gold",
       });
+  const nodes: ContextNode[] = [];
+  const edges: ContextEdge[] = [];
+
+  if (daily) {
+    const timeline = await getDailyLogTimelineRows(userId, daily.date);
+    for (const item of timeline) {
+      const targetType = item.type === "person" ? "person" : item.type === "zettel" ? "zettel" : item.type === "task" ? "task" : "interaction";
+      const target = node(targetType, `${daily.date}:${item.type}:${item.label}`, item.label, { subtitle: `${daily.date} ${item.time.slice(0, 5)}`, tone: "info" });
+      nodes.push(target);
+      edges.push(edge({ from: focus, to: target, label: item.type, evidence: [{ source: "table", table: "daily context query" }] }));
     }
   }
 
-  if (type === "daily_log") {
-    const daily = indexes.lifeOps?.logs[id];
-    if (daily) {
-      focus = node("daily_log", daily.date, daily.date, { subtitle: `mood ${daily.mood} · energy ${daily.energy}`, preview: daily.journal || daily.meditation, tone: "gold", sourceDocumentId: daily.sourceDocument?.id });
-      for (const item of daily.timeline) {
-        const targetType = item.type === "person" ? "person" : item.type === "zettel" ? "zettel" : item.type === "task" ? "task" : "interaction";
-        const target = node(targetType, `${daily.date}:${item.type}:${item.label}`, item.label, { subtitle: `${daily.date} ${item.time}`, tone: "info" });
-        nodes.push(target);
-        edges.push(edge({ from: focus, to: target, label: item.type, evidence: [{ source: "table", table: "daily context query" }] }));
-      }
-    }
-  }
+  return { focus, nodes, edges };
+}
+
+async function getContextReadModelSeed(userId: string, type: EntityType, id: string): Promise<ContextSeed | null> {
+  if (type === "project") return getProjectContextSeed(userId, id);
+  if (type === "task") return getTaskContextSeed(userId, id);
+  if (type === "person") return getPersonContextSeed(userId, id);
+  if (type === "gift") return getGiftContextSeed(userId, id);
+  if (type === "zettel") return getZettelContextSeed(userId, id);
+  if (type === "media") return getMediaContextSeed(userId, id);
+  if (type === "place") return getPlaceContextSeed(userId, id);
+  if (type === "workout") return getWorkoutContextSeed(userId, id);
+  if (type === "career") return getCareerContextSeed(userId, id);
+  if (type === "daily_log") return getDailyLogContextSeed(userId, id);
+  return null;
+}
+
+export async function getContextBundle(type: EntityType, id: string, options: ContextBundleOptions = {}): Promise<ContextBundle> {
+  const user = await resolveCurrentUser();
+  const seed = await getContextReadModelSeed(user.id, type, id);
+  const nodes: ContextNode[] = seed ? [...seed.nodes] : [];
+  const edges: ContextEdge[] = seed ? [...seed.edges] : [];
+  let focus: ContextNode | null = seed?.focus ?? null;
 
   if (!focus) {
     focus = node(type, id, id, { subtitle: "아직 canonical 데이터를 찾지 못했습니다", tone: "warning" });
@@ -1211,7 +1770,7 @@ export async function getContextBundle(type: EntityType, id: string, options: Co
         table: "source_document_relations",
         sourceDocumentId: relation.sourceDocumentId,
         propertyName: relation.relationName,
-        snippet: relation.targetTitle ?? relation.targetSourceId ?? undefined,
+        snippet: relation.targetTitle ?? (relation.targetSourceId ? "원본 관계 대상 보관됨" : undefined),
       }],
     }));
   }
@@ -1261,7 +1820,7 @@ export async function searchContextNodes(query: string, types?: EntityType[], op
   const normalized = query.trim();
   if (!normalized) return [];
   const user = await resolveCurrentUser();
-  const searchTypes = types?.filter((type) => ["person", "task", "zettel", "media", "place", "tag"].includes(type));
+  const searchTypes = types?.filter((type) => CONTEXT_SEARCH_ENTITY_TYPES.has(type));
   let semanticResults: Awaited<ReturnType<typeof semanticSearchZettels>> = [];
   if (options.semantic && (!searchTypes?.length || searchTypes.includes("zettel"))) {
     try {
@@ -1272,7 +1831,13 @@ export async function searchContextNodes(query: string, types?: EntityType[], op
     }
   }
   const ftsResults = await searchWithFTS(normalized, searchTypes);
-  const results = [...semanticResults, ...(ftsResults ?? [])]
+  const supplementalTypes = searchTypes?.length && !searchTypes.includes("place") ? [] : ["place"];
+  const readModelResults = ftsResults?.length
+    ? supplementalTypes.length
+      ? await getSearchReadModelItems(normalized, supplementalTypes)
+      : []
+    : await getSearchReadModelItems(normalized, searchTypes);
+  const results = [...semanticResults, ...(ftsResults ?? []), ...readModelResults]
     .filter((item, index, array) => array.findIndex((candidate) => candidate.type === item.type && candidate.id === item.id) === index)
     .sort((left, right) => right.score - left.score);
   const personLabels = await personIdentityLabels(user.id, results.filter((item) => item.type === "person").map((item) => item.id));

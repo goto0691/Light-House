@@ -20,7 +20,7 @@ export async function GET() {
     return NextResponse.json({ bindings });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Shortcut settings load failed." },
+      { error: error instanceof Error ? error.message : "단축키 설정을 불러오지 못했습니다." },
       { status: 400 },
     );
   }
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ bindings });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Shortcut settings update failed." },
+      { error: error instanceof Error ? error.message : "단축키 설정 저장에 실패했습니다." },
       { status: 400 },
     );
   }

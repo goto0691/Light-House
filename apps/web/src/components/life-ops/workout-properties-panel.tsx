@@ -7,8 +7,8 @@ import { buildWorkoutPropertyForm, workoutPropertyPayload, type WorkoutPropertyF
 import { PropertyPanel } from "@/components/shared/properties/property-panel";
 import type { WorkoutLog } from "@/lib/mock/life-ops";
 import { WORKOUT_PROPERTY_DEFINITIONS, WORKOUT_PROPERTY_GROUPS } from "@/lib/properties/workout";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { useLifeOpsStore } from "@/stores/use-life-ops-store";
+import { postDeltaMutation } from "@/lib/snapshot-client";
+import { useLifeOpsStore, type LifeOpsMutationDelta } from "@/stores/use-life-ops-store";
 
 type WorkoutPropertiesPanelProps = {
   workout: WorkoutLog;
@@ -17,7 +17,7 @@ type WorkoutPropertiesPanelProps = {
 export function WorkoutPropertiesPanel({ workout }: WorkoutPropertiesPanelProps) {
   const [isPending, startTransition] = useTransition();
   const activeWorkout = useLifeOpsStore((state) => state.workouts.find((item) => item.id === workout.id)) ?? workout;
-  const replaceSnapshot = useLifeOpsStore((state) => state.replaceSnapshot);
+  const applyMutationDelta = useLifeOpsStore((state) => state.applyMutationDelta);
   const [form, setForm] = useState<WorkoutPropertyForm>(() => buildWorkoutPropertyForm(activeWorkout));
   const [isDirty, setIsDirty] = useState(false);
   const [syncedWorkoutId, setSyncedWorkoutId] = useState(activeWorkout.id);
@@ -37,10 +37,10 @@ export function WorkoutPropertiesPanel({ workout }: WorkoutPropertiesPanelProps)
   const saveProperties = () => {
     startTransition(async () => {
       try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+        await postDeltaMutation<{ delta: LifeOpsMutationDelta }, LifeOpsMutationDelta>(
           `/api/life-ops/workouts/${activeWorkout.id}/properties`,
           workoutPropertyPayload(form),
-          replaceSnapshot,
+          applyMutationDelta,
         );
         setIsDirty(false);
         toast.success("운동 속성을 저장했습니다.");

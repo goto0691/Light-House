@@ -24,6 +24,27 @@ type CaptureResult = {
   };
 };
 
+export type ActionHubTaskDelta = {
+  project?: ProjectMock | null;
+  task: TaskMock;
+};
+
+export type ActionHubProjectDelta = {
+  project: ProjectMock;
+};
+
+export type ActionHubCaptureDelta = {
+  pendingCapture?: PendingCaptureMock;
+  pendingCaptureId?: string;
+  project?: ProjectMock | null;
+  referenceZettel?: ActionHubReference;
+  routedEntity?: {
+    id: string;
+    type: "task" | "zettel";
+  };
+  task?: TaskMock;
+};
+
 type ActionHubState = {
   projects: ProjectMock[];
   tasks: TaskMock[];
@@ -31,6 +52,9 @@ type ActionHubState = {
   referencePeople: ActionHubReference[];
   referenceZettels: ActionHubReference[];
   replaceSnapshot: (snapshot: Pick<ActionHubState, "projects" | "tasks" | "pendingCaptures" | "referencePeople" | "referenceZettels">) => void;
+  applyCaptureDelta: (delta: ActionHubCaptureDelta) => void;
+  applyProjectDelta: (delta: ActionHubProjectDelta) => void;
+  applyTaskDelta: (delta: ActionHubTaskDelta) => void;
   ingestCapture: (text: string, result: CaptureResult) => { taskId?: string };
   dismissCapture: (id: string) => void;
   routeInboxTaskToProject: (taskId: string, projectId: string) => void;
@@ -57,6 +81,55 @@ export const useActionHubStore = create<ActionHubState>()(
           referencePeople: snapshot.referencePeople,
           referenceZettels: snapshot.referenceZettels,
         })),
+      applyCaptureDelta: (delta) =>
+        set((state) => {
+          const projects = delta.project
+            ? state.projects.some((project) => project.id === delta.project!.id)
+              ? state.projects.map((project) => (project.id === delta.project!.id ? delta.project! : project))
+              : [...state.projects, delta.project]
+            : state.projects;
+          const tasks = delta.task
+            ? state.tasks.some((task) => task.id === delta.task!.id)
+              ? state.tasks.map((task) => (task.id === delta.task!.id ? delta.task! : task))
+              : [delta.task, ...state.tasks]
+            : state.tasks;
+          const referenceZettels = delta.referenceZettel
+            ? state.referenceZettels.some((zettel) => zettel.id === delta.referenceZettel!.id)
+              ? state.referenceZettels.map((zettel) => (zettel.id === delta.referenceZettel!.id ? delta.referenceZettel! : zettel))
+              : [delta.referenceZettel, ...state.referenceZettels]
+            : state.referenceZettels;
+          const pendingCaptures = delta.pendingCapture
+            ? state.pendingCaptures.some((capture) => capture.id === delta.pendingCapture!.id)
+              ? state.pendingCaptures.map((capture) => (capture.id === delta.pendingCapture!.id ? delta.pendingCapture! : capture))
+              : [delta.pendingCapture, ...state.pendingCaptures]
+            : state.pendingCaptures;
+
+          return {
+            pendingCaptures: delta.pendingCaptureId ? pendingCaptures.filter((capture) => capture.id !== delta.pendingCaptureId) : pendingCaptures,
+            projects,
+            referenceZettels,
+            tasks,
+          };
+        }),
+      applyProjectDelta: (delta) =>
+        set((state) => ({
+          projects: state.projects.some((project) => project.id === delta.project.id)
+            ? state.projects.map((project) => (project.id === delta.project.id ? delta.project : project))
+            : [...state.projects, delta.project],
+        })),
+      applyTaskDelta: (delta) =>
+        set((state) => {
+          const projects = delta.project
+            ? state.projects.some((project) => project.id === delta.project!.id)
+              ? state.projects.map((project) => (project.id === delta.project!.id ? delta.project! : project))
+              : [...state.projects, delta.project]
+            : state.projects;
+          const tasks = state.tasks.some((task) => task.id === delta.task.id)
+            ? state.tasks.map((task) => (task.id === delta.task.id ? delta.task : task))
+            : [delta.task, ...state.tasks];
+
+          return { projects, tasks };
+        }),
       ingestCapture: (text, result) => {
         if (result.status === "routed" && result.suggested.domain === "task") {
           const taskId = ulid();

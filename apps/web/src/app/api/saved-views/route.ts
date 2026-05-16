@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ views });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Saved views load failed." },
+      { error: error instanceof Error ? error.message : "저장된 뷰 목록을 불러오지 못했습니다." },
       { status: 400 },
     );
   }
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as SavedViewRequest;
 
     if (!body.domain || !body.scope || !body.name?.trim()) {
-      return NextResponse.json({ error: "domain, scope, name are required." }, { status: 400 });
+      return NextResponse.json({ error: "도메인, 범위, 이름을 모두 지정해 주세요." }, { status: 400 });
     }
 
     const views = await createSavedView({
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ views });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Saved view create failed." },
+      { error: error instanceof Error ? error.message : "저장된 뷰 생성에 실패했습니다." },
       { status: 400 },
     );
   }

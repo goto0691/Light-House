@@ -130,7 +130,7 @@ export function SourceDocumentPanel({ canonicalEntityType, definitions, sourceDo
               <section className="rounded-md border border-white/10 bg-black/10 p-3" key={group.key}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium text-foreground">{group.title}</p>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground">{group.rows.length}</span>
+            <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground">{group.rows.length}</span>
                 </div>
                 <div className="mt-3 grid gap-2">
                   {group.rows.map((row) => (

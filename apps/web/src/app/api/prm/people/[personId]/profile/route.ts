@@ -27,8 +27,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ per
   try {
     const body = (await request.json()) as Body;
     const { personId } = await params;
-    return NextResponse.json({ snapshot: await updatePersonProfile(personId, body) });
+    return NextResponse.json({ delta: await updatePersonProfile(personId, body) });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Person profile update failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "인물 프로필 저장에 실패했습니다." }, { status: 500 });
   }
 }

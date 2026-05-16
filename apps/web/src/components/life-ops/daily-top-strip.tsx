@@ -18,7 +18,7 @@ type DailyTopStripProps = {
 export function DailyTopStrip({ date, mood, energy, emotions, moodOptions, energyOptions, onMoodChange, onEnergyChange, disabled }: DailyTopStripProps) {
   return (
     <PageHeader
-      eyebrow="Life Ops"
+      eyebrow="생활기록"
       title={date}
       description="하루의 상태, 습관, 저널링, 전 도메인 활동을 한 화면에서 정리합니다."
       meta={

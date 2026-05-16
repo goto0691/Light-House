@@ -20,7 +20,7 @@ export function SavedViewTabs({ activeViewKey, basePath, onSelect, views }: Save
         const active = activeViewKey === viewKey;
         const params = new URLSearchParams({ view: viewKey });
         const className = cn(
-          "focus-ring shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-xs font-medium transition",
+          "focus-ring shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-xs font-medium",
           active ? "bg-primary/14 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]" : "text-muted-foreground hover:bg-white/6 hover:text-foreground",
         );
 
@@ -28,6 +28,7 @@ export function SavedViewTabs({ activeViewKey, basePath, onSelect, views }: Save
           return (
             <button
               aria-current={active ? "page" : undefined}
+              aria-pressed={active}
               className={className}
               key={view.id}
               onClick={() => onSelect(viewKey, view)}

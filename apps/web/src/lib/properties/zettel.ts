@@ -47,7 +47,7 @@ export const ZETTEL_PROPERTY_DEFINITIONS: PropertyDefinition[] = [
     key: "zettel.type",
     entityType: "zettel",
     field: "type",
-    label: "메모 타입",
+    label: "지식 유형",
     group: "classification",
     valueType: "select",
     display: "segmented",

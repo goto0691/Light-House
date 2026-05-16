@@ -13,7 +13,7 @@ type TaskCalendarProps = {
 
 export function TaskCalendar({ projectId, tasks }: TaskCalendarProps) {
   if (!tasks.length) {
-    return <EmptyState description="마감일이 있는 태스크가 아직 없습니다." icon={CalendarClock} title="일정을 기다리는 중" />;
+    return <EmptyState description="마감일이 있는 작업이 아직 없습니다." icon={CalendarClock} title="일정을 기다리는 중" />;
   }
 
   return (

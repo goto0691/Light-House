@@ -14,21 +14,21 @@ type ActiveTasksWidgetProps = {
 export function ActiveTasksWidget({ tasks }: ActiveTasksWidgetProps) {
   return (
     <BentoCard colSpan={8} priority="primary" rowSpan={3}>
-      <GlassCard className="h-full" interactive>
+      <GlassCard className="h-full">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-primary">Active Tasks</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-primary">진행 작업</p>
             <p className="mt-2 text-sm text-muted-foreground">P1 우선, 몰입 에너지와 마감을 먼저 보여줍니다.</p>
           </div>
           <Link className="text-xs uppercase tracking-[0.18em] text-primary" href="/action-hub">
-            Open
+            열기
           </Link>
         </div>
         <div className="mt-5 space-y-3">
           {tasks.length ? (
             tasks.map((task) => (
               <Link
-                className="flex items-center justify-between rounded-3xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-primary/20 hover:bg-white/8"
+                className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-primary/20 hover:bg-white/8"
                 href={task.projectId ? `/action-hub/${task.projectId}/tasks/${task.id}` : "/action-hub/inbox"}
                 key={task.id}
               >
@@ -45,8 +45,8 @@ export function ActiveTasksWidget({ tasks }: ActiveTasksWidgetProps) {
             ))
           ) : (
             <EmptyState
-              cta={{ label: "새 Task", onClick: () => window.location.assign("/action-hub"), hotkey: "c p" }}
-              description="오늘은 몰입할 Task가 없네요."
+              cta={{ label: "새 작업", href: "/action-hub", hotkey: "c p" }}
+              description="오늘은 몰입할 작업이 없네요."
               icon="🧭"
               title="비어 있는 브리핑"
             />
@@ -56,4 +56,3 @@ export function ActiveTasksWidget({ tasks }: ActiveTasksWidgetProps) {
     </BentoCard>
   );
 }
-

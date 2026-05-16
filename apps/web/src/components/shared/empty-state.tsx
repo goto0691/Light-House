@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { Compass, Gem, HeartHandshake, ListTodo, Sparkles } from "lucide-react";
+import Link from "next/link";
 
 import { KeyHint } from "@/components/shared/key-hint";
 import { cn } from "@/lib/utils/cn";
@@ -8,7 +9,7 @@ type EmptyStateProps = {
   icon?: LucideIcon | string;
   title: string;
   description?: string;
-  cta?: { label: string; onClick: () => void; hotkey?: string };
+  cta?: { label: string; href?: string; onClick?: () => void; hotkey?: string };
   illustration?: "zettel" | "person" | "task" | "habit" | "generic";
   className?: string;
 };
@@ -28,7 +29,7 @@ export function EmptyState({ icon, title, description, cta, illustration = "gene
       : illustrationIconMap[illustration];
 
   return (
-    <div className={cn("glass flex min-h-[240px] flex-col items-center justify-center rounded-[32px] px-6 py-10 text-center", className)}>
+    <div className={cn("glass flex min-h-[240px] flex-col items-center justify-center rounded-lg px-6 py-10 text-center", className)}>
       {typeof icon === "string" ? (
         <div className="mb-4 text-3xl">{icon}</div>
       ) : (
@@ -38,9 +39,17 @@ export function EmptyState({ icon, title, description, cta, illustration = "gene
       )}
       <h3 className="text-balance font-display text-3xl text-foreground">{title}</h3>
       {description ? <p className="text-pretty mt-3 max-w-md text-sm leading-6 text-muted-foreground">{description}</p> : null}
-      {cta ? (
+      {cta?.href ? (
+        <Link
+          className="focus-ring mt-6 inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-4 py-2 text-sm text-primary [@media(hover:hover)]:hover:bg-primary/15"
+          href={cta.href}
+        >
+          <span>{cta.label}</span>
+          {cta.hotkey ? <KeyHint keys={cta.hotkey} /> : null}
+        </Link>
+      ) : cta?.onClick ? (
         <button
-          className="focus-ring mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-sm text-primary transition [@media(hover:hover)]:hover:bg-primary/15"
+          className="focus-ring mt-6 inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-4 py-2 text-sm text-primary [@media(hover:hover)]:hover:bg-primary/15"
           onClick={cta.onClick}
           type="button"
         >

@@ -10,9 +10,9 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
   try {
     const { taskId } = await context.params;
     const body = (await request.json()) as ContentRequest;
-    const snapshot = await updateActionHubTaskContent(taskId, body.content ?? "");
-    return NextResponse.json({ snapshot });
+    const delta = await updateActionHubTaskContent(taskId, body.content ?? "");
+    return NextResponse.json({ delta });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Content update failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "본문 저장에 실패했습니다." }, { status: 500 });
   }
 }

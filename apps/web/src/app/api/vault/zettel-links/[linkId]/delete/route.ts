@@ -5,9 +5,8 @@ import { unlinkVaultZettels } from "@/lib/server/vault";
 
 export async function POST(_: Request, { params }: { params: Promise<{ linkId: string }> }) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   const { linkId } = await params;
-  const snapshot = await unlinkVaultZettels(linkId);
-  return NextResponse.json({ snapshot });
+  return NextResponse.json(await unlinkVaultZettels(linkId));
 }

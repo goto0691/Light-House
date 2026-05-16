@@ -5,7 +5,7 @@ import { createActionHubProject } from "@/lib/server/action-hub";
 
 export async function POST(request: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
   const body = (await request.json()) as {
     title?: string;
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     targetDate?: string | null;
   };
 
-  const snapshot = await createActionHubProject({
+  const delta = await createActionHubProject({
     title: body.title ?? "",
     kind: body.kind,
     category: body.category,
@@ -27,5 +27,5 @@ export async function POST(request: Request) {
     targetDate: body.targetDate,
   });
 
-  return NextResponse.json({ snapshot });
+  return NextResponse.json({ delta });
 }

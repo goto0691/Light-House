@@ -31,7 +31,7 @@ type FilterBarProps = {
 };
 
 export function FilterBar({
-  searchPlaceholder = "Search",
+  searchPlaceholder = "검색",
   filters,
   sortOptions,
   savedViews,
@@ -92,7 +92,7 @@ export function FilterBar({
         {filters
           .filter((filter) => filter.kind === "select")
           .map((filter) => (
-            <label className="flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground" key={filter.key}>
+            <label className="flex items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground" key={filter.key}>
               <span>{filter.label}</span>
               <select
                 className="bg-transparent text-[11px] text-foreground outline-none"
@@ -119,10 +119,10 @@ export function FilterBar({
             const values = Array.isArray(filterState[filter.key]) ? (filterState[filter.key] as string[]) : [];
             return (
               <details className="group relative" key={filter.key}>
-                <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/6 hover:text-foreground">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/6 hover:text-foreground">
                   <span>{filter.label}</span>
                   {values.length ? <span className="text-primary">{values.length}</span> : null}
-                  <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
+                  <ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" />
                 </summary>
                 <div className="glass-elevated absolute right-0 z-20 mt-2 grid min-w-52 gap-1 p-2">
                   {filter.options.map((option) => {
@@ -130,7 +130,7 @@ export function FilterBar({
                     return (
                       <button
                         className={cn(
-                          "focus-ring flex min-h-10 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition hover:bg-white/6",
+                          "focus-ring flex min-h-10 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-white/6",
                           checked ? "text-primary" : "text-muted-foreground",
                         )}
                         key={option.value}
@@ -162,7 +162,7 @@ export function FilterBar({
                 {values.map((value) => (
                   <button
                     aria-label={`${value} 제거`}
-                    className="focus-ring inline-flex min-h-7 items-center gap-1 rounded-full bg-primary/10 px-2 text-[11px] font-medium text-primary"
+                    className="focus-ring inline-flex min-h-7 items-center gap-1 rounded-md bg-primary/10 px-2 text-[11px] font-medium text-primary"
                     key={value}
                     onClick={() => {
                       const next = { ...filterState, [filter.key]: values.filter((item) => item !== value) };
@@ -204,7 +204,7 @@ export function FilterBar({
           })}
 
         {sortOptions?.length ? (
-          <label className="flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground">
+          <label className="flex items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground">
             <span>정렬</span>
             <select
               className="bg-transparent text-[11px] text-foreground outline-none"
@@ -224,7 +224,7 @@ export function FilterBar({
         ) : null}
 
         {savedViews?.length ? (
-          <label className="flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground">
+          <label className="flex items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground">
             <span>뷰</span>
             <select
               className="bg-transparent text-[11px] text-foreground outline-none"

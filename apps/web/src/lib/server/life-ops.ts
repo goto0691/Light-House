@@ -17,6 +17,16 @@ export type LifeOpsSnapshot = {
   healthMetrics: HealthMetric[];
 };
 
+export type LifeOpsMutationDelta = {
+  careerEntry?: CareerLog;
+  dailyLog?: DailyLogMock;
+  deletedCareerId?: string;
+  deletedWorkoutId?: string;
+  habit?: HabitDefinition;
+  healthMetrics?: HealthMetric[];
+  workout?: WorkoutLog;
+};
+
 type UserRow = { id: string };
 type DailyLogRow = {
   id: string;
@@ -76,7 +86,8 @@ type TimelineRow = {
   label: string;
   type: string;
 };
-type SourceDocumentRow = { id: string; sourceDatabase: string | null; sourceId: string; documentRole: string | null; status: string; preview: string | null };
+type SourceDocumentRow = { id: string; sourceDatabase: string | null; sourceId: string; documentRole: string | null; status: string; url: string | null; preview: string | null };
+type SourceDocumentEntityRow = SourceDocumentRow & { canonicalEntityId: string };
 type SourceDocumentPropertyRow = { sourceDocumentId: string; name: string; value: string | null; type: string | null };
 type DailyPersonRow = {
   date: string;
@@ -96,6 +107,30 @@ type DailyArchiveLogRow = {
   journal: string | null;
   meditation: string | null;
   meditationVerse: string | null;
+  sourceDocumentId: string | null;
+};
+export type DailyEntryArchiveFilters = {
+  hasEmotion?: boolean;
+  hasPeople?: boolean;
+  kinds?: DailyEntry["kind"][];
+  limit?: number;
+  offset?: number;
+  q?: string;
+};
+export type DailyEntryArchiveItem = DailyEntry & {
+  backgroundPreview?: string | null;
+  bodyPreview?: string;
+  hasBackground?: boolean;
+  hasBody?: boolean;
+  hasSourceDocument?: boolean;
+  isSummary?: boolean;
+};
+export type DailyEntryArchivePage = {
+  entries: DailyEntryArchiveItem[];
+  limit: number;
+  nextOffset: number | null;
+  offset: number;
+  total: number;
 };
 type WorkoutRow = {
   id: string;
@@ -117,6 +152,8 @@ type CareerRow = {
   description: string | null;
 };
 
+const DAILY_ENTRY_KIND_SET = new Set<DailyEntry["kind"]>(["journal", "meditation", "sermon_note", "workout", "note"]);
+
 function parseJsonArray(value: string | null) {
   if (!value) return [] as string[];
   try {
@@ -135,6 +172,108 @@ function dailyEntryFallbackTitle(kind: DailyEntry["kind"]) {
     note: "기록",
   };
   return titles[kind];
+}
+
+function clampPageLimit(value: number | undefined, fallback = 40) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(Math.trunc(value ?? fallback), 1), 80);
+}
+
+function compactText(value: string | null | undefined, maxLength: number) {
+  if (!value) return "";
+  const compacted = value.replace(/\s+/g, " ").trim();
+  if (compacted.length <= maxLength) return compacted;
+  return `${compacted.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function dailyEntryArchiveSearchText(entry: DailyEntry) {
+  return [
+    entry.title,
+    entry.body,
+    entry.emotion ?? "",
+    entry.eventSummary ?? "",
+    entry.verse ?? "",
+    entry.background ?? "",
+    entry.tagsSnapshot ?? "",
+    ...(entry.people?.map((person) => `${person.name} ${person.context ?? ""}`) ?? []),
+  ].join(" ").toLowerCase();
+}
+
+function summarizeDailyEntry(entry: DailyEntry, hasSourceDocument?: boolean): DailyEntryArchiveItem {
+  return {
+    id: entry.id,
+    kind: entry.kind,
+    title: entry.title,
+    date: entry.date,
+    body: "",
+    emotion: entry.emotion,
+    eventSummary: entry.eventSummary,
+    verse: entry.verse,
+    background: null,
+    tagsSnapshot: entry.tagsSnapshot,
+    people: entry.people,
+    sourceDocument: null,
+    backgroundPreview: compactText(entry.background, 180) || null,
+    bodyPreview: compactText(entry.body, 220),
+    hasBackground: Boolean(entry.background?.trim()),
+    hasBody: Boolean(entry.body?.trim()),
+    hasSourceDocument: Boolean(hasSourceDocument ?? entry.sourceDocument),
+    isSummary: true,
+  };
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function habitDefinitionFromRow(row: HabitDefinitionRow): HabitDefinition {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? "",
+    icon: row.icon ?? "•",
+    schedule: row.schedule ?? "daily",
+    isActive: Boolean(row.isActive),
+  };
+}
+
+function workoutFromRow(row: WorkoutRow): WorkoutLog {
+  return {
+    id: row.id,
+    date: row.date,
+    categories: row.title ?? row.categories,
+    duration: Number(row.durationMinutes ?? 0),
+    intensity: Number(row.intensity ?? 0),
+    notes: row.notes ?? "",
+  };
+}
+
+function careerFromRow(row: CareerRow): CareerLog {
+  return {
+    id: row.id,
+    organization: row.organization,
+    role: row.role,
+    category: row.category,
+    startDate: row.startDate,
+    endDate: row.endDate ?? undefined,
+    period: row.endDate ? `${row.startDate.slice(0, 4)} - ${row.endDate.slice(0, 4)}` : `${row.startDate.slice(0, 4)} - 현재`,
+    description: row.description ?? "",
+  };
+}
+
+function healthMetricFromRow(row: HealthMetricRow): HealthMetric {
+  return {
+    id: row.id,
+    date: row.date,
+    sleepHours: Number(row.sleepHours ?? 0),
+    deepWorkMinutes: Number(row.deepWorkMinutes ?? 0),
+    weight: row.weight ?? undefined,
+    stepsCount: Number(row.stepsCount ?? 0),
+  };
 }
 
 async function resolveUser() {
@@ -239,59 +378,248 @@ async function getHabitStateRows(userId: string, date: string) {
   );
 }
 
-async function getSourceDocumentForEntity(userId: string, entityType: string, entityId: string): Promise<SourceDocumentInfo | null> {
-  const sourceDocument = await queryD1<SourceDocumentRow>(
-    `select id, source_database as sourceDatabase, source_id as sourceId, document_role as documentRole, status, raw_content_preview as preview
-     from source_documents
-     where user_id = ? and canonical_entity_type = ? and canonical_entity_id = ? and deleted_at is null
-     limit 1`,
-    [userId, entityType, entityId],
-  );
-  const row = sourceDocument.rows[0];
-  if (!row) return null;
-  const properties = await queryD1<SourceDocumentPropertyRow>(
-    `select source_document_id as sourceDocumentId, property_name as name, value_text as value, property_type as type
-     from source_document_properties
-     where source_document_id = ?
-     order by property_key`,
-    [row.id],
-  );
-  return {
-    id: row.id,
-    sourceDatabase: row.sourceDatabase,
-    sourceId: row.sourceId,
-    documentRole: row.documentRole,
-    status: row.status,
-    preview: row.preview,
-    properties: properties.rows.filter((property) => property.value).map((property) => ({ name: property.name, value: property.value!, type: property.type })),
-  };
+async function getSourceDocumentsForEntities(userId: string, entityType: string, entityIds: string[]) {
+  const uniqueEntityIds = [...new Set(entityIds.filter(Boolean))];
+  const documentsByEntityId = new Map<string, SourceDocumentInfo>();
+  if (!uniqueEntityIds.length) return documentsByEntityId;
+
+  const documentRows: SourceDocumentEntityRow[] = [];
+  for (const entityIdChunk of chunkArray(uniqueEntityIds, 80)) {
+    const placeholders = entityIdChunk.map(() => "?").join(", ");
+    const result = await queryD1<SourceDocumentEntityRow>(
+      `select
+         id,
+         canonical_entity_id as canonicalEntityId,
+         source_database as sourceDatabase,
+         source_id as sourceId,
+         document_role as documentRole,
+         status,
+         url,
+         raw_content_preview as preview
+       from source_documents
+       where user_id = ?
+         and canonical_entity_type = ?
+         and canonical_entity_id in (${placeholders})
+         and deleted_at is null
+       order by canonical_entity_id asc, updated_at desc, created_at desc`,
+      [userId, entityType, ...entityIdChunk],
+    );
+    documentRows.push(...result.rows);
+  }
+
+  const propertiesByDocumentId = new Map<string, SourceDocumentInfo["properties"]>();
+  const documentIds = documentRows.map((row) => row.id);
+  for (const documentIdChunk of chunkArray(documentIds, 80)) {
+    const placeholders = documentIdChunk.map(() => "?").join(", ");
+    const result = await queryD1<SourceDocumentPropertyRow>(
+      `select source_document_id as sourceDocumentId, property_name as name, value_text as value, property_type as type
+       from source_document_properties
+       where source_document_id in (${placeholders})
+       order by source_document_id, property_key`,
+      documentIdChunk,
+    );
+
+    for (const property of result.rows) {
+      if (!property.value) continue;
+      const properties = propertiesByDocumentId.get(property.sourceDocumentId) ?? [];
+      properties.push({ name: property.name, value: property.value, type: property.type });
+      propertiesByDocumentId.set(property.sourceDocumentId, properties);
+    }
+  }
+
+  for (const row of documentRows) {
+    if (documentsByEntityId.has(row.canonicalEntityId)) continue;
+    documentsByEntityId.set(row.canonicalEntityId, {
+      id: row.id,
+      sourceDatabase: row.sourceDatabase,
+      sourceId: row.sourceId,
+      documentRole: row.documentRole,
+      status: row.status,
+      url: row.url,
+      preview: row.preview,
+      properties: propertiesByDocumentId.get(row.id) ?? [],
+    });
+  }
+
+  return documentsByEntityId;
 }
 
 async function getPeopleForDailyEntries(userId: string, dailyEntryIds: string[]) {
   if (!dailyEntryIds.length) return new Map<string, DailyEntry["people"]>();
-  const placeholders = dailyEntryIds.map(() => "?").join(", ");
-  const result = await queryD1<DailyEntryPersonRelationRow>(
-    `select
-       depr.daily_entry_id as dailyEntryId,
-       p.id as personId,
-       p.name,
-       depr.context
-     from daily_entry_people_relations depr
-     inner join people p on p.id = depr.person_id
-     where depr.daily_entry_id in (${placeholders})
-       and p.user_id = ?
-       and p.deleted_at is null
-     order by p.name asc`,
-    [...dailyEntryIds, userId],
-  );
 
   const byEntry = new Map<string, DailyEntry["people"]>();
-  for (const row of result.rows) {
-    const people = byEntry.get(row.dailyEntryId) ?? [];
-    people.push({ id: row.personId, name: row.name, context: row.context });
-    byEntry.set(row.dailyEntryId, people);
+  for (const entryIdChunk of chunkArray(dailyEntryIds, 80)) {
+    const placeholders = entryIdChunk.map(() => "?").join(", ");
+    const result = await queryD1<DailyEntryPersonRelationRow>(
+      `select
+         depr.daily_entry_id as dailyEntryId,
+         p.id as personId,
+         p.name,
+         depr.context
+       from daily_entry_people_relations depr
+       inner join people p on p.id = depr.person_id
+       where depr.daily_entry_id in (${placeholders})
+         and p.user_id = ?
+         and p.deleted_at is null
+       order by p.name asc`,
+      [...entryIdChunk, userId],
+    );
+
+    for (const row of result.rows) {
+      const people = byEntry.get(row.dailyEntryId) ?? [];
+      people.push({ id: row.personId, name: row.name, context: row.context });
+      byEntry.set(row.dailyEntryId, people);
+    }
   }
   return byEntry;
+}
+
+async function getHealthMetricsReadModel(userId: string) {
+  const result = await queryD1<HealthMetricRow>(
+    `select id, date, sleep_hours as sleepHours, deep_work_minutes as deepWorkMinutes, weight, steps_count as stepsCount
+     from health_metrics where user_id = ? order by date desc limit 30`,
+    [userId],
+  );
+  return result.rows.map(healthMetricFromRow);
+}
+
+async function getHabitDefinitionsReadModel(userId: string) {
+  const result = await queryD1<HabitDefinitionRow>(
+    `select id, title, description, icon, schedule, is_active as isActive, display_order as displayOrder
+     from habits where user_id = ? order by display_order asc, created_at asc`,
+    [userId],
+  );
+  return result.rows.map(habitDefinitionFromRow);
+}
+
+async function getWorkoutListReadModel(userId: string) {
+  const result = await queryD1<WorkoutRow>(
+    `select id, title, date, categories, duration_minutes as durationMinutes, intensity, notes
+     from workouts
+     where user_id = ? and deleted_at is null
+     order by date desc`,
+    [userId],
+  );
+  return result.rows.map(workoutFromRow);
+}
+
+async function getCareerListReadModel(userId: string) {
+  const result = await queryD1<CareerRow>(
+    `select id, source_document_id as sourceDocumentId, organization, role, category, start_date as startDate, end_date as endDate, description
+     from career_history
+     where user_id = ? and deleted_at is null
+     order by start_date desc`,
+    [userId],
+  );
+  return result.rows.map(careerFromRow);
+}
+
+async function getDailyLogReadModel(userId: string, date: string): Promise<DailyLogMock> {
+  const [dailyResult, habitsStateResult, metricsResult, dailyEntryResult, taskTimeline, interactionTimeline, zettelTimeline, dailyPeopleTimeline] = await Promise.all([
+    queryD1<DailyLogRow>(
+      `select id, date, mood, energy_level as energyLevel, emotions, gratitude, journal, meditation, meditation_verse as meditationVerse
+       from daily_logs where user_id = ? and date = ? limit 1`,
+      [userId, date],
+    ),
+    getHabitStateRows(userId, date),
+    queryD1<HealthMetricRow>(
+      `select id, date, sleep_hours as sleepHours, deep_work_minutes as deepWorkMinutes, weight, steps_count as stepsCount
+       from health_metrics where user_id = ? and date <= ? order by date desc limit 14`,
+      [userId, date],
+    ),
+    queryD1<DailyEntryRow>(
+      `select id, kind, title, date, body, emotion, event_summary as eventSummary, verse, background,
+              tags_snapshot as tagsSnapshot, source_document_id as sourceDocumentId
+       from daily_log_entries
+       where user_id = ? and date = ? and deleted_at is null
+       order by case kind when 'journal' then 0 when 'meditation' then 1 when 'sermon_note' then 2 when 'workout' then 3 else 4 end, created_at asc`,
+      [userId, date],
+    ),
+    queryD1<TimelineRow>(
+      `select date(coalesce(updated_at, created_at)) as date, time(coalesce(updated_at, created_at)) as time, title as label, 'task' as type
+       from tasks where user_id = ? and date(coalesce(updated_at, created_at)) = ? and deleted_at is null order by updated_at desc limit 4`,
+      [userId, date],
+    ),
+    queryD1<TimelineRow>(
+      `select occurred_at as date, '14:00' as time, summary as label, 'interaction' as type
+       from interactions where user_id = ? and occurred_at = ? and deleted_at is null order by created_at desc limit 4`,
+      [userId, date],
+    ),
+    queryD1<TimelineRow>(
+      `select date(coalesce(updated_at, created_at)) as date, time(coalesce(updated_at, created_at)) as time, title as label, 'zettel' as type
+       from zettels where user_id = ? and date(coalesce(updated_at, created_at)) = ? and deleted_at is null order by updated_at desc limit 4`,
+      [userId, date],
+    ),
+    queryD1<DailyPersonRow>(
+      `select dl.date as date, '12:00' as time, p.name as label, 'person' as type
+       from daily_logs dl
+       inner join daily_log_people_relations dlpr on dlpr.daily_log_id = dl.id
+       inner join people p on p.id = dlpr.person_id
+       where dl.user_id = ?
+         and dl.date = ?
+         and dl.deleted_at is null
+         and p.deleted_at is null
+       order by p.name asc
+       limit 6`,
+      [userId, date],
+    ),
+  ]);
+
+  const row = dailyResult.rows[0];
+  const metrics = metricsResult.rows;
+  const entryIds = dailyEntryResult.rows.map((entry) => entry.id);
+  const [dailyLogSourceDocuments, entrySourceDocuments, peopleByEntry] = await Promise.all([
+    row ? getSourceDocumentsForEntities(userId, "daily_log", [row.id]) : Promise.resolve(new Map<string, SourceDocumentInfo>()),
+    getSourceDocumentsForEntities(userId, "daily_entry", entryIds),
+    getPeopleForDailyEntries(userId, entryIds),
+  ]);
+
+  return {
+    date,
+    mood: row?.mood ?? 3,
+    energy: row?.energyLevel ?? 3,
+    emotions: parseJsonArray(row?.emotions ?? null),
+    gratitude: row?.gratitude ?? "",
+    journal: row?.journal ?? "",
+    meditation: row?.meditation ?? "",
+    meditationVerse: row?.meditationVerse ?? "",
+    habits: habitsStateResult.rows.map((habit) => ({
+      id: habit.id,
+      title: habit.title,
+      icon: habit.icon ?? "•",
+      streak: Number(habit.streak ?? 0),
+      completedToday: Boolean(habit.completedToday),
+    })),
+    entries: dailyEntryResult.rows.map((entry) => ({
+      id: entry.id,
+      kind: entry.kind,
+      title: entry.title ?? dailyEntryFallbackTitle(entry.kind),
+      date: entry.date,
+      body: entry.body ?? "",
+      emotion: entry.emotion,
+      eventSummary: entry.eventSummary,
+      verse: entry.verse,
+      background: entry.background,
+      tagsSnapshot: entry.tagsSnapshot,
+      people: peopleByEntry.get(entry.id) ?? [],
+      sourceDocument: entrySourceDocuments.get(entry.id) ?? null,
+    })),
+    sleepHours: metrics.map((item) => Number(item.sleepHours ?? 0)).reverse(),
+    deepWorkMinutes: Number(metrics[0]?.deepWorkMinutes ?? 0),
+    timeline: [...taskTimeline.rows, ...interactionTimeline.rows, ...zettelTimeline.rows, ...dailyPeopleTimeline.rows]
+      .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
+      .slice(0, 6)
+      .map((item) => ({ time: item.time.slice(0, 5), label: item.label, type: item.type })),
+    sourceDocument: row ? dailyLogSourceDocuments.get(row.id) ?? null : null,
+  };
+}
+
+async function getLifeOpsDailyDelta(userId: string, date: string): Promise<Pick<LifeOpsMutationDelta, "dailyLog" | "healthMetrics">> {
+  const [dailyLog, healthMetrics] = await Promise.all([
+    getDailyLogReadModel(userId, date),
+    getHealthMetricsReadModel(userId),
+  ]);
+  return { dailyLog, healthMetrics };
 }
 
 export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?: string[]): Promise<LifeOpsSnapshot> {
@@ -299,126 +627,14 @@ export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?
   const targetDates = dates?.length ? dates : [getTodayString(), "2026-04-22", "2026-04-21"];
   const logs: Record<string, DailyLogMock> = {};
 
-  const [habitsResult, healthMetricRows, workoutsResult, careerResult] = await Promise.all([
-    queryD1<HabitDefinitionRow>(
-      `select id, title, description, icon, schedule, is_active as isActive, display_order as displayOrder
-       from habits where user_id = ? order by display_order asc, created_at asc`,
-      [userId],
-    ),
-    queryD1<HealthMetricRow>(
-      `select id, date, sleep_hours as sleepHours, deep_work_minutes as deepWorkMinutes, weight, steps_count as stepsCount
-       from health_metrics where user_id = ? order by date desc limit 30`,
-      [userId],
-    ),
-    queryD1<WorkoutRow>(
-      `select id, title, date, categories, duration_minutes as durationMinutes, intensity, notes
-       from workouts where user_id = ? and deleted_at is null order by date desc`,
-      [userId],
-    ),
-    queryD1<CareerRow>(
-      `select id, source_document_id as sourceDocumentId, organization, role, category, start_date as startDate, end_date as endDate, description
-       from career_history where user_id = ? and deleted_at is null order by start_date desc`,
-      [userId],
-    ),
+  const [habits, healthMetrics, workouts, career] = await Promise.all([
+    getHabitDefinitionsReadModel(userId),
+    getHealthMetricsReadModel(userId),
+    getWorkoutListReadModel(userId),
+    getCareerListReadModel(userId),
   ]);
 
-  const dailyEntries = await Promise.all(targetDates.map(async (date) => {
-    const [dailyResult, habitsStateResult, metricsResult, dailyEntryResult, taskTimeline, interactionTimeline, zettelTimeline, dailyPeopleTimeline] = await Promise.all([
-        queryD1<DailyLogRow>(
-          `select id, date, mood, energy_level as energyLevel, emotions, gratitude, journal, meditation, meditation_verse as meditationVerse
-           from daily_logs where user_id = ? and date = ? limit 1`,
-          [userId, date],
-        ),
-        getHabitStateRows(userId, date),
-        queryD1<HealthMetricRow>(
-          `select id, date, sleep_hours as sleepHours, deep_work_minutes as deepWorkMinutes, weight, steps_count as stepsCount
-           from health_metrics where user_id = ? and date <= ? order by date desc limit 14`,
-          [userId, date],
-        ),
-        queryD1<DailyEntryRow>(
-          `select id, kind, title, date, body, emotion, event_summary as eventSummary, verse, background,
-                  tags_snapshot as tagsSnapshot, source_document_id as sourceDocumentId
-           from daily_log_entries
-           where user_id = ? and date = ? and deleted_at is null
-           order by case kind when 'journal' then 0 when 'meditation' then 1 when 'sermon_note' then 2 when 'workout' then 3 else 4 end, created_at asc`,
-          [userId, date],
-        ),
-        queryD1<TimelineRow>(
-          `select date(coalesce(updated_at, created_at)) as date, time(coalesce(updated_at, created_at)) as time, title as label, 'task' as type
-           from tasks where user_id = ? and date(coalesce(updated_at, created_at)) = ? and deleted_at is null order by updated_at desc limit 4`,
-          [userId, date],
-        ),
-        queryD1<TimelineRow>(
-          `select occurred_at as date, '14:00' as time, summary as label, 'interaction' as type
-           from interactions where user_id = ? and occurred_at = ? and deleted_at is null order by created_at desc limit 4`,
-          [userId, date],
-        ),
-        queryD1<TimelineRow>(
-          `select date(coalesce(updated_at, created_at)) as date, time(coalesce(updated_at, created_at)) as time, title as label, 'zettel' as type
-           from zettels where user_id = ? and date(coalesce(updated_at, created_at)) = ? and deleted_at is null order by updated_at desc limit 4`,
-          [userId, date],
-        ),
-        queryD1<DailyPersonRow>(
-          `select dl.date as date, '12:00' as time, p.name as label, 'person' as type
-           from daily_logs dl
-           inner join daily_log_people_relations dlpr on dlpr.daily_log_id = dl.id
-           inner join people p on p.id = dlpr.person_id
-           where dl.user_id = ?
-             and dl.date = ?
-             and dl.deleted_at is null
-             and p.deleted_at is null
-           order by p.name asc
-           limit 6`,
-          [userId, date],
-        ),
-      ]);
-
-      const row = dailyResult.rows[0];
-      const sourceDocument = row ? await getSourceDocumentForEntity(userId, "daily_log", row.id) : null;
-      const metrics = metricsResult.rows;
-      const entrySourceDocuments = await Promise.all(
-        dailyEntryResult.rows.map((entry) => getSourceDocumentForEntity(userId, "daily_entry", entry.id)),
-      );
-      const peopleByEntry = await getPeopleForDailyEntries(userId, dailyEntryResult.rows.map((entry) => entry.id));
-      return [date, {
-      date,
-      mood: row?.mood ?? 3,
-      energy: row?.energyLevel ?? 3,
-      emotions: parseJsonArray(row?.emotions ?? null),
-      gratitude: row?.gratitude ?? "",
-      journal: row?.journal ?? "",
-      meditation: row?.meditation ?? "",
-      meditationVerse: row?.meditationVerse ?? "",
-      habits: habitsStateResult.rows.map((habit) => ({
-        id: habit.id,
-        title: habit.title,
-        icon: habit.icon ?? "•",
-        streak: Number(habit.streak ?? 0),
-        completedToday: Boolean(habit.completedToday),
-      })),
-      entries: dailyEntryResult.rows.map((entry, index) => ({
-        id: entry.id,
-        kind: entry.kind,
-        title: entry.title ?? dailyEntryFallbackTitle(entry.kind),
-        date: entry.date,
-        body: entry.body ?? "",
-        emotion: entry.emotion,
-        eventSummary: entry.eventSummary,
-        verse: entry.verse,
-        background: entry.background,
-        tagsSnapshot: entry.tagsSnapshot,
-        people: peopleByEntry.get(entry.id) ?? [],
-        sourceDocument: entrySourceDocuments[index],
-      })),
-      sleepHours: metrics.map((item) => Number(item.sleepHours ?? 0)).reverse(),
-      deepWorkMinutes: Number(metrics[0]?.deepWorkMinutes ?? 0),
-      timeline: [...taskTimeline.rows, ...interactionTimeline.rows, ...zettelTimeline.rows, ...dailyPeopleTimeline.rows]
-        .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
-        .slice(0, 6)
-        .map((item) => ({ time: item.time.slice(0, 5), label: item.label, type: item.type })),
-      sourceDocument,
-    } satisfies DailyLogMock] as const;
-  }));
+  const dailyEntries = await Promise.all(targetDates.map(async (date) => [date, await getDailyLogReadModel(userId, date)] as const));
 
   for (const [date, log] of dailyEntries) {
     logs[date] = log;
@@ -426,46 +642,94 @@ export const getLifeOpsSnapshot = cache(async function getLifeOpsSnapshot(dates?
 
   return {
     logs,
-    habits: habitsResult.rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      description: row.description ?? "",
-      icon: row.icon ?? "•",
-      schedule: row.schedule ?? "daily",
-      isActive: Boolean(row.isActive),
-    })),
-    workouts: workoutsResult.rows.map((row) => ({
-      id: row.id,
-      date: row.date,
-      categories: row.title ?? row.categories,
-      duration: Number(row.durationMinutes ?? 0),
-      intensity: Number(row.intensity ?? 0),
-      notes: row.notes ?? "",
-    })),
-    career: careerResult.rows.map((row) => ({
-      id: row.id,
-      organization: row.organization,
-      role: row.role,
-      category: row.category,
-      startDate: row.startDate,
-      endDate: row.endDate ?? undefined,
-      period: row.endDate ? `${row.startDate.slice(0, 4)} - ${row.endDate.slice(0, 4)}` : `${row.startDate.slice(0, 4)} - 현재`,
-      description: row.description ?? "",
-    })),
-    healthMetrics: healthMetricRows.rows.map((row) => ({
-      id: row.id,
-      date: row.date,
-      sleepHours: Number(row.sleepHours ?? 0),
-      deepWorkMinutes: Number(row.deepWorkMinutes ?? 0),
-      weight: row.weight ?? undefined,
-      stepsCount: Number(row.stepsCount ?? 0),
-    })),
+    habits,
+    workouts,
+    career,
+    healthMetrics,
   };
 });
 
+function emptyLifeOpsSnapshot(): LifeOpsSnapshot {
+  return {
+    career: [],
+    habits: [],
+    healthMetrics: [],
+    logs: {},
+    workouts: [],
+  };
+}
+
+function isDatePathSegment(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+async function getDailyHydrationSnapshot(userId: string, date: string): Promise<LifeOpsSnapshot> {
+  const [dailyLog, healthMetrics] = await Promise.all([
+    getDailyLogReadModel(userId, date),
+    getHealthMetricsReadModel(userId),
+  ]);
+
+  return {
+    ...emptyLifeOpsSnapshot(),
+    healthMetrics,
+    logs: {
+      [date]: dailyLog,
+    },
+  };
+}
+
+export async function getLifeOpsHydrationSnapshot(pathAndSearch = "/life-ops"): Promise<LifeOpsSnapshot> {
+  const { id: userId } = await resolveUser();
+  const url = new URL(pathAndSearch, "http://local");
+  const segments = url.pathname.split("/").filter(Boolean);
+  const section = segments[1] ?? "";
+
+  if (!section) return getDailyHydrationSnapshot(userId, getTodayString());
+  if (isDatePathSegment(section)) return getDailyHydrationSnapshot(userId, section);
+
+  if (section === "habits") {
+    const habits = await getHabitDefinitionsReadModel(userId);
+    return { ...emptyLifeOpsSnapshot(), habits };
+  }
+
+  if (section === "workouts") {
+    const workoutId = segments[2];
+    if (!workoutId) {
+      const workouts = await getWorkoutListReadModel(userId);
+      return { ...emptyLifeOpsSnapshot(), workouts };
+    }
+
+    try {
+      const workout = (await getWorkoutDelta(userId, workoutId)).workout;
+      return { ...emptyLifeOpsSnapshot(), workouts: workout ? [workout] : [] };
+    } catch (error) {
+      if (error instanceof Error && error.message === "운동 로그를 찾지 못했습니다.") return emptyLifeOpsSnapshot();
+      throw error;
+    }
+  }
+
+  if (section === "career") {
+    const careerId = segments[2];
+    if (!careerId) {
+      const career = await getCareerListReadModel(userId);
+      return { ...emptyLifeOpsSnapshot(), career };
+    }
+
+    try {
+      const careerEntry = (await getCareerDelta(userId, careerId)).careerEntry;
+      return { ...emptyLifeOpsSnapshot(), career: careerEntry ? [careerEntry] : [] };
+    } catch (error) {
+      if (error instanceof Error && error.message === "커리어 이력을 찾지 못했습니다.") return emptyLifeOpsSnapshot();
+      throw error;
+    }
+  }
+
+  return emptyLifeOpsSnapshot();
+}
+
 export async function getLifeOpsLog(date: string) {
-  const snapshot = await getLifeOpsSnapshot([date]);
-  return snapshot.logs[date] ?? null;
+  const { id: userId } = await resolveUser();
+  return getDailyLogReadModel(userId, date);
 }
 
 export async function getDailyEntryArchive(kind?: DailyEntry["kind"]): Promise<DailyEntry[]> {
@@ -480,12 +744,13 @@ export async function getDailyEntryArchive(kind?: DailyEntry["kind"]): Promise<D
      order by date desc, created_at desc`,
     params,
   );
-  const sourceDocuments = await Promise.all(
-    entryResult.rows.map((entry) => getSourceDocumentForEntity(userId, "daily_entry", entry.id)),
-  );
-  const peopleByEntry = await getPeopleForDailyEntries(userId, entryResult.rows.map((entry) => entry.id));
+  const entryIds = entryResult.rows.map((entry) => entry.id);
+  const [sourceDocuments, peopleByEntry] = await Promise.all([
+    getSourceDocumentsForEntities(userId, "daily_entry", entryIds),
+    getPeopleForDailyEntries(userId, entryIds),
+  ]);
 
-  const entries: DailyEntry[] = entryResult.rows.map((entry, index) => ({
+  const entries: DailyEntry[] = entryResult.rows.map((entry) => ({
     id: entry.id,
     kind: entry.kind,
     title: entry.title ?? dailyEntryFallbackTitle(entry.kind),
@@ -497,7 +762,7 @@ export async function getDailyEntryArchive(kind?: DailyEntry["kind"]): Promise<D
     background: entry.background,
     tagsSnapshot: entry.tagsSnapshot,
     people: peopleByEntry.get(entry.id) ?? [],
-    sourceDocument: sourceDocuments[index],
+    sourceDocument: sourceDocuments.get(entry.id) ?? null,
   }));
 
   if (!kind || kind === "journal" || kind === "meditation") {
@@ -513,8 +778,8 @@ export async function getDailyEntryArchive(kind?: DailyEntry["kind"]): Promise<D
       if (kind === "meditation") return Boolean(row.meditation?.trim());
       return Boolean(row.journal?.trim() || row.meditation?.trim());
     });
-    const logSources = await Promise.all(logRows.map((row) => getSourceDocumentForEntity(userId, "daily_log", row.id)));
-    for (const [index, row] of logRows.entries()) {
+    const logSources = await getSourceDocumentsForEntities(userId, "daily_log", logRows.map((row) => row.id));
+    for (const row of logRows) {
       if ((!kind || kind === "journal") && row.journal?.trim()) {
         entries.push({
           id: `${row.id}:journal`,
@@ -522,7 +787,7 @@ export async function getDailyEntryArchive(kind?: DailyEntry["kind"]): Promise<D
           title: "Daily Journal",
           date: row.date,
           body: row.journal,
-          sourceDocument: logSources[index],
+          sourceDocument: logSources.get(row.id) ?? null,
         });
       }
       if ((!kind || kind === "meditation") && row.meditation?.trim()) {
@@ -533,13 +798,168 @@ export async function getDailyEntryArchive(kind?: DailyEntry["kind"]): Promise<D
           date: row.date,
           body: row.meditation,
           verse: row.meditationVerse,
-          sourceDocument: logSources[index],
+          sourceDocument: logSources.get(row.id) ?? null,
         });
       }
     }
   }
 
   return entries.sort((left, right) => (left.date < right.date ? 1 : left.date > right.date ? -1 : left.title.localeCompare(right.title)));
+}
+
+export async function getDailyEntryArchivePage(options: DailyEntryArchiveFilters = {}): Promise<DailyEntryArchivePage> {
+  const { id: userId } = await resolveUser();
+  const kinds = options.kinds?.filter((kind, index, array) => DAILY_ENTRY_KIND_SET.has(kind) && array.indexOf(kind) === index) ?? [];
+  const q = options.q?.trim().toLowerCase() ?? "";
+  const limit = clampPageLimit(options.limit);
+  const offset = Math.max(Math.trunc(options.offset ?? 0), 0);
+  const kindPlaceholders = kinds.length ? `and kind in (${kinds.map(() => "?").join(", ")})` : "";
+  const entryResult = await queryD1<DailyEntryRow>(
+    `select id, kind, title, date, body, emotion, event_summary as eventSummary, verse, background,
+            tags_snapshot as tagsSnapshot, source_document_id as sourceDocumentId
+     from daily_log_entries
+     where user_id = ? and deleted_at is null ${kindPlaceholders}
+     order by date desc, created_at desc`,
+    [userId, ...kinds],
+  );
+  const entryIds = entryResult.rows.map((entry) => entry.id);
+  const peopleByEntry = await getPeopleForDailyEntries(userId, entryIds);
+
+  const entries: Array<DailyEntry & { hasSourceDocument?: boolean }> = entryResult.rows.map((entry) => ({
+    id: entry.id,
+    kind: entry.kind,
+    title: entry.title ?? dailyEntryFallbackTitle(entry.kind),
+    date: entry.date,
+    body: entry.body ?? "",
+    emotion: entry.emotion,
+    eventSummary: entry.eventSummary,
+    verse: entry.verse,
+    background: entry.background,
+    tagsSnapshot: entry.tagsSnapshot,
+    people: peopleByEntry.get(entry.id) ?? [],
+    sourceDocument: null,
+    hasSourceDocument: Boolean(entry.sourceDocumentId),
+  }));
+
+  if (!kinds.length || kinds.includes("journal") || kinds.includes("meditation")) {
+    const logResult = await queryD1<DailyArchiveLogRow>(
+      `select id, date, journal, meditation, meditation_verse as meditationVerse, source_document_id as sourceDocumentId
+       from daily_logs
+       where user_id = ? and deleted_at is null
+       order by date desc`,
+      [userId],
+    );
+    for (const row of logResult.rows) {
+      if ((!kinds.length || kinds.includes("journal")) && row.journal?.trim()) {
+        entries.push({
+          id: `${row.id}:journal`,
+          kind: "journal",
+          title: "Daily Journal",
+          date: row.date,
+          body: row.journal,
+          sourceDocument: null,
+          hasSourceDocument: Boolean(row.sourceDocumentId),
+        });
+      }
+      if ((!kinds.length || kinds.includes("meditation")) && row.meditation?.trim()) {
+        entries.push({
+          id: `${row.id}:meditation`,
+          kind: "meditation",
+          title: "Daily Meditation",
+          date: row.date,
+          body: row.meditation,
+          verse: row.meditationVerse,
+          sourceDocument: null,
+          hasSourceDocument: Boolean(row.sourceDocumentId),
+        });
+      }
+    }
+  }
+
+  const filtered = entries
+    .filter((entry) => (options.hasPeople ? (entry.people?.length ?? 0) > 0 : true))
+    .filter((entry) => (options.hasEmotion ? Boolean(entry.emotion?.trim()) : true))
+    .filter((entry) => (q ? dailyEntryArchiveSearchText(entry).includes(q) : true))
+    .sort((left, right) => (left.date < right.date ? 1 : left.date > right.date ? -1 : left.title.localeCompare(right.title)));
+  const page = filtered.slice(offset, offset + limit);
+
+  return {
+    entries: page.map((entry) => summarizeDailyEntry(entry, entry.hasSourceDocument)),
+    limit,
+    nextOffset: offset + limit < filtered.length ? offset + limit : null,
+    offset,
+    total: filtered.length,
+  };
+}
+
+export async function getDailyEntryArchiveDetail(entryId: string): Promise<DailyEntry | null> {
+  const { id: userId } = await resolveUser();
+  const syntheticMatch = entryId.match(/^(.+):(journal|meditation)$/);
+  if (syntheticMatch) {
+    const [, dailyLogId, kind] = syntheticMatch;
+    const result = await queryD1<DailyArchiveLogRow>(
+      `select id, date, journal, meditation, meditation_verse as meditationVerse, source_document_id as sourceDocumentId
+       from daily_logs
+       where user_id = ? and id = ? and deleted_at is null
+       limit 1`,
+      [userId, dailyLogId],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    const sourceDocuments = await getSourceDocumentsForEntities(userId, "daily_log", [row.id]);
+    if (kind === "journal" && row.journal?.trim()) {
+      return {
+        id: entryId,
+        kind: "journal",
+        title: "Daily Journal",
+        date: row.date,
+        body: row.journal,
+        sourceDocument: sourceDocuments.get(row.id) ?? null,
+      };
+    }
+    if (kind === "meditation" && row.meditation?.trim()) {
+      return {
+        id: entryId,
+        kind: "meditation",
+        title: "Daily Meditation",
+        date: row.date,
+        body: row.meditation,
+        verse: row.meditationVerse,
+        sourceDocument: sourceDocuments.get(row.id) ?? null,
+      };
+    }
+    return null;
+  }
+
+  const result = await queryD1<DailyEntryRow>(
+    `select id, kind, title, date, body, emotion, event_summary as eventSummary, verse, background,
+            tags_snapshot as tagsSnapshot, source_document_id as sourceDocumentId
+     from daily_log_entries
+     where user_id = ? and id = ? and deleted_at is null
+     limit 1`,
+    [userId, entryId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const [sourceDocuments, peopleByEntry] = await Promise.all([
+    getSourceDocumentsForEntities(userId, "daily_entry", [row.id]),
+    getPeopleForDailyEntries(userId, [row.id]),
+  ]);
+
+  return {
+    id: row.id,
+    kind: row.kind,
+    title: row.title ?? dailyEntryFallbackTitle(row.kind),
+    date: row.date,
+    body: row.body ?? "",
+    emotion: row.emotion,
+    eventSummary: row.eventSummary,
+    verse: row.verse,
+    background: row.background,
+    tagsSnapshot: row.tagsSnapshot,
+    people: peopleByEntry.get(row.id) ?? [],
+    sourceDocument: sourceDocuments.get(row.id) ?? null,
+  };
 }
 
 export async function getLifeOpsTrendSeries(limit = 7) {
@@ -602,18 +1022,33 @@ export async function getLifeOpsHabitHeatmap(days = 371) {
 }
 
 export async function getLifeOpsWorkouts() {
-  const snapshot = await getLifeOpsSnapshot();
-  return snapshot.workouts;
+  const { id: userId } = await resolveUser();
+  return getWorkoutListReadModel(userId);
+}
+
+export async function getLifeOpsWorkout(workoutId: string) {
+  const { id: userId } = await resolveUser();
+  try {
+    return (await getWorkoutDelta(userId, workoutId)).workout ?? null;
+  } catch (error) {
+    if (error instanceof Error && error.message === "운동 로그를 찾지 못했습니다.") return null;
+    throw error;
+  }
 }
 
 export async function getLifeOpsCareer() {
-  const snapshot = await getLifeOpsSnapshot();
-  return snapshot.career;
+  const { id: userId } = await resolveUser();
+  return getCareerListReadModel(userId);
 }
 
 export async function getLifeOpsCareerEntry(careerId: string) {
-  const snapshot = await getLifeOpsSnapshot();
-  return snapshot.career.find((item) => item.id === careerId) ?? null;
+  const { id: userId } = await resolveUser();
+  try {
+    return (await getCareerDelta(userId, careerId)).careerEntry ?? null;
+  } catch (error) {
+    if (error instanceof Error && error.message === "커리어 이력을 찾지 못했습니다.") return null;
+    throw error;
+  }
 }
 
 async function ensureDailyLog(userId: string, date: string) {
@@ -644,14 +1079,14 @@ export async function updateLifeOpsMood(date: string, mood: number) {
   const { id: userId } = await resolveUser();
   await ensureDailyLog(userId, date);
   await executeD1(`update daily_logs set mood = ?, updated_at = datetime('now') where user_id = ? and date = ?`, [mood, userId, date]);
-  return getLifeOpsSnapshot([date]);
+  return getLifeOpsDailyDelta(userId, date);
 }
 
 export async function updateLifeOpsEnergy(date: string, energy: number) {
   const { id: userId } = await resolveUser();
   await ensureDailyLog(userId, date);
   await executeD1(`update daily_logs set energy_level = ?, updated_at = datetime('now') where user_id = ? and date = ?`, [energy, userId, date]);
-  return getLifeOpsSnapshot([date]);
+  return getLifeOpsDailyDelta(userId, date);
 }
 
 export async function updateLifeOpsDailyProperties(
@@ -739,7 +1174,7 @@ export async function updateLifeOpsDailyProperties(
     taggableId: dailyLogId,
     content: [journal, meditation, gratitude, meditationVerse, ...emotions].join("\n"),
   });
-  return getLifeOpsSnapshot([date]);
+  return getLifeOpsDailyDelta(userId, date);
 }
 
 export async function toggleLifeOpsHabit(date: string, habitId: string) {
@@ -754,7 +1189,7 @@ export async function toggleLifeOpsHabit(date: string, habitId: string) {
   } else {
     await executeD1(`insert into habit_logs (id, user_id, habit_id, date, value, note, created_at) values (?, ?, ?, ?, 1, null, datetime('now'))`, [`${habitId}-${date}`, userId, habitId, date]);
   }
-  return getLifeOpsSnapshot([date]);
+  return getLifeOpsDailyDelta(userId, date);
 }
 
 export async function updateLifeOpsJournalField(date: string, field: "journal" | "meditation" | "gratitude", value: string) {
@@ -778,7 +1213,7 @@ export async function updateLifeOpsJournalField(date: string, field: "journal" |
       content: [row.journal ?? "", row.meditation ?? "", row.gratitude ?? ""].join("\n"),
     });
   }
-  return getLifeOpsSnapshot([date]);
+  return getLifeOpsDailyDelta(userId, date);
 }
 
 export async function updateDailyEntry(entryId: string, input: {
@@ -837,7 +1272,46 @@ export async function updateDailyEntry(entryId: string, input: {
     taggableId: entryId,
     content: [input.title ?? "", input.body ?? "", input.emotion ?? "", input.eventSummary ?? "", input.verse ?? "", input.background ?? "", input.tagsSnapshot ?? ""].join("\n"),
   });
-  return getLifeOpsSnapshot([row.date]);
+  return getLifeOpsDailyDelta(userId, row.date);
+}
+
+async function getHabitDefinitionDelta(userId: string, habitId: string): Promise<Pick<LifeOpsMutationDelta, "habit">> {
+  const result = await queryD1<HabitDefinitionRow>(
+    `select id, title, description, icon, schedule, is_active as isActive, display_order as displayOrder
+     from habits
+     where id = ? and user_id = ?
+     limit 1`,
+    [habitId, userId],
+  );
+  const row = result.rows[0];
+  if (!row) throw new Error("습관을 찾지 못했습니다.");
+  return { habit: habitDefinitionFromRow(row) };
+}
+
+async function getWorkoutDelta(userId: string, workoutId: string): Promise<Pick<LifeOpsMutationDelta, "workout">> {
+  const result = await queryD1<WorkoutRow>(
+    `select id, title, date, categories, duration_minutes as durationMinutes, intensity, notes
+     from workouts
+     where id = ? and user_id = ? and deleted_at is null
+     limit 1`,
+    [workoutId, userId],
+  );
+  const row = result.rows[0];
+  if (!row) throw new Error("운동 로그를 찾지 못했습니다.");
+  return { workout: workoutFromRow(row) };
+}
+
+async function getCareerDelta(userId: string, careerId: string): Promise<Pick<LifeOpsMutationDelta, "careerEntry">> {
+  const result = await queryD1<CareerRow>(
+    `select id, source_document_id as sourceDocumentId, organization, role, category, start_date as startDate, end_date as endDate, description
+     from career_history
+     where id = ? and user_id = ? and deleted_at is null
+     limit 1`,
+    [careerId, userId],
+  );
+  const row = result.rows[0];
+  if (!row) throw new Error("커리어 이력을 찾지 못했습니다.");
+  return { careerEntry: careerFromRow(row) };
 }
 
 export async function createLifeOpsHabit(input: { title: string; description?: string; icon?: string; schedule?: string }) {
@@ -845,13 +1319,14 @@ export async function createLifeOpsHabit(input: { title: string; description?: s
   const title = input.title.trim();
   if (!title) throw new Error("습관 이름은 비워둘 수 없습니다.");
   const nextOrder = await queryD1<{ nextOrder: number | null }>(`select coalesce(max(display_order), -1) + 1 as nextOrder from habits where user_id = ?`, [userId]);
+  const habitId = ulid();
   await executeD1(
     `insert into habits
       (id, user_id, title, description, type, target_value, unit, icon, color, schedule, is_active, display_order, created_at, updated_at)
      values (?, ?, ?, ?, 'boolean', 1, 'session', ?, 'gold', ?, 1, ?, datetime('now'), datetime('now'))`,
-    [ulid(), userId, title, input.description?.trim() || null, input.icon?.trim() || "•", input.schedule?.trim() || "daily", Number(nextOrder.rows[0]?.nextOrder ?? 0)],
+    [habitId, userId, title, input.description?.trim() || null, input.icon?.trim() || "•", input.schedule?.trim() || "daily", Number(nextOrder.rows[0]?.nextOrder ?? 0)],
   );
-  return getLifeOpsSnapshot();
+  return getHabitDefinitionDelta(userId, habitId);
 }
 
 export async function updateLifeOpsHabitProperties(
@@ -888,7 +1363,7 @@ export async function updateLifeOpsHabitProperties(
     [title, description, icon, schedule, isActive, habitId, userId],
   );
 
-  return getLifeOpsSnapshot();
+  return getHabitDefinitionDelta(userId, habitId);
 }
 
 export async function toggleHabitActive(habitId: string) {
@@ -897,19 +1372,20 @@ export async function toggleHabitActive(habitId: string) {
   if (!current.rows[0]) throw new Error("습관을 찾지 못했습니다.");
   const next = current.rows[0].isActive ? 0 : 1;
   await executeD1(`update habits set is_active = ?, updated_at = datetime('now') where id = ? and user_id = ?`, [next, habitId, userId]);
-  return getLifeOpsSnapshot();
+  return getHabitDefinitionDelta(userId, habitId);
 }
 
 export async function createWorkout(input: { date: string; categories: string; duration: number; intensity: number; notes?: string }) {
   const { id: userId } = await resolveUser();
   const categories = input.categories.trim();
   if (!categories) throw new Error("운동 카테고리는 비워둘 수 없습니다.");
+  const workoutId = ulid();
   await executeD1(
     `insert into workouts (id, user_id, date, categories, duration_minutes, intensity, notes, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    [ulid(), userId, input.date, categories, input.duration, input.intensity, input.notes?.trim() || null],
+    [workoutId, userId, input.date, categories, input.duration, input.intensity, input.notes?.trim() || null],
   );
-  return getLifeOpsSnapshot();
+  return getWorkoutDelta(userId, workoutId);
 }
 
 export async function updateWorkoutProperties(
@@ -946,13 +1422,13 @@ export async function updateWorkoutProperties(
     [categories, input.date ?? row.date, categories, duration, intensity, notes, workoutId, userId],
   );
 
-  return getLifeOpsSnapshot();
+  return getWorkoutDelta(userId, workoutId);
 }
 
 export async function deleteWorkout(workoutId: string) {
   const { id: userId } = await resolveUser();
   await executeD1(`update workouts set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [workoutId, userId]);
-  return getLifeOpsSnapshot();
+  return { deletedWorkoutId: workoutId } satisfies LifeOpsMutationDelta;
 }
 
 export async function upsertHealthMetric(input: { date: string; sleepHours: number; deepWorkMinutes: number; weight?: number; stepsCount?: number }) {
@@ -972,7 +1448,7 @@ export async function upsertHealthMetric(input: { date: string; sleepHours: numb
       [ulid(), userId, input.date, input.sleepHours, input.deepWorkMinutes, input.weight ?? null, input.stepsCount ?? null],
     );
   }
-  return getLifeOpsSnapshot([input.date]);
+  return getLifeOpsDailyDelta(userId, input.date);
 }
 
 export async function createCareerEntry(input: { organization: string; role: string; category: string; startDate: string; endDate?: string | null; description?: string }) {
@@ -980,13 +1456,14 @@ export async function createCareerEntry(input: { organization: string; role: str
   const organization = input.organization.trim();
   const role = input.role.trim();
   if (!organization || !role) throw new Error("조직명과 역할은 비워둘 수 없습니다.");
+  const careerId = ulid();
   await executeD1(
     `insert into career_history
       (id, user_id, organization, role, category, start_date, end_date, location, description, highlights, cover_image_url, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, null, ?, null, null, datetime('now'), datetime('now'))`,
-    [ulid(), userId, organization, role, input.category.trim() || "work", input.startDate, input.endDate ?? null, input.description?.trim() || null],
+    [careerId, userId, organization, role, input.category.trim() || "work", input.startDate, input.endDate ?? null, input.description?.trim() || null],
   );
-  return getLifeOpsSnapshot();
+  return getCareerDelta(userId, careerId);
 }
 
 export async function updateCareerEntryProperties(
@@ -1024,13 +1501,13 @@ export async function updateCareerEntryProperties(
     [organization, role, category, input.startDate ?? row.startDate, endDate, description, careerId, userId],
   );
 
-  return getLifeOpsSnapshot();
+  return getCareerDelta(userId, careerId);
 }
 
 export async function deleteCareerEntry(careerId: string) {
   const { id: userId } = await resolveUser();
   await executeD1(`update career_history set deleted_at = datetime('now'), updated_at = datetime('now') where id = ? and user_id = ?`, [careerId, userId]);
-  return getLifeOpsSnapshot();
+  return { deletedCareerId: careerId } satisfies LifeOpsMutationDelta;
 }
 
 function normalizeCareerCategory(value: string | undefined, fallback: string) {

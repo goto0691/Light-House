@@ -7,8 +7,8 @@ import { buildHabitPropertyForm, habitPropertyPayload, type HabitPropertyForm } 
 import { PropertyPanel } from "@/components/shared/properties/property-panel";
 import type { HabitDefinition } from "@/lib/mock/life-ops";
 import { HABIT_PROPERTY_DEFINITIONS, HABIT_PROPERTY_GROUPS } from "@/lib/properties/habit";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
-import { useLifeOpsStore } from "@/stores/use-life-ops-store";
+import { postDeltaMutation } from "@/lib/snapshot-client";
+import { useLifeOpsStore, type LifeOpsMutationDelta } from "@/stores/use-life-ops-store";
 
 type HabitPropertiesPanelProps = {
   habit: HabitDefinition;
@@ -17,7 +17,7 @@ type HabitPropertiesPanelProps = {
 export function HabitPropertiesPanel({ habit }: HabitPropertiesPanelProps) {
   const [isPending, startTransition] = useTransition();
   const activeHabit = useLifeOpsStore((state) => state.habits.find((item) => item.id === habit.id)) ?? habit;
-  const replaceSnapshot = useLifeOpsStore((state) => state.replaceSnapshot);
+  const applyMutationDelta = useLifeOpsStore((state) => state.applyMutationDelta);
   const [form, setForm] = useState<HabitPropertyForm>(() => buildHabitPropertyForm(activeHabit));
   const [isDirty, setIsDirty] = useState(false);
   const [syncedHabitId, setSyncedHabitId] = useState(activeHabit.id);
@@ -37,10 +37,10 @@ export function HabitPropertiesPanel({ habit }: HabitPropertiesPanelProps) {
   const saveProperties = () => {
     startTransition(async () => {
       try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
+        await postDeltaMutation<{ delta: LifeOpsMutationDelta }, LifeOpsMutationDelta>(
           `/api/life-ops/habits/${activeHabit.id}/properties`,
           habitPropertyPayload(form),
-          replaceSnapshot,
+          applyMutationDelta,
         );
         setIsDirty(false);
         toast.success("습관 속성을 저장했습니다.");

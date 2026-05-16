@@ -4,10 +4,11 @@ import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { PropertyPanel } from "@/components/shared/properties/property-panel";
+import { PropertySummary } from "@/components/shared/properties/property-summary";
 import { SourcePropertyInspector, type SourcePropertyTarget } from "@/components/shared/properties/source-property-inspector";
 import type { AssetMock } from "@/lib/mock/vault";
 import { ASSET_PROPERTY_DEFINITIONS, ASSET_PROPERTY_GROUPS } from "@/lib/properties/asset";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
+import { postJsonMutation } from "@/lib/snapshot-client";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 type AssetPropertyForm = {
@@ -20,6 +21,8 @@ type AssetPropertyForm = {
   condition: string;
   notes: string;
 };
+
+type AssetPropertyMode = "summary" | "detail" | "edit" | "source";
 
 const ASSET_SOURCE_TARGETS: Array<SourcePropertyTarget<AssetPropertyForm>> = [
   { value: "skip", label: "원본 유지" },
@@ -35,11 +38,16 @@ const ASSET_SOURCE_TARGETS: Array<SourcePropertyTarget<AssetPropertyForm>> = [
 
 export function AssetPropertiesPanel({ asset }: { asset: AssetMock }) {
   const [isPending, startTransition] = useTransition();
-  const activeAsset = useVaultStore((state) => state.assets.find((item) => item.id === asset.id)) ?? asset;
-  const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
+  const upsertAsset = useVaultStore((state) => state.upsertAsset);
+  const [activeAsset, setActiveAsset] = useState(asset);
   const [form, setForm] = useState<AssetPropertyForm>(() => buildAssetPropertyForm(activeAsset));
   const [isDirty, setIsDirty] = useState(false);
   const [syncedAssetId, setSyncedAssetId] = useState(activeAsset.id);
+  const [mode, setMode] = useState<AssetPropertyMode>("summary");
+
+  useEffect(() => {
+    setActiveAsset(asset);
+  }, [asset]);
 
   useEffect(() => {
     if (isDirty && activeAsset.id === syncedAssetId) return;
@@ -51,15 +59,16 @@ export function AssetPropertiesPanel({ asset }: { asset: AssetMock }) {
   function saveProperties() {
     startTransition(async () => {
       try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-          `/api/vault/assets/${activeAsset.id}/properties`,
-          {
-            ...form,
-            acquiredPrice: optionalNumber(form.acquiredPrice),
-          },
-          replaceSnapshot,
-        );
+        const payload = await postJsonMutation<{ asset: AssetMock }>(`/api/vault/assets/${activeAsset.id}/properties`, {
+          ...form,
+          acquiredPrice: optionalNumber(form.acquiredPrice),
+        });
+        if (payload.asset) {
+          setActiveAsset(payload.asset);
+          upsertAsset(payload.asset);
+        }
         setIsDirty(false);
+        setMode("summary");
         toast.success("자산 속성을 저장했습니다.");
       } catch (error) {
         toast.error("자산 속성 저장에 실패했습니다.", {
@@ -75,33 +84,70 @@ export function AssetPropertiesPanel({ asset }: { asset: AssetMock }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs tracking-[0.08em] text-primary">자산 속성</p>
-            <p className="mt-1 text-sm text-muted-foreground">자산의 canonical 필드를 같은 속성 문법으로 정리합니다.</p>
+            <p className="mt-1 text-sm text-muted-foreground">요약으로 먼저 보고, 필요할 때만 자세히 보거나 편집합니다.</p>
           </div>
-          <button className="focus-ring rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50" disabled={isPending || !form.name.trim()} onClick={saveProperties} type="button">
-            {isPending ? "저장 중..." : "속성 저장"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {([
+              ["summary", "요약"],
+              ["detail", "상세"],
+              ["edit", "편집"],
+              ["source", "원본"],
+            ] as const).map(([key, label]) => (
+              <button
+                aria-pressed={mode === key}
+                className={`focus-ring min-h-9 rounded-md border px-3 py-1.5 text-xs ${
+                  mode === key ? "border-primary/25 bg-primary/10 text-primary" : "border-white/10 bg-black/10 text-muted-foreground hover:bg-white/8 hover:text-foreground"
+                }`}
+                key={key}
+                onClick={() => setMode(key)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+            {mode === "edit" || mode === "source" ? (
+              <button className="focus-ring rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50" disabled={isPending || !form.name.trim()} onClick={saveProperties} type="button">
+                {isPending ? "저장 중..." : "속성 저장"}
+              </button>
+            ) : null}
+          </div>
         </div>
       </section>
-      <PropertyPanel
-        definitions={ASSET_PROPERTY_DEFINITIONS}
-        form={form}
-        groups={ASSET_PROPERTY_GROUPS}
-        onChange={(patch) => {
-          setIsDirty(true);
-          setForm((current) => ({ ...current, ...patch }));
-        }}
-      />
-      <SourcePropertyInspector
-        canonicalEntityType="asset"
-        definitions={ASSET_PROPERTY_DEFINITIONS}
-        form={form}
-        onChange={(patch) => {
-          setIsDirty(true);
-          setForm((current) => ({ ...current, ...patch }));
-        }}
-        sourceDocument={activeAsset.sourceDocument}
-        targets={ASSET_SOURCE_TARGETS}
-      />
+      {mode === "summary" || mode === "detail" ? (
+        <section className="rounded-lg border border-white/10 bg-white/5 p-4">
+          <PropertySummary
+            definitions={ASSET_PROPERTY_DEFINITIONS}
+            groups={ASSET_PROPERTY_GROUPS}
+            mode={mode === "summary" ? "list" : "all"}
+            record={activeAsset}
+            title={mode === "summary" ? "핵심 속성" : "전체 속성"}
+          />
+        </section>
+      ) : null}
+      {mode === "edit" ? (
+        <PropertyPanel
+          definitions={ASSET_PROPERTY_DEFINITIONS}
+          form={form}
+          groups={ASSET_PROPERTY_GROUPS}
+          onChange={(patch) => {
+            setIsDirty(true);
+            setForm((current) => ({ ...current, ...patch }));
+          }}
+        />
+      ) : null}
+      {mode === "source" ? (
+        <SourcePropertyInspector
+          canonicalEntityType="asset"
+          definitions={ASSET_PROPERTY_DEFINITIONS}
+          form={form}
+          onChange={(patch) => {
+            setIsDirty(true);
+            setForm((current) => ({ ...current, ...patch }));
+          }}
+          sourceDocument={activeAsset.sourceDocument}
+          targets={ASSET_SOURCE_TARGETS}
+        />
+      ) : null}
     </div>
   );
 }

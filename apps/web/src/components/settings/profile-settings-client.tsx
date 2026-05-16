@@ -20,37 +20,37 @@ export function ProfileSettingsClient({ profile }: ProfileSettingsClientProps) {
   const [timezone, setTimezone] = useState(profile.timezone);
 
   return (
-    <div className="mt-8 space-y-3 rounded-3xl border border-white/10 bg-white/5 p-5">
+    <div className="mt-8 space-y-3 rounded-lg border border-white/10 bg-white/5 p-5">
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-2 text-sm text-muted-foreground">
           <span>표시 이름</span>
           <input
-            className="w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-foreground outline-none"
+            className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-foreground outline-none"
             onChange={(event) => setDisplayName(event.target.value)}
             value={displayName}
           />
         </label>
         <label className="space-y-2 text-sm text-muted-foreground">
           <span>이메일</span>
-          <input className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-muted-foreground" disabled value={profile.email} />
+          <input className="w-full rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-muted-foreground" disabled value={profile.email} />
         </label>
         <label className="space-y-2 text-sm text-muted-foreground">
           <span>로케일</span>
-          <input className="w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-foreground outline-none" onChange={(event) => setLocale(event.target.value)} value={locale} />
+          <input className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-foreground outline-none" onChange={(event) => setLocale(event.target.value)} value={locale} />
         </label>
         <label className="space-y-2 text-sm text-muted-foreground">
           <span>타임존</span>
-          <input className="w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-foreground outline-none" onChange={(event) => setTimezone(event.target.value)} value={timezone} />
+          <input className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-foreground outline-none" onChange={(event) => setTimezone(event.target.value)} value={timezone} />
         </label>
       </div>
 
-      <div className="flex items-center justify-between rounded-3xl border border-white/10 bg-black/10 px-4 py-3 text-sm text-muted-foreground">
+      <div className="flex items-center justify-between rounded-md border border-white/10 bg-black/10 px-4 py-3 text-sm text-muted-foreground">
         <span>테마 기본값</span>
         <strong className="text-foreground">{profile.theme}</strong>
       </div>
 
       <button
-        className="rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
         disabled={isPending}
         onClick={() => {
           startTransition(async () => {
@@ -81,4 +81,3 @@ export function ProfileSettingsClient({ profile }: ProfileSettingsClientProps) {
     </div>
   );
 }
-

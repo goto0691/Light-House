@@ -24,14 +24,14 @@ export function BacklinkPanel({ zettel, semanticResults, onSelectSemantic, onRem
       </div>
 
       <div className="mt-5">
-        <p className="text-sm font-medium text-foreground">이 메모가 연결하는 항목</p>
+        <p className="text-sm font-medium text-foreground">이 지식이 연결하는 항목</p>
         <div className="mt-3 space-y-2">
           {zettel.outgoingLinks.length ? (
             zettel.outgoingLinks.map((item) => (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3" key={item.id}>
+              <div className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 px-3 py-3" key={item.id}>
                 <p className="text-sm text-muted-foreground">{item.title}</p>
                 <button
-                  className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+                  className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-[11px] tracking-[0.08em] text-muted-foreground hover:bg-white/8 hover:text-foreground"
                   disabled={isPending}
                   onClick={() => onRemoveLink(item.id)}
                   type="button"
@@ -41,17 +41,17 @@ export function BacklinkPanel({ zettel, semanticResults, onSelectSemantic, onRem
               </div>
             ))
           ) : (
-            <EmptyState className="min-h-[160px]" description="이 메모에서 이어진 링크가 아직 없습니다." icon={Network} title="연결 대기 중" />
+            <EmptyState className="min-h-[160px]" description="이 지식에서 이어진 링크가 아직 없습니다." icon={Network} title="연결 대기 중" />
           )}
         </div>
       </div>
 
       <div className="mt-6">
-        <p className="text-sm font-medium text-foreground">이 메모를 참조하는 항목</p>
+        <p className="text-sm font-medium text-foreground">이 지식을 참조하는 항목</p>
         <div className="mt-3 space-y-2">
           {zettel.backlinks.length ? (
             zettel.backlinks.map((item) => (
-              <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-sm text-muted-foreground" key={item}>
+              <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 text-sm text-muted-foreground" key={item}>
                 {item}
               </div>
             ))
@@ -62,12 +62,12 @@ export function BacklinkPanel({ zettel, semanticResults, onSelectSemantic, onRem
       </div>
 
       <div className="mt-6">
-        <p className="text-sm font-medium text-foreground">의미적으로 가까운 메모</p>
+        <p className="text-sm font-medium text-foreground">의미적으로 가까운 지식</p>
         <div className="mt-3 space-y-2">
           {semanticResults.length ? (
             semanticResults.map((item) => (
               <button
-                className="block w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-left transition hover:bg-white/8"
+                className="block w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-left hover:bg-white/8"
                 key={item.id}
                 onClick={() => onSelectSemantic(item.id)}
                 type="button"

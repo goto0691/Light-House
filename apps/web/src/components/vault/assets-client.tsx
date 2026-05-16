@@ -32,6 +32,7 @@ import type { SavedView } from "@/lib/server/ui-state";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 type AssetsClientProps = {
+  initialAssets: AssetMock[];
   savedViews: SavedView[];
 };
 
@@ -51,9 +52,10 @@ const ASSET_COLUMNS: CollectionColumnDefinition[] = [
   { key: "sourceDocument", label: "원본 속성" },
 ];
 
-export function AssetsClient({ savedViews }: AssetsClientProps) {
+export function AssetsClient({ initialAssets, savedViews }: AssetsClientProps) {
   const searchParams = useSearchParams();
-  const assets = useVaultStore((state) => state.assets);
+  const [assets, setAssets] = useState(initialAssets);
+  const replaceAssets = useVaultStore((state) => state.replaceAssets);
   const initialActiveViewKey = searchParams.get("view") ?? getDefaultSavedViewKey(savedViews) ?? "all";
   const initialActiveView = savedViews.find((view) => getSavedViewKey(view) === initialActiveViewKey) ?? savedViews.find((view) => view.isDefault) ?? savedViews[0];
   const [localSavedViews, setLocalSavedViews] = useState(savedViews);
@@ -79,6 +81,11 @@ export function AssetsClient({ savedViews }: AssetsClientProps) {
   useEffect(() => {
     setLocalSavedViews(savedViews);
   }, [savedViews]);
+
+  useEffect(() => {
+    setAssets(initialAssets);
+    replaceAssets(initialAssets);
+  }, [initialAssets, replaceAssets]);
 
   function setAssetsLocation(viewKey: string) {
     const params = new URLSearchParams({ view: viewKey });
@@ -273,7 +280,7 @@ export function AssetsClient({ savedViews }: AssetsClientProps) {
           <>
             <CollectionColumnControls columns={ASSET_COLUMNS} onChange={setVisibleColumnKeys} visibleKeys={visibleColumnKeys} />
             <button
-              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8"
               onClick={() => setViewManagerOpen((open) => !open)}
               type="button"
             >

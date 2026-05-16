@@ -10,9 +10,11 @@ export default async function ZettelDetailPage({
   params: Promise<{ zettelId: string }>;
 }) {
   const { zettelId } = await params;
-  const zettel = await getVaultZettel(zettelId);
+  const [zettel, savedViews] = await Promise.all([
+    getVaultZettel(zettelId),
+    listSavedViews({ domain: "library", scope: "knowledge" }),
+  ]);
   if (!zettel) notFound();
-  const savedViews = await listSavedViews({ domain: "library", scope: "knowledge" });
 
-  return <ZettelsClient savedViews={savedViews} selectedZettelId={zettelId} />;
+  return <ZettelsClient deferInitialZettels initialSelectedZettel={zettel} initialZettels={[]} savedViews={savedViews} selectedZettelId={zettelId} />;
 }

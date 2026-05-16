@@ -20,7 +20,7 @@ export function ShortcutsSettingsClient({ initial }: ShortcutsSettingsClientProp
       <ShortcutTable bindings={bindings} onChange={setBindings} />
 
       <button
-        className="rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
         disabled={isPending}
         onClick={() => {
           startTransition(async () => {

@@ -2,12 +2,18 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 import type { VaultSnapshot } from "@/lib/server/vault";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 type VaultHydratorState = { status: "loading" | "ready" | "error"; error?: string; attempt: number };
+
+function bootstrapUrl(pathname: string) {
+  const params = new URLSearchParams({ path: pathname });
+  return `/api/vault/bootstrap?${params.toString()}`;
+}
 
 export function VaultHydrator({
   children,
@@ -18,12 +24,16 @@ export function VaultHydrator({
   initialError?: string;
   initialSnapshot?: VaultSnapshot;
 }) {
+  const pathname = usePathname();
+  const canRenderBeforeVaultBootstrap = ["/vault/zettels", "/vault/media", "/vault/assets", "/vault/places"].some((prefix) => pathname.startsWith(prefix));
   const [state, setState] = useState<VaultHydratorState>(() =>
     initialError ? { status: "error", error: initialError, attempt: 0 } : { status: "loading", attempt: 0 },
   );
   const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
 
   useEffect(() => {
+    if (canRenderBeforeVaultBootstrap && !initialSnapshot) return;
+
     if (initialSnapshot) {
       replaceSnapshot(initialSnapshot);
       setState((current) => ({ ...current, status: "ready", error: undefined }));
@@ -39,13 +49,13 @@ export function VaultHydrator({
     async function hydrate() {
       setState((current) => ({ ...current, status: "loading", error: undefined }));
       try {
-        const response = await fetch("/api/vault/bootstrap", { cache: "no-store" });
+        const response = await fetch(bootstrapUrl(pathname), { cache: "no-store" });
         const payload = (await response.json().catch(() => null)) as Parameters<typeof replaceSnapshot>[0] | { error?: string } | null;
         if (!response.ok) {
-          throw new Error((payload && "error" in payload ? payload.error : undefined) ?? `Vault bootstrap failed with ${response.status}.`);
+          throw new Error((payload && "error" in payload ? payload.error : undefined) ?? `지식금고 초기화에 실패했습니다. 상태 코드: ${response.status}`);
         }
         if (!payload || !("zettels" in payload)) {
-          throw new Error("Vault bootstrap returned an invalid snapshot.");
+          throw new Error("지식금고 초기화 응답이 올바르지 않습니다.");
         }
         if (!cancelled) {
           replaceSnapshot(payload);
@@ -56,7 +66,7 @@ export function VaultHydrator({
           setState((current) => ({
             ...current,
             status: "error",
-            error: error instanceof Error ? error.message : "Vault 데이터를 불러오지 못했습니다.",
+            error: error instanceof Error ? error.message : "지식금고 데이터를 불러오지 못했습니다.",
           }));
         }
       }
@@ -65,18 +75,18 @@ export function VaultHydrator({
     return () => {
       cancelled = true;
     };
-  }, [initialError, initialSnapshot, replaceSnapshot, state.attempt]);
+  }, [canRenderBeforeVaultBootstrap, initialError, initialSnapshot, pathname, replaceSnapshot, state.attempt]);
 
-  if (state.status === "error") {
+  if (state.status === "error" && !canRenderBeforeVaultBootstrap) {
     return (
       <div className="rounded-lg border border-danger/30 bg-danger/8 p-5">
         <div className="flex items-start gap-3">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">Vault 데이터를 불러오지 못했습니다.</p>
+            <p className="text-sm font-medium text-foreground">지식금고 데이터를 불러오지 못했습니다.</p>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{state.error}</p>
             <button
-              className="focus-ring mt-4 inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8"
+              className="focus-ring mt-4 inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground hover:bg-white/8"
               onClick={() => setState((current) => ({ status: "loading", attempt: current.attempt + 1 }))}
               type="button"
             >
@@ -89,8 +99,8 @@ export function VaultHydrator({
     );
   }
 
-  if (state.status !== "ready") {
-    return <div className="rounded-lg border border-white/10 bg-white/5 p-5 text-sm text-muted-foreground">Vault 데이터를 불러오는 중입니다.</div>;
+  if (state.status !== "ready" && !canRenderBeforeVaultBootstrap) {
+    return <div className="rounded-lg border border-white/10 bg-white/5 p-5 text-sm text-muted-foreground">지식금고 데이터를 불러오는 중입니다.</div>;
   }
 
   return <>{children}</>;

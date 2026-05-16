@@ -26,8 +26,8 @@ export function MediaCard({ item, actionLabel, onCycleStatus, disabled, visibleF
 
   return (
     <GlassCard className="p-5" interactive>
-      <Link className="block transition hover:opacity-95" href={`/vault/media/${item.id}`} scroll={false}>
-        <div className="aspect-[4/3] rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(212,175,55,0.14),rgba(94,140,255,0.12),rgba(255,255,255,0.05))]" />
+      <Link className="block hover:opacity-95" href={`/vault/media/${item.id}`} scroll={false}>
+        <div className="aspect-[4/3] rounded-lg border border-white/10 bg-[linear-gradient(135deg,rgba(212,175,55,0.14),rgba(94,140,255,0.12),rgba(255,255,255,0.05))]" />
         <div className="mt-4 flex items-start justify-between gap-3">
           <div>
             <h3 className="font-display text-2xl text-foreground">{item.title}</h3>
@@ -38,7 +38,7 @@ export function MediaCard({ item, actionLabel, onCycleStatus, disabled, visibleF
         {metaItems.length ? (
           <div className="mt-4 flex flex-wrap gap-2">
             {metaItems.map(([label, value]) => (
-              <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1 text-[11px] text-muted-foreground" key={label}>
+          <span className="rounded-md border border-white/10 bg-black/10 px-2.5 py-1 text-[11px] text-muted-foreground" key={label}>
                 {label}: <span className="text-foreground">{value}</span>
               </span>
             ))}
@@ -48,7 +48,7 @@ export function MediaCard({ item, actionLabel, onCycleStatus, disabled, visibleF
       <div className="mt-4 flex items-center justify-between gap-3">
         {isVisible("status") ? <Tag value={optionLabel(MEDIA_STATUS_OPTIONS, item.status, item.status)} variant="status" /> : <span />}
         <button
-          className="rounded-full border border-primary/20 bg-primary/10 px-3 py-2 text-[11px] text-primary transition hover:bg-primary/15"
+          className="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-[11px] text-primary hover:bg-primary/15"
           disabled={disabled}
           onClick={onCycleStatus}
           type="button"

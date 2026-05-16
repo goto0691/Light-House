@@ -28,7 +28,7 @@ export function CareerNode({ item, onDelete }: CareerNodeProps) {
             </Link>
             <div className="flex items-center gap-2">
               <Tag value={categoryLabel} variant="custom" />
-              <button className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground transition hover:bg-white/8 hover:text-foreground" onClick={onDelete} type="button">
+              <button className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground" onClick={onDelete} type="button">
                 삭제
               </button>
             </div>

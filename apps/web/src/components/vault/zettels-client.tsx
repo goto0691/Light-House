@@ -3,11 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Plus, Save, Settings2, Trash2, Workflow } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { ContextBundlePanel } from "@/components/shared/context/context-bundle-panel";
-import { ContextMapMini } from "@/components/shared/context/context-map-mini";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FilterBar, type FilterState } from "@/components/shared/filter-bar";
 import { GlassCard } from "@/components/shared/glass-card";
@@ -24,14 +22,44 @@ import {
   ZETTEL_TYPE_OPTIONS,
 } from "@/components/vault/zettel-form";
 import type { ZettelMock } from "@/lib/mock/vault";
-import { postSnapshotMutation } from "@/lib/snapshot-client";
 import type { SavedView } from "@/lib/server/ui-state";
+import { mergePagedZettelPage, mergeZettelList, mergeZettelListItems, removeZettelFromList } from "@/lib/vault/zettel-list-state";
 import { getZettelSearchText, normalizeZettelDocumentKind } from "@/lib/vault/zettel-properties";
 import { useVaultStore } from "@/stores/use-vault-store";
 
 type ZettelsClientProps = {
+  deferInitialZettels?: boolean;
+  initialSelectedZettel?: ZettelMock | null;
+  initialZettels?: ZettelMock[];
   savedViews: SavedView[];
   selectedZettelId?: string;
+};
+
+type ZettelListHydrationState = {
+  status: "idle" | "loading" | "ready" | "error";
+  error?: string;
+  nextOffset?: number | null;
+  total: number;
+};
+
+type ZettelListIndexItem = {
+  zettel: ZettelMock;
+  categorySearchText: string;
+  createdAtTime: number;
+  documentKind: string;
+  propertySearchText: string;
+  reviewCadence: string;
+  reviewCadenceSearchValue: string;
+  searchText: string;
+  sourceReliability: string;
+  sourceReliabilitySearchValue: string;
+  status: string;
+  statusSearchValue: string;
+  tags: string[];
+  title: string;
+  type: string;
+  typeSearchValue: string;
+  updatedAtTime: number;
 };
 
 const LIST_PAGE_SIZE = 40;
@@ -48,13 +76,22 @@ const ZETTEL_VIEW_FILTER_KEYS = [
   "sourceProperty",
 ];
 
-export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientProps) {
+export function ZettelsClient({ deferInitialZettels = false, initialSelectedZettel, initialZettels, savedViews, selectedZettelId }: ZettelsClientProps) {
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const zettels = useVaultStore((state) => state.zettels);
+  const storeZettels = useVaultStore((state) => state.zettels);
   const storeSelectedZettelId = useVaultStore((state) => state.selectedZettelId);
   const selectZettel = useVaultStore((state) => state.selectZettel);
-  const replaceSnapshot = useVaultStore((state) => state.replaceSnapshot);
+  const usesInitialZettels = Boolean(initialZettels) || deferInitialZettels;
+  const [localZettels, setLocalZettels] = useState(() => mergeZettelList(initialZettels ?? [], initialSelectedZettel));
+  const [listHydration, setListHydration] = useState<ZettelListHydrationState>(() =>
+    deferInitialZettels ? { status: "loading", total: 0 } : { status: "ready", nextOffset: null, total: initialZettels?.length ?? 0 },
+  );
+  const listRequestIdRef = useRef(0);
+  const [loadedDetailIds, setLoadedDetailIds] = useState<Set<string>>(() => new Set(initialSelectedZettel?.id ? [initialSelectedZettel.id] : []));
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const zettels = usesInitialZettels ? localZettels : storeZettels;
   const [localSavedViews, setLocalSavedViews] = useState(savedViews);
   const [activeViewKeyState, setActiveViewKeyState] = useState(
     () => searchParams.get("view") ?? getDefaultSavedViewKey(savedViews) ?? "all",
@@ -92,29 +129,189 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   ].join("\u0000");
   const [visiblePage, setVisiblePage] = useState({ key: filterKey, limit: LIST_PAGE_SIZE });
   const visibleLimit = visiblePage.key === filterKey ? visiblePage.limit : LIST_PAGE_SIZE;
+  const zettelListRequestKey = useMemo(
+    () =>
+      buildZettelListRequestParams({
+        activeView,
+        categoryTags,
+        documentKindFilter,
+        limit: LIST_PAGE_SIZE,
+        offset: 0,
+        propertyTags,
+        query,
+        reviewCadenceFilter,
+        sortKey,
+        sourceReliabilityFilter,
+        statusFilter,
+        typeFilter,
+      }).toString(),
+    [
+      activeView,
+      categoryTags,
+      documentKindFilter,
+      propertyTags,
+      query,
+      reviewCadenceFilter,
+      sortKey,
+      sourceReliabilityFilter,
+      statusFilter,
+      typeFilter,
+    ],
+  );
 
-  const viewZettels = activeView ? zettels.filter((item) => zettelMatchesSavedView(item, activeView)) : zettels;
-  const visibleZettels = sortZettels(viewZettels.filter((item) => {
+  const categoryFilterTerms = useMemo(() => categoryTags.map((tag) => tag.toLowerCase()), [categoryTags]);
+  const propertyFilterTerms = useMemo(() => propertyTags.map((tag) => tag.toLowerCase()), [propertyTags]);
+  const queryTerm = query.trim().toLowerCase();
+  const zettelIndex = useMemo(() => zettels.map(createZettelListIndexItem), [zettels]);
+  const zettelById = useMemo(() => new Map(zettels.map((zettel) => [zettel.id, zettel])), [zettels]);
+  const activeViewMatcher = useMemo(() => (activeView ? createSavedViewMatcher(activeView) : null), [activeView]);
+  const viewZettelIndex = useMemo(() => (activeViewMatcher ? zettelIndex.filter(activeViewMatcher) : zettelIndex), [activeViewMatcher, zettelIndex]);
+  const visibleZettels = useMemo(() => sortZettelIndexItems(viewZettelIndex.filter((item) => {
     if (typeFilter && item.type !== typeFilter) return false;
-    if (documentKindFilter && normalizeZettelDocumentKind(item.documentKind) !== documentKindFilter) return false;
+    if (documentKindFilter && item.documentKind !== documentKindFilter) return false;
     if (statusFilter && item.status !== statusFilter) return false;
-    if (sourceReliabilityFilter && getSourceReliabilityValue(item) !== sourceReliabilityFilter) return false;
-    if (reviewCadenceFilter && getReviewCadenceValue(item) !== reviewCadenceFilter) return false;
-    if (categoryTags.length && !categoryTags.some((tag) => getCategorySearchText(item).includes(tag.toLowerCase()))) return false;
-    if (propertyTags.length && !propertyTags.every((tag) => getSourcePropertySearchText(item).includes(tag.toLowerCase()))) return false;
-    if (query && !getZettelSearchText(item).includes(query.toLowerCase())) return false;
+    if (sourceReliabilityFilter && item.sourceReliability !== sourceReliabilityFilter) return false;
+    if (reviewCadenceFilter && item.reviewCadence !== reviewCadenceFilter) return false;
+    if (categoryFilterTerms.length && !categoryFilterTerms.some((tag) => item.categorySearchText.includes(tag))) return false;
+    if (propertyFilterTerms.length && !propertyFilterTerms.every((tag) => item.propertySearchText.includes(tag))) return false;
+    if (queryTerm && !item.searchText.includes(queryTerm)) return false;
     return true;
-  }), sortKey);
-  const selected = isCreating || !selectedZettelIdState ? null : zettels.find((item) => item.id === selectedZettelIdState) ?? null;
-  const listedZettels = visibleZettels.slice(0, visibleLimit);
+  }), sortKey).map((item) => item.zettel), [
+    categoryFilterTerms,
+    documentKindFilter,
+    propertyFilterTerms,
+    queryTerm,
+    reviewCadenceFilter,
+    sortKey,
+    sourceReliabilityFilter,
+    statusFilter,
+    typeFilter,
+    viewZettelIndex,
+  ]);
+  const selected = useMemo(() => (isCreating || !selectedZettelIdState ? null : zettelById.get(selectedZettelIdState) ?? null), [isCreating, selectedZettelIdState, zettelById]);
+  const listedZettels = useMemo(() => visibleZettels.slice(0, visibleLimit), [visibleLimit, visibleZettels]);
+  const pagedListedZettels = deferInitialZettels ? visibleZettels : listedZettels;
+  const zettelResultTotal = deferInitialZettels ? listHydration.total : visibleZettels.length;
+  const canLoadMoreZettels = deferInitialZettels ? Boolean(listHydration.nextOffset) : visibleLimit < visibleZettels.length;
   const categoryOptions = useMemo(() => Array.from(new Set(zettels.map((zettel) => zettel.category).filter(Boolean))).sort(), [zettels]);
   const categorySuggestions = useMemo(() => buildCategorySuggestions(zettels), [zettels]);
   const sourcePropertySuggestions = useMemo(() => buildSourcePropertySuggestions(zettels), [zettels]);
   const filterBarInitialFilters = useMemo(() => getFilterBarInitialFilters(activeView), [activeView]);
 
+  const mergeLocalZettel = useCallback((zettel: ZettelMock) => {
+    if (!usesInitialZettels) return;
+    setLocalZettels((current) => mergeZettelList(current, zettel));
+    setLoadedDetailIds((current) => {
+      const next = new Set(current);
+      next.add(zettel.id);
+      return next;
+    });
+  }, [usesInitialZettels]);
+
+  const mergeLocalZettels = useCallback((nextZettels: ZettelMock[]) => {
+    if (!usesInitialZettels) return;
+    setLocalZettels((current) => mergeZettelListItems(current, nextZettels));
+    setLoadedDetailIds((current) => {
+      const next = new Set(current);
+      nextZettels.forEach((item) => next.add(item.id));
+      return next;
+    });
+  }, [usesInitialZettels]);
+
+  const removeLocalZettel = useCallback((zettelId: string) => {
+    if (!usesInitialZettels) return;
+    setLocalZettels((current) => removeZettelFromList(current, zettelId));
+    setLoadedDetailIds((current) => {
+      const next = new Set(current);
+      next.delete(zettelId);
+      return next;
+    });
+  }, [usesInitialZettels]);
+
+  const hydrateZettelList = useCallback(async (options?: { mode?: "replace" | "append"; offset?: number }) => {
+    if (!usesInitialZettels) return;
+
+    const mode = options?.mode ?? "replace";
+    const requestId = listRequestIdRef.current + 1;
+    listRequestIdRef.current = requestId;
+    const offset = options?.offset ?? 0;
+    const params = new URLSearchParams(zettelListRequestKey);
+    params.set("limit", String(LIST_PAGE_SIZE));
+    params.set("offset", String(offset));
+
+    setListHydration((current) => ({ ...current, status: "loading", error: undefined }));
+    try {
+      const response = await fetch(`/api/vault/zettels?${params.toString()}`, { cache: "no-store" });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        nextOffset?: number | null;
+        total?: number;
+        zettels?: ZettelMock[];
+      } | null;
+      if (!response.ok || !payload?.zettels) throw new Error(payload?.error ?? "지식 목록을 불러오지 못했습니다.");
+      if (listRequestIdRef.current !== requestId) return;
+      setLocalZettels((current) => mergePagedZettelPage(current, payload.zettels ?? [], { loadedDetailIds, mode }));
+      setListHydration({
+        status: "ready",
+        nextOffset: payload.nextOffset ?? null,
+        total: payload.total ?? payload.zettels.length,
+      });
+    } catch (error) {
+      if (listRequestIdRef.current !== requestId) return;
+      setListHydration((current) => ({
+        ...current,
+        status: "error",
+        error: error instanceof Error ? error.message : "지식 목록을 불러오지 못했습니다.",
+        total: mode === "append" ? current.total : 0,
+      }));
+    }
+  }, [loadedDetailIds, usesInitialZettels, zettelListRequestKey]);
+
+  const ensureZettelDetail = useCallback(async (zettelId: string, options?: { force?: boolean }) => {
+    if (!usesInitialZettels) return;
+    if (!options?.force && loadedDetailIds.has(zettelId)) return;
+
+    setDetailLoadingId(zettelId);
+    setDetailError(null);
+    try {
+      const response = await fetch(`/api/vault/zettels/${encodeURIComponent(zettelId)}/details`, { cache: "no-store" });
+      const payload = (await response.json().catch(() => null)) as { zettel?: ZettelMock; error?: string } | null;
+      if (!response.ok || !payload?.zettel) throw new Error(payload?.error ?? "지식 상세를 불러오지 못했습니다.");
+      setLocalZettels((current) => mergeZettelList(current, payload.zettel));
+      setLoadedDetailIds((current) => {
+        const next = new Set(current);
+        next.add(zettelId);
+        return next;
+      });
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : "지식 상세를 불러오지 못했습니다.");
+    } finally {
+      setDetailLoadingId((current) => (current === zettelId ? null : current));
+    }
+  }, [loadedDetailIds, usesInitialZettels]);
+
   useEffect(() => {
     setLocalSavedViews(savedViews);
   }, [savedViews]);
+
+  useEffect(() => {
+    if (!deferInitialZettels) return;
+    void hydrateZettelList();
+    // The request key carries the server-side query contract. `hydrateZettelList`
+    // also closes over loaded detail ids so detail payloads can be preserved.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferInitialZettels, zettelListRequestKey]);
+
+  useEffect(() => {
+    if (!usesInitialZettels) return;
+    setLocalZettels(mergeZettelList(initialZettels ?? [], initialSelectedZettel));
+    if (!initialSelectedZettel?.id) return;
+    setLoadedDetailIds((current) => {
+      const next = new Set(current);
+      next.add(initialSelectedZettel.id);
+      return next;
+    });
+  }, [initialSelectedZettel, initialZettels, usesInitialZettels]);
 
   useEffect(() => {
     function syncFromBrowserLocation() {
@@ -134,6 +331,11 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
     if (!selected?.id) return;
     if (storeSelectedZettelId !== selected.id) selectZettel(selected.id);
   }, [selectZettel, selected?.id, storeSelectedZettelId]);
+
+  useEffect(() => {
+    if (!selectedZettelIdState || isCreating) return;
+    void ensureZettelDetail(selectedZettelIdState);
+  }, [ensureZettelDetail, isCreating, selectedZettelIdState]);
 
   function setZettelsLocation({
     mode = "push",
@@ -166,6 +368,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
     selectZettel(id);
     setSelectedZettelIdState(id);
     setZettelsLocation({ selectedId: id });
+    void ensureZettelDetail(id);
   }
 
   function openNewZettel() {
@@ -190,7 +393,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
     return {
       domain: "library",
       scope: "knowledge",
-      name: name ?? activeView?.name ?? "Zettel 뷰",
+      name: name ?? activeView?.name ?? "지식 뷰",
       icon: activeView?.icon ?? "library",
       searchQuery: query.trim(),
       filterState,
@@ -199,7 +402,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   }
 
   async function saveCurrentView() {
-    const name = window.prompt("저장할 조회 이름", query.trim() || activeView?.name || "Zettel 뷰");
+    const name = window.prompt("저장할 조회 이름", query.trim() || activeView?.name || "지식 뷰");
     if (!name?.trim()) return;
     try {
       const viewKey = `${slugifyViewKey(name)}-${Date.now().toString(36)}`;
@@ -390,19 +593,18 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   }
 
   function deleteSelected() {
-    if (!selected || !window.confirm(`"${selected.title}" 메모를 삭제할까요?`)) return;
+    if (!selected || !window.confirm(`"${selected.title}" 지식을 삭제할까요?`)) return;
     startTransition(async () => {
       try {
-        await postSnapshotMutation<{ snapshot: Parameters<typeof replaceSnapshot>[0] }, Parameters<typeof replaceSnapshot>[0]>(
-          `/api/vault/zettels/${selected.id}/delete`,
-          undefined,
-          replaceSnapshot,
-        );
-        toast.success("Zettel을 삭제했습니다.");
+        const response = await fetch(`/api/vault/zettels/${selected.id}/delete`, { method: "POST" });
+        const payload = (await response.json().catch(() => null)) as { deletedId?: string; error?: string } | null;
+        if (!response.ok) throw new Error(payload?.error ?? "지식 삭제에 실패했습니다.");
+        removeLocalZettel(payload?.deletedId ?? selected.id);
+        toast.success("지식을 삭제했습니다.");
         setSelectedZettelIdState(null);
         setZettelsLocation({ mode: "replace", selectedId: null });
       } catch (error) {
-        toast.error("메모 삭제에 실패했습니다.", {
+        toast.error("지식 삭제에 실패했습니다.", {
           description: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
         });
       }
@@ -410,63 +612,85 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
   }
 
   if (!zettels.length && !isCreating) {
+    if (listHydration.status === "loading") {
+      return (
+        <PageLayout>
+          <PageHeader
+            description="목록에서는 제목과 핵심 단서만 훑고, 선택하면 지식 읽기 화면으로 전환됩니다."
+            eyebrow="지식금고"
+            title="지식금고"
+          />
+          <PageBody className="zettels-read-body">
+            <GlassCard className="max-h-none" priority="secondary">
+              <p className="text-sm text-muted-foreground">지식 목록을 불러오는 중입니다.</p>
+            </GlassCard>
+          </PageBody>
+        </PageLayout>
+      );
+    }
+
+    if (listHydration.status === "error") {
+      return (
+        <EmptyState
+          cta={{ label: "다시 불러오기", onClick: () => void hydrateZettelList() }}
+          description={listHydration.error ?? "지식 목록을 불러오지 못했습니다."}
+          illustration="zettel"
+          title="지식 목록을 열 수 없습니다"
+        />
+      );
+    }
+
     return (
       <EmptyState
-        cta={{ label: "첫 Zettel 쓰기", hotkey: "Cmd+N", onClick: openNewZettel }}
-        description="생각은 쓰는 순간 연결을 얻습니다. 첫 메모를 만들어 Vault에 불을 켜보세요."
+        cta={{ label: "첫 지식 쓰기", hotkey: "Cmd+N", onClick: openNewZettel }}
+        description="생각은 쓰는 순간 연결을 얻습니다. 첫 지식을 만들어 지식금고에 불을 켜보세요."
         illustration="zettel"
-        title="첫 번째 원석을 던져보세요"
+        title="첫 번째 지식을 남겨보세요"
       />
     );
   }
 
-  const contextPanel =
-    selected && !isCreating ? (
-      <ContextBundlePanel
-        density="drawer"
-        entityId={selected.id}
-        entityType="zettel"
-        mainSlot={(bundle) => <ContextMapMini bundle={bundle} />}
-        railDefaultLens="zettels"
-        refreshKey={`${selected.id}:${contextRefreshKey}`}
-      />
-    ) : null;
-  const bodyGridClassName = isCreating
-    ? "grid gap-4"
-    : "grid gap-4 xl:grid-cols-[minmax(260px,340px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]";
+  const selectedReady = Boolean(selected && (!usesInitialZettels || loadedDetailIds.has(selected.id)));
+  const showDetailLoading = Boolean(!isCreating && selectedZettelIdState && (!selectedReady || detailLoadingId === selectedZettelIdState) && !detailError);
+  const showDetailError = Boolean(!isCreating && selectedZettelIdState && detailError && !selectedReady);
+  const showListSurface = !selectedZettelIdState && !isCreating;
 
   return (
     <PageLayout>
-      <PageHeader
-        actions={
-          <div className="flex flex-wrap gap-2">
-            {!isCreating ? (
-              <button className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={openNewZettel} type="button">
-                <Plus className="h-4 w-4" />
-                새 메모
-              </button>
-            ) : null}
-            <Link className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground transition hover:bg-white/8" href="/vault/zettels/graph">
-              <Workflow className="h-4 w-4" />
-              그래프
-            </Link>
-            <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              메모 {visibleZettels.length}개
-            </span>
-          </div>
-        }
-        description="메모를 고르고, 읽고, 고치는 흐름을 한 화면에서 이어갑니다."
-        eyebrow="Vault"
-        title="Zettelkasten"
-      />
+      {showListSurface || isCreating ? (
+        <PageHeader
+          actions={
+            <div className="flex flex-wrap gap-2">
+              {!isCreating ? (
+                <button className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={openNewZettel} type="button">
+                  <Plus className="h-4 w-4" />
+                  새 지식
+                </button>
+              ) : null}
+              <Link className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground hover:bg-white/8" href="/vault/zettels/graph">
+                <Workflow className="h-4 w-4" />
+                그래프
+              </Link>
+              {!isCreating ? (
+                <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                  지식 {zettelResultTotal}개
+                </span>
+              ) : null}
+            </div>
+          }
+          description={isCreating ? "새 지식을 작성하고 필요한 속성만 함께 정리합니다." : "목록에서는 제목과 핵심 단서만 훑고, 선택하면 지식 읽기 화면으로 전환됩니다."}
+          eyebrow="지식금고"
+          title={isCreating ? "새 지식" : "지식금고"}
+        />
+      ) : null}
 
-      {!isCreating ? (
+      {showListSurface ? (
         <PageToolbar>
           <SavedViewTabs activeViewKey={getSavedViewKey(activeView) ?? activeViewKey} basePath="/vault/zettels" onSelect={selectSavedView} views={localSavedViews} />
           <FilterBar
             key={activeViewKey}
             filters={[
-              { kind: "select", key: "type", label: "메모 타입", options: ZETTEL_TYPE_OPTIONS },
+              { kind: "select", key: "type", label: "지식 유형", options: ZETTEL_TYPE_OPTIONS },
               { kind: "select", key: "documentKind", label: "문서 종류", options: DOCUMENT_KIND_OPTIONS },
               { kind: "select", key: "status", label: "상태", options: ZETTEL_STATUS_OPTIONS },
               { kind: "select", key: "sourceReliability", label: "신뢰도", options: ZETTEL_SOURCE_RELIABILITY_OPTIONS },
@@ -492,7 +716,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
             rightSlot={
               <>
                 <button
-                  className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+                  className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8"
                   onClick={() => setViewManagerOpen((open) => !open)}
                   type="button"
                 >
@@ -501,7 +725,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
                 </button>
                 {activeViewIsPersisted ? (
                   <button
-                    className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+                    className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8"
                     onClick={() => void updateActiveView()}
                     type="button"
                   >
@@ -510,7 +734,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
                   </button>
                 ) : null}
                 <button
-                  className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/8"
+                  className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-foreground hover:bg-white/8"
                   onClick={() => void saveCurrentView()}
                   type="button"
                 >
@@ -520,7 +744,7 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
                 {activeViewIsPersisted ? (
                   <button
                     aria-label="저장된 뷰 삭제"
-                    className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground transition hover:bg-white/8 hover:text-foreground"
+                    className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/10 text-muted-foreground hover:bg-white/8 hover:text-foreground"
                     onClick={() => void deleteActiveView()}
                     type="button"
                   >
@@ -555,73 +779,95 @@ export function ZettelsClient({ savedViews, selectedZettelId }: ZettelsClientPro
       ) : null}
 
       <PageBody className="zettels-read-body">
-        <div className={bodyGridClassName}>
-          {selected || isCreating ? (
-            <div className="order-1 min-w-0 xl:order-2">
-              <ZettelReaderPane
-                categoryOptions={categoryOptions}
-                contextRefreshKey={contextRefreshKey}
-                isPending={isPending}
-                mode={isCreating ? "new" : "existing"}
-                onCancelNew={() => {
-                  setCreatingDraftOpen(false);
-                  setZettelsLocation({ mode: "replace", newOpen: false, selectedId: null });
-                }}
-                onDelete={selected ? deleteSelected : undefined}
-                onRelationsChanged={() => setContextRefreshKey((value) => value + 1)}
-                onSaved={(zettelId) => {
-                  setCreatingDraftOpen(false);
-                  selectZettel(zettelId);
-                  setSelectedZettelIdState(zettelId);
-                  setZettelsLocation({ mode: "replace", selectedId: zettelId });
-                }}
-                zettel={selected}
-              />
-              {contextPanel ? <div className="mt-4">{contextPanel}</div> : null}
-            </div>
-          ) : (
-            <div className="order-1 min-w-0 xl:order-2">
-              <EmptyState description="목록에서 메모를 선택하거나 새 메모를 만듭니다." illustration="zettel" title="메모를 선택해 주세요" />
-            </div>
-          )}
-
-          {!isCreating ? (
-            <GlassCard className="order-2 max-h-none xl:order-1 xl:max-h-[calc(100vh-220px)] xl:overflow-y-auto" priority="secondary">
+        {selectedReady || isCreating ? (
+          <ZettelReaderPane
+            categoryOptions={categoryOptions}
+            contextRefreshKey={contextRefreshKey}
+            isPending={isPending}
+            mode={isCreating ? "new" : "existing"}
+            onBackToList={() => {
+              setCreatingDraftOpen(false);
+              selectZettel("");
+              setSelectedZettelIdState(null);
+              setZettelsLocation({ selectedId: null });
+            }}
+            onCancelNew={() => {
+              setCreatingDraftOpen(false);
+              setZettelsLocation({ mode: "replace", newOpen: false, selectedId: null });
+            }}
+            onDelete={selected ? deleteSelected : undefined}
+            onRelationsChanged={() => setContextRefreshKey((value) => value + 1)}
+            onZettelChange={mergeLocalZettel}
+            onZettelsChange={mergeLocalZettels}
+            onSaved={(zettelId) => {
+              setCreatingDraftOpen(false);
+              selectZettel(zettelId);
+              setSelectedZettelIdState(zettelId);
+              setLoadedDetailIds((current) => {
+                const next = new Set(current);
+                next.add(zettelId);
+                return next;
+              });
+              setZettelsLocation({ mode: "replace", selectedId: zettelId });
+            }}
+            zettel={selected}
+          />
+        ) : showDetailLoading ? (
+          <GlassCard className="mx-auto max-w-4xl" priority="secondary">
+            <p className="text-sm text-muted-foreground">지식 상세를 불러오는 중입니다.</p>
+          </GlassCard>
+        ) : showDetailError ? (
+          <EmptyState
+            cta={{ label: "목록으로 돌아가기", onClick: () => {
+              setSelectedZettelIdState(null);
+              setDetailError(null);
+              setZettelsLocation({ selectedId: null });
+            } }}
+            description={detailError ?? "지식 상세를 불러오지 못했습니다."}
+            illustration="zettel"
+            title="지식을 열 수 없습니다"
+          />
+        ) : (
+          <GlassCard className="max-h-none" priority="secondary">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs tracking-[0.08em] text-primary">메모 목록</p>
-                  <p className="mt-1 text-xs text-muted-foreground">목록에서 고르면 오른쪽에 글이 열립니다.</p>
+                  <p className="text-xs tracking-[0.08em] text-primary">지식 목록</p>
+                  <p className="mt-1 text-xs text-muted-foreground">목록에서는 핵심 단서만 보고, 선택하면 읽기 화면으로 넘어갑니다.</p>
                 </div>
                 <span className="rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  {listedZettels.length}/{visibleZettels.length}
+                  {pagedListedZettels.length}/{zettelResultTotal}
                 </span>
               </div>
-              <div className="mt-4 space-y-2">
-                {listedZettels.length ? (
-                  listedZettels.map((zettel) => (
-                    <ZettelCard key={zettel.id} onSelect={() => openZettel(zettel.id)} selected={selected?.id === zettel.id} zettel={zettel} />
+              <div className="mt-4 grid gap-2 md:grid-cols-2 2xl:grid-cols-3">
+                {pagedListedZettels.length ? (
+                  pagedListedZettels.map((zettel) => (
+                    <ZettelCard key={zettel.id} onSelect={() => openZettel(zettel.id)} zettel={zettel} />
                   ))
                 ) : (
-                  <EmptyState description="검색어나 필터를 바꾸면 다른 메모들이 다시 나타납니다." illustration="zettel" title="이 조건에 맞는 메모가 없습니다" />
+              <EmptyState description="검색어나 필터를 바꾸면 다른 항목들이 다시 나타납니다." illustration="zettel" title="이 조건에 맞는 지식이 없습니다" />
                 )}
               </div>
-              {visibleLimit < visibleZettels.length ? (
+              {canLoadMoreZettels ? (
                 <button
-                  className="focus-ring mt-4 w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground transition hover:bg-white/8"
-                  onClick={() =>
+                  className="focus-ring mt-4 w-full rounded-md border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground hover:bg-white/8"
+                  disabled={listHydration.status === "loading"}
+                  onClick={() => {
+                    if (deferInitialZettels) {
+                      void hydrateZettelList({ mode: "append", offset: listHydration.nextOffset ?? pagedListedZettels.length });
+                      return;
+                    }
                     setVisiblePage((current) => ({
                       key: filterKey,
                       limit: (current.key === filterKey ? current.limit : LIST_PAGE_SIZE) + LIST_PAGE_SIZE,
-                    }))
-                  }
+                    }));
+                  }}
                   type="button"
                 >
-                  더 보기
+                  {listHydration.status === "loading" ? "불러오는 중" : "더 보기"}
                 </button>
               ) : null}
-            </GlassCard>
-          ) : null}
-        </div>
+          </GlassCard>
+        )}
       </PageBody>
     </PageLayout>
   );
@@ -634,6 +880,32 @@ function asStringArray(value: unknown) {
 
 function normalizeFilterValue(value: string) {
   return value.toLowerCase().replaceAll("_", " ").trim();
+}
+
+function createZettelListIndexItem(zettel: ZettelMock): ZettelListIndexItem {
+  const status = zettel.status ?? "";
+  const sourceReliability = getSourceReliabilityValue(zettel);
+  const reviewCadence = getReviewCadenceValue(zettel);
+
+  return {
+    zettel,
+    categorySearchText: getCategorySearchText(zettel),
+    createdAtTime: getTimeValue(zettel.createdAt),
+    documentKind: normalizeZettelDocumentKind(zettel.documentKind),
+    propertySearchText: getSourcePropertySearchText(zettel),
+    reviewCadence,
+    reviewCadenceSearchValue: normalizeFilterValue(reviewCadence),
+    searchText: getZettelSearchText(zettel),
+    sourceReliability,
+    sourceReliabilitySearchValue: normalizeFilterValue(sourceReliability),
+    status,
+    statusSearchValue: normalizeFilterValue(status),
+    tags: zettel.tags.map(normalizeFilterValue),
+    title: zettel.title,
+    type: zettel.type,
+    typeSearchValue: normalizeFilterValue(zettel.type),
+    updatedAtTime: getTimeValue(zettel.updatedAt ?? zettel.createdAt),
+  };
 }
 
 function getSavedViewKey(view: SavedView | null | undefined) {
@@ -660,7 +932,7 @@ function slugifyViewKey(value: string) {
     .trim()
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
-    .slice(0, 48) || "zettel-view";
+    .slice(0, 48) || "knowledge-view";
 }
 
 function getCategorySearchText(item: ZettelMock) {
@@ -676,6 +948,7 @@ function getSourcePropertySearchText(item: ZettelMock) {
     item.source ?? "",
     item.sourceUrl ?? "",
     item.originalCreatedAt ?? "",
+    item.sourcePropertySearchText ?? "",
     item.sourceDocument?.sourceDatabase ?? "",
     item.sourceDocument?.url ?? "",
     item.sourceDocument?.documentRole ?? "",
@@ -728,16 +1001,16 @@ function sortSuggestions(counts: Map<string, number>, limit: number) {
     .map(([value]) => value);
 }
 
-function sortZettels(items: ZettelMock[], sortKey: string) {
+function sortZettelIndexItems(items: ZettelListIndexItem[], sortKey: string) {
   const sorted = [...items];
   if (sortKey === "title-asc") return sorted.sort((left, right) => left.title.localeCompare(right.title, "ko-KR"));
   if (sortKey === "kind-asc") {
-    return sorted.sort((left, right) => normalizeZettelDocumentKind(left.documentKind).localeCompare(normalizeZettelDocumentKind(right.documentKind)));
+    return sorted.sort((left, right) => left.documentKind.localeCompare(right.documentKind));
   }
   if (sortKey === "created-desc") {
-    return sorted.sort((left, right) => getTimeValue(right.createdAt) - getTimeValue(left.createdAt));
+    return sorted.sort((left, right) => right.createdAtTime - left.createdAtTime);
   }
-  return sorted.sort((left, right) => Number(right.pinned ?? false) - Number(left.pinned ?? false) || getTimeValue(right.updatedAt ?? right.createdAt) - getTimeValue(left.updatedAt ?? left.createdAt));
+  return sorted.sort((left, right) => Number(right.zettel.pinned ?? false) - Number(left.zettel.pinned ?? false) || right.updatedAtTime - left.updatedAtTime);
 }
 
 function getTimeValue(value: string | null | undefined) {
@@ -765,12 +1038,72 @@ function getFilterBarInitialFilters(view: SavedView | null | undefined): FilterS
   };
 }
 
+function buildZettelListRequestParams(input: {
+  activeView: SavedView | null | undefined;
+  categoryTags: string[];
+  documentKindFilter: string;
+  limit: number;
+  offset: number;
+  propertyTags: string[];
+  query: string;
+  reviewCadenceFilter: string;
+  sortKey: string;
+  sourceReliabilityFilter: string;
+  statusFilter: string;
+  typeFilter: string;
+}) {
+  const params = new URLSearchParams({
+    limit: String(input.limit),
+    offset: String(input.offset),
+    sort: input.sortKey || getSavedViewSortKey(input.activeView) || "updated-desc",
+  });
+
+  appendQueryValue(params, "q", input.activeView?.searchQuery);
+  appendSavedViewFilterParams(params, input.activeView?.filterState);
+  appendQueryValue(params, "q", input.query);
+  appendQueryValue(params, "type", input.typeFilter);
+  appendQueryValue(params, "documentKind", input.documentKindFilter);
+  appendQueryValue(params, "status", input.statusFilter);
+  appendQueryValue(params, "sourceReliability", input.sourceReliabilityFilter);
+  appendQueryValue(params, "reviewCadence", input.reviewCadenceFilter);
+  input.categoryTags.forEach((tag) => appendQueryValue(params, "category", tag));
+  input.propertyTags.forEach((tag) => appendQueryValue(params, "property", tag));
+  return params;
+}
+
+function appendSavedViewFilterParams(params: URLSearchParams, filterState: SavedView["filterState"] | undefined) {
+  if (!filterState) return;
+
+  asStringArray(filterState.kind).forEach((value) => appendQueryValue(params, "kind", value));
+  asStringArray(filterState.documentKind).forEach((value) => appendQueryValue(params, "documentKind", value));
+  asStringArray(filterState.type).forEach((value) => appendQueryValue(params, "type", value));
+  asStringArray(filterState.status).forEach((value) => appendQueryValue(params, "status", value));
+  asStringArray(filterState.sourceReliability).forEach((value) => appendQueryValue(params, "sourceReliability", value));
+  asStringArray(filterState.reviewCadence).forEach((value) => appendQueryValue(params, "reviewCadence", value));
+  asStringArray(filterState.category).forEach((value) => appendQueryValue(params, "category", value));
+  asStringArray(filterState.tags).forEach((value) => appendQueryValue(params, "tags", value));
+  asStringArray(filterState.property).forEach((value) => appendQueryValue(params, "property", value));
+  asStringArray(filterState.sourceProperty).forEach((value) => appendQueryValue(params, "sourceProperty", value));
+  appendBooleanQueryValue(params, "hasSourceDocument", filterState.hasSourceDocument);
+  appendBooleanQueryValue(params, "hasBacklinks", filterState.hasBacklinks);
+  appendBooleanQueryValue(params, "hasOutgoingLinks", filterState.hasOutgoingLinks);
+}
+
+function appendQueryValue(params: URLSearchParams, key: string, value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (trimmed) params.append(key, trimmed);
+}
+
+function appendBooleanQueryValue(params: URLSearchParams, key: string, value: unknown) {
+  if (typeof value === "boolean") params.set(key, String(value));
+}
+
 function oneSelectValue(value: unknown) {
   const values = asStringArray(value);
   return values.length === 1 ? values[0] : null;
 }
 
-function zettelMatchesSavedView(item: ZettelMock, view: SavedView) {
+function createSavedViewMatcher(view: SavedView) {
   const kinds = asStringArray(view.filterState.kind).map(normalizeZettelDocumentKind).filter(Boolean);
   const documentKinds = asStringArray(view.filterState.documentKind).map(normalizeZettelDocumentKind).filter(Boolean);
   const statuses = asStringArray(view.filterState.status).map(normalizeFilterValue);
@@ -780,29 +1113,23 @@ function zettelMatchesSavedView(item: ZettelMock, view: SavedView) {
   const categories = asStringArray(view.filterState.category).map(normalizeFilterValue);
   const tags = asStringArray(view.filterState.tags).map(normalizeFilterValue);
   const propertyTerms = [...asStringArray(view.filterState.property), ...asStringArray(view.filterState.sourceProperty)].map(normalizeFilterValue);
-  const itemKind = normalizeZettelDocumentKind(item.documentKind);
-  const itemStatus = normalizeFilterValue(item.status ?? "");
-  const itemType = normalizeFilterValue(item.type);
-  const itemSourceReliability = normalizeFilterValue(getSourceReliabilityValue(item));
-  const itemReviewCadence = normalizeFilterValue(getReviewCadenceValue(item));
-  const haystack = getZettelSearchText(item);
-  const categoryHaystack = getCategorySearchText(item);
-  const propertyHaystack = getSourcePropertySearchText(item);
   const viewSearch = normalizeFilterValue(view.searchQuery);
 
-  if (viewSearch && !haystack.includes(viewSearch)) return false;
-  if (types.length && !types.includes(itemType)) return false;
-  if (kinds.length && !kinds.some((kind) => itemKind === kind || haystack.includes(kind))) return false;
-  if (documentKinds.length && !documentKinds.some((kind) => itemKind === kind || haystack.includes(kind))) return false;
-  if (statuses.length && !statuses.includes(itemStatus)) return false;
-  if (sourceReliabilities.length && !sourceReliabilities.includes(itemSourceReliability)) return false;
-  if (reviewCadences.length && !reviewCadences.includes(itemReviewCadence)) return false;
-  if (categories.length && !categories.some((category) => categoryHaystack.includes(category))) return false;
-  if (tags.length && !tags.every((tag) => item.tags.some((itemTag) => normalizeFilterValue(itemTag).includes(tag)))) return false;
-  if (propertyTerms.length && !propertyTerms.every((term) => propertyHaystack.includes(term))) return false;
-  if (view.filterState.hasSourceDocument === true && !item.sourceDocument) return false;
-  if (view.filterState.hasSourceDocument === false && item.sourceDocument) return false;
-  if (view.filterState.hasBacklinks === true && !item.backlinks.length) return false;
-  if (view.filterState.hasOutgoingLinks === true && !item.outgoingLinks.length) return false;
-  return true;
+  return (item: ZettelListIndexItem) => {
+    if (viewSearch && !item.searchText.includes(viewSearch)) return false;
+    if (types.length && !types.includes(item.typeSearchValue)) return false;
+    if (kinds.length && !kinds.some((kind) => item.documentKind === kind || item.searchText.includes(kind))) return false;
+    if (documentKinds.length && !documentKinds.some((kind) => item.documentKind === kind || item.searchText.includes(kind))) return false;
+    if (statuses.length && !statuses.includes(item.statusSearchValue)) return false;
+    if (sourceReliabilities.length && !sourceReliabilities.includes(item.sourceReliabilitySearchValue)) return false;
+    if (reviewCadences.length && !reviewCadences.includes(item.reviewCadenceSearchValue)) return false;
+    if (categories.length && !categories.some((category) => item.categorySearchText.includes(category))) return false;
+    if (tags.length && !tags.every((tag) => item.tags.some((itemTag) => itemTag.includes(tag)))) return false;
+    if (propertyTerms.length && !propertyTerms.every((term) => item.propertySearchText.includes(term))) return false;
+    if (view.filterState.hasSourceDocument === true && !item.zettel.sourceDocument) return false;
+    if (view.filterState.hasSourceDocument === false && item.zettel.sourceDocument) return false;
+    if (view.filterState.hasBacklinks === true && !item.zettel.backlinks.length) return false;
+    if (view.filterState.hasOutgoingLinks === true && !item.zettel.outgoingLinks.length) return false;
+    return true;
+  };
 }

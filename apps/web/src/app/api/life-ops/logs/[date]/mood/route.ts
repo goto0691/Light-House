@@ -8,7 +8,7 @@ export async function POST(request: Request, context: { params: Promise<{ date: 
   try {
     const body = (await request.json()) as Body;
     const { date } = await context.params;
-    return NextResponse.json({ snapshot: await updateLifeOpsMood(date, body.mood ?? 3) });
+    return NextResponse.json({ delta: await updateLifeOpsMood(date, body.mood ?? 3) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Mood update failed." }, { status: 500 });
   }

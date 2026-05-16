@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { getSession } from "@/lib/auth/session";
-import { getActionHubSnapshot, seedActionHubSupportData } from "@/lib/server/action-hub";
+import { getActionHubHydrationSnapshot, seedActionHubSupportData } from "@/lib/server/action-hub";
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getSession();
   if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
   await seedActionHubSupportData();
-  const snapshot = await getActionHubSnapshot();
+  const url = new URL(request.url);
+  const snapshot = await getActionHubHydrationSnapshot(url.searchParams.get("path") ?? "/action-hub");
 
   return NextResponse.json(snapshot);
 }

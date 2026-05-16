@@ -8,7 +8,7 @@ const CREATE_TYPES = new Set<EntityType>(["person", "zettel", "project", "media"
 
 export async function POST(request: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "인증이 필요합니다." }, { status: 401 });
 
   const body = (await request.json()) as {
     focusId?: string;
@@ -20,10 +20,10 @@ export async function POST(request: Request) {
   };
 
   if (!body.focusType || !body.focusId || !body.targetType || !body.title) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    return NextResponse.json({ error: "필수 항목이 빠졌습니다." }, { status: 400 });
   }
   if (!CREATE_TYPES.has(body.targetType)) {
-    return NextResponse.json({ error: "Unsupported canonical entity type" }, { status: 400 });
+    return NextResponse.json({ error: "지원하지 않는 기준 항목 유형입니다." }, { status: 400 });
   }
 
   const bundle = await createCanonicalEntityAndAttach({

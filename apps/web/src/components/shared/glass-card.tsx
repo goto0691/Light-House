@@ -41,9 +41,9 @@ export function GlassCard<T extends ElementType = "section">({
         priority === "hero" && "rounded-lg p-5 md:p-6",
         priority === "primary" && "rounded-lg p-5",
         priority === "secondary" && "rounded-md p-4",
-        "focus-ring transition-[box-shadow,border-color,background-color] duration-150",
+        "focus-ring",
         interactive && "cursor-pointer",
-        interactive && "[@media(hover:hover)]:hover:border-primary/25 [@media(hover:hover)]:hover:shadow-[var(--shadow-glow),var(--shadow-lg)]",
+        interactive && "[@media(hover:hover)]:hover:border-primary/20",
         className,
       )}
       {...props}

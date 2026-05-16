@@ -2,16 +2,12 @@ import { SkeletonBlock } from "@/components/shared/skeleton-block";
 
 export default function VaultZettelsLoading() {
   return (
-    <section className="space-y-4">
+    <section aria-label="지식 목록을 불러오는 중" aria-live="polite" className="space-y-4" role="status">
+      <p className="sr-only">지식 목록을 불러오는 중입니다.</p>
       <SkeletonBlock count={1} variant="card" />
       <SkeletonBlock count={1} variant="row" />
-      <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_300px]">
-        <SkeletonBlock count={3} variant="card" />
-        <div className="space-y-4">
-          <SkeletonBlock count={1} variant="card" />
-          <SkeletonBlock count={1} variant="editor" />
-        </div>
-        <SkeletonBlock count={2} variant="card" />
+      <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+        <SkeletonBlock count={6} variant="card" />
       </div>
     </section>
   );

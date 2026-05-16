@@ -4,7 +4,7 @@ import { EntityContextShell } from "@/components/shared/context/entity-context-s
 import { GlassCard } from "@/components/shared/glass-card";
 import { PlacePropertiesPanel } from "@/components/vault/place-properties-panel";
 import { getContextBundle } from "@/lib/server/context";
-import { getVaultSnapshot } from "@/lib/server/vault";
+import { getVaultPlace } from "@/lib/server/vault";
 
 export default async function PlaceDetailPage({
   params,
@@ -12,8 +12,7 @@ export default async function PlaceDetailPage({
   params: Promise<{ placeId: string }>;
 }) {
   const { placeId } = await params;
-  const snapshot = await getVaultSnapshot();
-  const place = snapshot.places.find((item) => item.id === placeId);
+  const place = await getVaultPlace(placeId);
   if (!place) notFound();
 
   const bundle = await getContextBundle("place", placeId);
