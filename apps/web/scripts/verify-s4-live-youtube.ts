@@ -56,7 +56,7 @@ async function main() {
   const db = new MemoryD1();
   db.sql.exec(`pragma foreign_keys=on; create table users(id text primary key); insert into users values ('${USER_ID}');`);
   const directory = fileURLToPath(new URL("../../../migrations/", import.meta.url));
-  for (const name of readdirSync(directory).filter((item) => /^\d{4}_.*\.sql$/.test(item) && Number(item.slice(0, 4)) >= 6).sort()) db.sql.exec(readFileSync(`${directory}/${name}`, "utf8"));
+  for (const name of readdirSync(directory).filter((item) => /^\d{4}_v2_.*\.sql$/.test(item) && Number(item.slice(0, 4)) >= 6).sort()) db.sql.exec(readFileSync(`${directory}/${name}`, "utf8"));
 
   const capture = await prepareCaptureCommit({ draftId: crypto.randomUUID(), channel: "web", title: "합성 영상 검증", bodyMarkdown: MEMO,
     aiEnabled: false, clientTimezone: "Asia/Seoul", privacyLevel: "normal", capturedAt: new Date().toISOString(),

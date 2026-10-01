@@ -24,7 +24,7 @@ export class LinkMemoryD1 implements D1DatabaseBinding {
   constructor(version = 31) {
     this.sql.exec("pragma foreign_keys=on;create table users(id text primary key not null);insert into users values ('link-owner'),('link-other');");
     const directory = fileURLToPath(new URL("../../../../../migrations/", import.meta.url));
-    for (const name of readdirSync(directory).filter((name) => /^\d{4}_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= version).sort()) this.sql.exec(readFileSync(`${directory}/${name}`, "utf8"));
+    for (const name of readdirSync(directory).filter((name) => /^\d{4}_v2_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= version).sort()) this.sql.exec(readFileSync(`${directory}/${name}`, "utf8"));
   }
   prepare(query: string) { return new Statement(this, query, this.sql.prepare(query)); }
   async batch<T = unknown>(statements: D1PreparedStatementBinding[]): Promise<T[]> {

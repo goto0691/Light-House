@@ -77,7 +77,7 @@ beforeAll(async () => {
   platform = await getPlatformProxy<TestEnv>({ configPath, persist: false, remoteBindings: false });
   db = platform.env.DB;
   await db.exec("pragma foreign_keys=on;create table users(id text primary key not null);insert into users(id) values ('web-owner'),('other-owner');");
-  const names = (await readdir(migrationsPath)).filter((name) => /^\d{4}_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 32).sort();
+  const names = (await readdir(migrationsPath)).filter((name) => /^\d{4}_v2_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 32).sort();
   for (const name of names) await applyMigration(name);
   expect(await db.prepare("pragma foreign_keys").first<{ foreign_keys: number }>()).toEqual({ foreign_keys: 1 });
 }, 120_000);

@@ -47,7 +47,7 @@ beforeEach(() => {
   db = new MemoryD1();
   db.sql.exec("pragma foreign_keys=on;create table users(id text primary key not null);insert into users values ('user-a'),('user-b');");
   const directory = fileURLToPath(new URL("../../../../../migrations/", import.meta.url));
-  for (const name of readdirSync(directory).filter((name) => /^\d{4}_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 31).sort()) db.sql.exec(readFileSync(`${directory}/${name}`, "utf8"));
+  for (const name of readdirSync(directory).filter((name) => /^\d{4}_v2_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 31).sort()) db.sql.exec(readFileSync(`${directory}/${name}`, "utf8"));
   harness.getSession.mockResolvedValue({ sessionId: "session-a", userId: "user-a", email: "a@example.test", expiresAt: Date.now() + 100_000 });
   harness.getActiveRestrictedGrant.mockResolvedValue(null);
   harness.getV2CloudflareBindings.mockReturnValue({ db });

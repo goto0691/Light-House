@@ -49,7 +49,7 @@ beforeEach(() => {
   db = new MemoryD1();
   db.sql.exec("pragma foreign_keys=on; create table users(id text primary key); insert into users values ('user-a'),('user-b');");
   const directory = fileURLToPath(new URL("../../../../../migrations/", import.meta.url));
-  for (const file of readdirSync(directory).filter((name) => /^\d{4}_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 30).sort()) db.sql.exec(readFileSync(`${directory}/${file}`, "utf8"));
+  for (const file of readdirSync(directory).filter((name) => /^\d{4}_v2_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 30).sort()) db.sql.exec(readFileSync(`${directory}/${file}`, "utf8"));
 });
 afterEach(() => { vi.useRealTimers(); db.sql.close(); });
 

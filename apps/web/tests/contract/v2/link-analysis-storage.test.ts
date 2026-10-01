@@ -26,7 +26,7 @@ beforeAll(async () => {
   platform = await getPlatformProxy<{ DB: TestD1 }>({ configPath, persist: false, remoteBindings: false });
   db = platform.env.DB;
   await db.exec("create table users (id text primary key not null); insert into users (id) values ('link-owner'),('link-other');");
-  for (const name of (await readdir(migrationDirectory)).filter((name) => /^\d{4}_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 31).sort()) {
+  for (const name of (await readdir(migrationDirectory)).filter((name) => /^\d{4}_v2_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 31).sort()) {
     for (const statement of (await readFile(`${migrationDirectory}/${name}`, "utf8")).split("--> statement-breakpoint").map((item) => item.trim()).filter(Boolean)) await db.prepare(statement).run();
   }
   links = new D1LinkAnalysisRepository(db);

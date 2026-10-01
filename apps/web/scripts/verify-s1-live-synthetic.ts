@@ -62,7 +62,7 @@ function createLocalDatabase() {
   try {
     db.sql.exec(`pragma foreign_keys=on; create table users(id text primary key); insert into users values ('${USER_ID}');`);
     const directory = fileURLToPath(new URL("../../../migrations/", import.meta.url));
-    const migrations = readdirSync(directory).filter((name) => /^\d{4}_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6).sort();
+    const migrations = readdirSync(directory).filter((name) => /^\d{4}_v2_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6).sort();
     for (const name of migrations) db.sql.exec(readFileSync(`${directory}/${name}`, "utf8"));
     return db;
   } catch (error) { db.close(); throw error; }

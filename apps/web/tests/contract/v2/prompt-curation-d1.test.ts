@@ -23,7 +23,7 @@ beforeAll(async () => {
   db = platform.env.DB;
   await db.exec("create table users(id text primary key not null); insert into users values ('curation-owner'),('curation-other');");
   const directory = fileURLToPath(new URL("../../../../../migrations/", import.meta.url));
-  for (const name of (await readdir(directory)).filter((name) => /^\d{4}_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 32).sort()) {
+  for (const name of (await readdir(directory)).filter((name) => /^\d{4}_v2_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 32).sort()) {
     for (const sql of (await readFile(`${directory}/${name}`, "utf8")).split("--> statement-breakpoint").map((part) => part.trim()).filter(Boolean)) await db.prepare(sql).run();
   }
 }, 90_000);

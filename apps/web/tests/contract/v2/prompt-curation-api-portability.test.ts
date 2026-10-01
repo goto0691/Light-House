@@ -91,7 +91,7 @@ async function platform() {
   const value = await getPlatformProxy<Env>({ configPath, persist: false, remoteBindings: false, envFiles: [] });
   platforms.push(value);
   await value.env.DB.exec(`create table users(id text primary key not null); insert into users values ('${sourceOwner}'),('${targetOwner}');`);
-  for (const name of (await readdir(migrationPath)).filter((name) => /^\d{4}_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 32).sort()) {
+  for (const name of (await readdir(migrationPath)).filter((name) => /^\d{4}_v2_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= 32).sort()) {
     for (const sql of (await readFile(`${migrationPath}/${name}`, "utf8")).split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) await value.env.DB.prepare(sql).run();
   }
   return value;

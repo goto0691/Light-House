@@ -36,7 +36,7 @@ async function createPlatform(lastMigration: number) {
   const platform = await getPlatformProxy<{ DB: TestD1 }>({ configPath, persist: false, remoteBindings: false });
   platforms.push(platform);
   await platform.env.DB.exec("create table users(id text primary key not null);insert into users(id) values ('link-user'),('other-user');");
-  const names = (await readdir(migrationsPath)).filter((name) => /^\d{4}_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= lastMigration).sort();
+  const names = (await readdir(migrationsPath)).filter((name) => /^\d{4}_v2_.*\.sql$/.test(name) && Number(name.slice(0, 4)) >= 6 && Number(name.slice(0, 4)) <= lastMigration).sort();
   for (const name of names) await applyMigration(platform.env.DB, name);
   return platform.env.DB;
 }
