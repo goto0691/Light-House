@@ -29,8 +29,8 @@ export function NotificationCenter() {
 
     let cancelled = false;
     void fetch("/api/notifications?limit=10")
-      .then((response) => response.json())
-      .then((payload: { items?: NotificationItem[] }) => {
+      .then(async (response) => (await response.json()) as { items?: NotificationItem[] })
+      .then((payload) => {
         if (!cancelled) {
           setItems(payload.items ?? []);
         }

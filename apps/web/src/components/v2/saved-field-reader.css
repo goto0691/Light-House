@@ -1,0 +1,15 @@
+.v2-saved-field-reader { min-width: 0; max-width: 100%; color: #2d4534; white-space: normal; }
+.v2-saved-field-reader button { min-height: 44px; max-width: 100%; padding: 8px 11px; border: 1px solid #a9bca4; border-radius: 7px; background: #fffdf8; color: #304d36; font: inherit; font-size: 13px; cursor: pointer; overflow-wrap: anywhere; }
+.v2-saved-field-reader button:disabled { cursor: default; opacity: .6; }
+.v2-saved-field-reader :focus-visible { outline: 3px solid #42654e; outline-offset: 2px; }
+.v2-saved-field-preview { min-width: 0; margin: 0 0 8px; }
+.v2-saved-field-preview > span,.v2-saved-field-preview > small { display: block; font-size: 11px; line-height: 1.7; color: #4c614f; }
+.v2-saved-field-preview > pre { margin: 5px 0; max-height: 8em; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 12px; line-height: 1.6; }
+.v2-saved-field-reader > section { min-width: 0; margin-top: 12px; padding: 12px; border: 1px solid #c5d0c0; border-radius: 8px; background: #fbf9f3; }
+.v2-saved-field-reader h3 { margin: 0; font-size: 15px; line-height: 1.6; overflow-wrap: anywhere; }
+.v2-saved-field-reader .v2-saved-field-notice,.v2-saved-field-reader .v2-saved-field-range { margin: 8px 0; color: #465d4c; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.v2-saved-field-reader .v2-saved-field-text { box-sizing: border-box; display: block; width: 100%; min-width: 0; height: 18rem; max-height: 45dvh; margin: 12px 0; padding: 10px; border: 1px solid #bfccba; border-radius: 6px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.75 ui-monospace,SFMono-Regular,Consolas,monospace; color: #293e30; background: #fffefb; }
+.v2-saved-field-reader nav,.v2-saved-field-copy,.v2-saved-field-pending { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.v2-saved-field-reader [role=alert] { color: #7d3d2b; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.v2-saved-field-reader [role=status] { color: #345a3c; font-size: 12px; line-height: 1.7; }
+@media(max-width:420px) { .v2-saved-field-reader > section { padding: 9px; } .v2-saved-field-reader nav > button,.v2-saved-field-copy > button { flex: 1 1 90px; } }

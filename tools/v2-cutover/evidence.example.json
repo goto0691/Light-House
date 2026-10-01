@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "measuredAt": "2026-08-12T00:00:00.000Z",
+  "ownerCaptureStartedAt": null,
+  "captureDefaultAt": null,
+  "privateCorpus": {
+    "totalCount": 0,
+    "readyCount": 0,
+    "approvedExpectedCount": 0,
+    "fatalFailureCount": 0,
+    "evaluationPassed": false
+  },
+  "runtime": {
+    "liveGeminiRolesPassed": false,
+    "workerDeploymentPassed": false,
+    "sourceCommitHealthy": false
+  },
+  "devices": {
+    "windowsImePassed": false,
+    "androidSharePassed": false,
+    "iosFallbackPassed": false,
+    "screenReaderPassed": false
+  },
+  "migration": {
+    "liveInventoryCompleted": false,
+    "r2InventoryCompleted": false,
+    "adapterCoveragePercent": 0,
+    "structuralReconciliationPassed": false,
+    "substantiveSamplePassed": false,
+    "finalDeltaReconciled": false,
+    "verifiedSnapshotAt": null
+  },
+  "experience": {
+    "usabilityPassed": false,
+    "recallTop10Rate": null
+  },
+  "operations": {
+    "legacyReadonlyGuardPassed": false,
+    "rollbackDrillPassed": false
+  }
+}

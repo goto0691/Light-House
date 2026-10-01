@@ -27,7 +27,7 @@ export function ProjectHeader({ project, currentView }: ProjectHeaderProps) {
       eyebrow="Action Hub"
       title={
         <span className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-2xl shadow-[var(--shadow-sm)]">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-2xl shadow-app-sm">
             {project.icon}
           </span>
           <span>{project.title}</span>

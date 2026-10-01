@@ -1,0 +1,95 @@
+{
+  "synthetic_fixture_version": 1,
+  "corpus_id": "synthetic-demo",
+  "identity": {
+    "build_sha": "6b8be40556b326a8c413f902fc73ec7eecf24816",
+    "schema_sha256": "sha256:76188e94c941e418caa30f089297d740d7e1a38ef591f2d025f06fe698822999",
+    "model_config_sha256": "sha256:2a117133aa88270d7c184eb7f0c5a3166f809c754b1c521d48333fe96759b048",
+    "prompt_sha256": "sha256:bf944689dedac4ec8c5414c65e72085f71f029d8e8c4b484770457d178df620a",
+    "registry_sha256": "sha256:0ab67cea17e3f186be23a400c3106e50e32b17d0b9c16d07d2edda11a3d9a9e7"
+  },
+  "expected": [
+    {
+      "version": 1,
+      "case_id": "GC-01",
+      "authoring_status": "draft",
+      "source_hashes": [
+        "sha256:8e3402cff7ac72abf8cad1aafb205ead41b5692d2bf165771bfe7062059964be"
+      ],
+      "must_create": {},
+      "must_preserve": [
+        {
+          "exact_typed_value": {
+            "id": "demo-rating",
+            "value_type": "rating",
+            "value": 4.5,
+            "scale_max": 5
+          }
+        }
+      ],
+      "must_not_assert": [],
+      "acceptable_variants": {
+        "primary_type": [
+          "place_review",
+          "dining_note"
+        ]
+      },
+      "required_evidence": [],
+      "recall_queries": [
+        {
+          "id": "demo-recall",
+          "query": "synthetic query only",
+          "required_ids": [
+            "demo-target"
+          ],
+          "top_k": 10
+        }
+      ],
+      "severity_overrides": {}
+    }
+  ],
+  "observations": {
+    "contract": "recorded-evaluation-v1",
+    "mode": "synthetic",
+    "identity": {
+      "build_sha": "6b8be40556b326a8c413f902fc73ec7eecf24816",
+      "schema_sha256": "sha256:76188e94c941e418caa30f089297d740d7e1a38ef591f2d025f06fe698822999",
+      "model_config_sha256": "sha256:2a117133aa88270d7c184eb7f0c5a3166f809c754b1c521d48333fe96759b048",
+      "prompt_sha256": "sha256:bf944689dedac4ec8c5414c65e72085f71f029d8e8c4b484770457d178df620a",
+      "registry_sha256": "sha256:0ab67cea17e3f186be23a400c3106e50e32b17d0b9c16d07d2edda11a3d9a9e7"
+    },
+    "corpus_sha256": "sha256:10613997b563670a2c1434f7821730e490790423b738823815e628226973a94f",
+    "cases": [
+      {
+        "case_id": "GC-01",
+        "source_hashes": [
+          "sha256:8e3402cff7ac72abf8cad1aafb205ead41b5692d2bf165771bfe7062059964be"
+        ],
+        "typed_values": [
+          {
+            "id": "demo-rating",
+            "value_type": "rating",
+            "value": 4.5,
+            "scale_max": 5
+          }
+        ],
+        "primary_types": [
+          "dining_note"
+        ],
+        "recall_results": [
+          {
+            "id": "demo-recall",
+            "ranked_ids": [
+              "demo-filler-1",
+              "demo-filler-2",
+              "demo-filler-3",
+              "demo-filler-4",
+              "demo-target"
+            ]
+          }
+        ],
+        "fatal_failures": []
+      }
+    ]
+  }
+}

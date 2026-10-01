@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://light-house.local/schemas/expected-result.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "case_id",
+    "authoring_status",
+    "source_hashes",
+    "must_create",
+    "must_preserve",
+    "must_not_assert",
+    "acceptable_variants",
+    "required_evidence",
+    "recall_queries",
+    "severity_overrides"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "case_id": { "type": "string", "pattern": "^GC-(0[1-9]|1[0-9]|20)$" },
+    "authoring_status": { "enum": ["draft", "human_approved"] },
+    "source_hashes": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+      "uniqueItems": true
+    },
+    "must_create": { "type": "object" },
+    "must_preserve": { "type": "array", "items": { "type": "object" } },
+    "must_not_assert": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "acceptable_variants": { "type": "object" },
+    "required_evidence": { "type": "array", "items": { "type": "object" } },
+    "recall_queries": { "type": "array", "items": { "type": "object" } },
+    "severity_overrides": { "type": "object", "additionalProperties": { "enum": ["fatal", "major", "minor"] } }
+  }
+}

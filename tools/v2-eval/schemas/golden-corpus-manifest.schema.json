@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://light-house.local/schemas/golden-corpus-manifest.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "corpus_id", "privacy", "cases"],
+  "properties": {
+    "version": { "const": 1 },
+    "corpus_id": { "type": "string", "minLength": 1 },
+    "privacy": { "const": "private_local_only" },
+    "cases": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["case_id", "slot_kind", "status", "source_paths", "expected_path"],
+        "properties": {
+          "case_id": { "type": "string", "pattern": "^GC-(0[1-9]|1[0-9]|20)$" },
+          "slot_kind": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["awaiting_source", "expected_draft", "ready"] },
+          "source_paths": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "expected_path": { "type": "string", "minLength": 1 },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  }
+}

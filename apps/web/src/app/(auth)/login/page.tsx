@@ -17,14 +17,9 @@ export default async function LoginPage() {
         <p className="text-xs uppercase tracking-[0.3em] text-primary">Project Light House</p>
         <h1 className="mt-4 text-3xl font-semibold text-foreground">로그인</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          P0에서는 단일 관리자 계정으로 진입하는 최소 인증 흐름을 먼저 연결했습니다. 이후 Lucia + D1 세션 저장소로 확장할 수 있게 구조를 잡아 두었습니다.
+          개인 보관함의 관리자 계정으로 로그인하세요.
         </p>
         <LoginForm />
-        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-muted-foreground">
-          기본 계정: <span className="text-foreground">keeper@lighthouse.local</span>
-          <br />
-          기본 비밀번호: <span className="text-foreground">lighthouse</span>
-        </div>
       </section>
     </main>
   );

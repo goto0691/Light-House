@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://light-house.local/schemas/cutover-evidence.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "measuredAt", "ownerCaptureStartedAt", "captureDefaultAt", "privateCorpus", "runtime", "devices", "migration", "experience", "operations"],
+  "properties": {
+    "version": { "const": 1 },
+    "measuredAt": { "type": "string", "minLength": 1 },
+    "ownerCaptureStartedAt": { "type": ["string", "null"] },
+    "captureDefaultAt": { "type": ["string", "null"] },
+    "privateCorpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totalCount", "readyCount", "approvedExpectedCount", "fatalFailureCount", "evaluationPassed"],
+      "properties": {
+        "totalCount": { "type": "integer", "minimum": 0 },
+        "readyCount": { "type": "integer", "minimum": 0 },
+        "approvedExpectedCount": { "type": "integer", "minimum": 0 },
+        "fatalFailureCount": { "type": "integer", "minimum": 0 },
+        "evaluationPassed": { "type": "boolean" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["liveGeminiRolesPassed", "workerDeploymentPassed", "sourceCommitHealthy"],
+      "properties": {
+        "liveGeminiRolesPassed": { "type": "boolean" },
+        "workerDeploymentPassed": { "type": "boolean" },
+        "sourceCommitHealthy": { "type": "boolean" }
+      }
+    },
+    "devices": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windowsImePassed", "androidSharePassed", "iosFallbackPassed", "screenReaderPassed"],
+      "properties": {
+        "windowsImePassed": { "type": "boolean" },
+        "androidSharePassed": { "type": "boolean" },
+        "iosFallbackPassed": { "type": "boolean" },
+        "screenReaderPassed": { "type": "boolean" }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["liveInventoryCompleted", "r2InventoryCompleted", "adapterCoveragePercent", "structuralReconciliationPassed", "substantiveSamplePassed", "finalDeltaReconciled", "verifiedSnapshotAt"],
+      "properties": {
+        "liveInventoryCompleted": { "type": "boolean" },
+        "r2InventoryCompleted": { "type": "boolean" },
+        "adapterCoveragePercent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "structuralReconciliationPassed": { "type": "boolean" },
+        "substantiveSamplePassed": { "type": "boolean" },
+        "finalDeltaReconciled": { "type": "boolean" },
+        "verifiedSnapshotAt": { "type": ["string", "null"] }
+      }
+    },
+    "experience": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usabilityPassed", "recallTop10Rate"],
+      "properties": {
+        "usabilityPassed": { "type": "boolean" },
+        "recallTop10Rate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["legacyReadonlyGuardPassed", "rollbackDrillPassed"],
+      "properties": {
+        "legacyReadonlyGuardPassed": { "type": "boolean" },
+        "rollbackDrillPassed": { "type": "boolean" }
+      }
+    }
+  }
+}

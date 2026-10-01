@@ -22,7 +22,7 @@ export function ErrorState({
 
   return (
     <GlassCard className="mx-auto max-w-lg text-center" elevation="l3" priority="hero" variant="elevated">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[hsl(var(--danger)/0.16)] bg-[hsl(var(--danger)/0.12)] text-danger shadow-[var(--shadow-md)]">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[hsl(var(--danger)/0.16)] bg-[hsl(var(--danger)/0.12)] text-danger shadow-app-md">
         <AlertTriangle className="h-7 w-7" />
       </div>
       <p className="mt-5 text-xs uppercase tracking-[0.24em] text-danger">System Error</p>
@@ -55,7 +55,7 @@ export function ErrorState({
       {onRetry ? (
         <div className="mt-6 flex justify-center">
           <button
-            className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-[var(--shadow-glow)] transition [@media(hover:hover)]:hover:brightness-105"
+            className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-glow transition [@media(hover:hover)]:hover:brightness-105"
             onClick={onRetry}
             type="button"
           >

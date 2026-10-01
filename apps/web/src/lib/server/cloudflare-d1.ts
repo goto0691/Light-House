@@ -37,7 +37,7 @@ function getD1Endpoint() {
 }
 
 function getD1Token() {
-  return process.env.CLOUDFLARE_API_TOKEN ?? getRequiredEnv("DATABASE_AUTH_TOKEN");
+  return process.env.CLOUDFLARE_API_TOKEN?.trim() || getRequiredEnv("DATABASE_AUTH_TOKEN");
 }
 
 export async function queryD1<T>(sql: string, params: unknown[] = []) {

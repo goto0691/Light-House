@@ -6,3 +6,4 @@ export * from "./life-ops";
 export * from "./prm";
 export * from "./shared";
 export * from "./vault";
+export * from "./v2";

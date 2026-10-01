@@ -16,6 +16,11 @@
   --color-info: hsl(var(--info));
 }
 
+@utility shadow-app-sm { box-shadow: var(--shadow-sm); }
+@utility shadow-app-md { box-shadow: var(--shadow-md); }
+@utility shadow-glow { box-shadow: var(--shadow-glow); }
+@utility shadow-glow-lg { box-shadow: var(--shadow-glow), var(--shadow-lg); }
+
 @layer base {
   :root {
     --color-surface-base: 222 20% 7%;

@@ -32,7 +32,7 @@ export function EmptyState({ icon, title, description, cta, illustration = "gene
       {typeof icon === "string" ? (
         <div className="float-illustration mb-4 text-3xl">{icon}</div>
       ) : (
-        <div className="float-illustration mb-5 rounded-full border border-primary/15 bg-primary/10 p-4 text-primary shadow-[var(--shadow-glow)]">
+        <div className="float-illustration mb-5 rounded-full border border-primary/15 bg-primary/10 p-4 text-primary shadow-glow">
           {Illustration ? <Illustration className="h-7 w-7" /> : <Icon className="h-6 w-6" />}
         </div>
       )}

@@ -9,8 +9,28 @@
   "scripts": {
     "dev": "npm run dev --workspace @light-house/web",
     "build": "npm run build --workspace @light-house/web",
-    "lint": "npm run lint --workspace @light-house/web",
-    "typecheck": "npm run typecheck --workspace @light-house/web",
+    "lint": "npm run lint --workspace @light-house/web && npm run lint:eval",
+    "lint:eval": "eslint --config tools/v2-eval/eslint.config.mjs tools/v2-eval",
+    "typecheck": "npm run typecheck --workspace @light-house/web && npm run typecheck:eval",
+    "typecheck:eval": "tsc --project tools/v2-eval/tsconfig.json",
+    "test": "npm run test --workspace @light-house/web",
+    "test:tools": "node --import tsx --test tools/v2-migration/private-sample-core.test.ts tools/v2-eval/evaluator.test.ts",
+    "test:eval": "node --import tsx --test tools/v2-eval/evaluator.test.ts",
+    "test:all": "npm run test && npm run test:tools",
+    "test:e2e": "npm run test:e2e --workspace @light-house/web",
+    "bindings:types": "node tools/v2-release/run-wrangler-types.mjs generate",
+    "bindings:check": "node tools/v2-release/run-wrangler-types.mjs check",
+    "validate:local": "npm run bindings:check && npm run db:check && npm run typecheck && npm run lint && npm run test:all && npm run build && npm run build:worker --workspace @light-house/web",
+    "eval:private:validate": "tsx tools/v2-eval/validate-manifest.ts",
+    "eval:private:gate": "tsx tools/v2-eval/validate-manifest.ts --require-ready",
+    "eval:private:recorded": "node --import tsx tools/v2-eval/run.ts --mode private-recorded",
+    "eval:synthetic": "node --import tsx tools/v2-eval/run.ts --mode synthetic",
+    "eval:compare": "node --import tsx tools/v2-eval/compare.ts",
+    "migration:inventory:d1": "tsx tools/v2-migration/inventory-d1.ts",
+    "migration:inventory:r2": "tsx tools/v2-migration/inventory-r2.ts",
+    "migration:adapters:validate": "tsx tools/v2-migration/validate-adapter-coverage.ts",
+    "portability:spike:large": "tsx tools/v2-portability/spike-large-bundle.ts",
+    "cutover:preflight": "tsx tools/v2-cutover/preflight.ts",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:seed": "tsx ./scripts/seed-demo.ts",
@@ -18,7 +38,10 @@
     "db:reclassify": "tsx ./scripts/reclassify-data.ts"
   },
   "devDependencies": {
+    "ajv": "8.20.0",
     "drizzle-kit": "^0.31.4",
-    "tsx": "^4.20.6"
+    "tsx": "^4.20.6",
+    "wrangler": "4.121.0",
+    "yaml": "2.9.0"
   }
 }

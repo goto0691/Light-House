@@ -15,7 +15,7 @@ export function ZettelCard({ zettel, selected, onSelect, actions }: ZettelCardPr
     <GlassCard
       className={cn(
         "border p-4",
-        selected ? "border-primary/35 bg-primary/10 shadow-[var(--shadow-glow)]" : "border-white/10 bg-white/5",
+        selected ? "border-primary/35 bg-primary/10 shadow-glow" : "border-white/10 bg-white/5",
       )}
       interactive
       priority="primary"

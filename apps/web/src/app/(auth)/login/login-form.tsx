@@ -16,7 +16,6 @@ export function LoginForm() {
         <input
           autoComplete="email"
           className="input-base"
-          defaultValue="keeper@lighthouse.local"
           name="email"
           type="email"
         />
@@ -26,7 +25,6 @@ export function LoginForm() {
         <input
           autoComplete="current-password"
           className="input-base"
-          defaultValue="lighthouse"
           name="password"
           type="password"
         />

@@ -1,31 +1,12 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Noto_Sans_KR, Noto_Serif_KR, Source_Serif_4 } from "next/font/google";
+import "@fontsource-variable/noto-sans-kr/wght.css";
+import "@fontsource-variable/noto-serif-kr/wght.css";
+import "@fontsource-variable/source-serif-4/wght.css";
+import "@fontsource-variable/jetbrains-mono/wght.css";
 
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import "@/styles/local-fonts.css";
 import "@/styles/globals.css";
-
-const sans = Noto_Sans_KR({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  weight: ["400", "500", "700"],
-});
-
-const serif = Noto_Serif_KR({
-  subsets: ["latin"],
-  variable: "--font-serif",
-  weight: ["400", "600", "700"],
-});
-
-const display = Source_Serif_4({
-  subsets: ["latin"],
-  variable: "--font-display",
-  weight: ["400", "600", "700"],
-});
-
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-});
 
 export const metadata: Metadata = {
   title: "Project Light House",
@@ -34,7 +15,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html className={`${sans.variable} ${serif.variable} ${display.variable} ${mono.variable}`} lang="ko" suppressHydrationWarning>
+    <html lang="ko" suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem={false}>
           {children}

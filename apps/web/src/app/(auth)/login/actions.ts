@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 
 import { createSession } from "@/lib/auth/session";
 import { authenticateUser } from "@/lib/server/auth";
+import { getV2ServerFeatureFlags } from "@/lib/v2/config/server-feature-flags";
+import { resolveAuthenticatedHome } from "@/lib/v2/cutover/cutover-routing";
 
 export type LoginActionState = {
   error?: string;
@@ -26,7 +28,7 @@ export async function loginAction(_: LoginActionState, formData: FormData): Prom
     userId: user.id,
   });
 
-  redirect("/dashboard");
+  redirect(resolveAuthenticatedHome(getV2ServerFeatureFlags()));
 }
 
 export async function logoutAction() {

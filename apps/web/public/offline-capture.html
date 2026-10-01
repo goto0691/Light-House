@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#47584d" />
+    <link rel="manifest" href="/v2-manifest.webmanifest" />
+    <title>Light House · 오프라인 기록</title>
+    <style>
+      :root { color-scheme: light; font-family: system-ui, sans-serif; background: #eee7da; color: #27332d; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+      main { width: min(100%, 520px); background: #fbf7ef; border: 1px solid #d8cfbf; border-radius: 24px; box-shadow: 0 18px 60px #39473e1c; overflow: hidden; }
+      header { padding: 22px 22px 16px; border-bottom: 1px solid #e2d9ca; }
+      h1 { font: 650 20px/1.2 Georgia, serif; margin: 0 0 7px; }
+      p { margin: 0; color: #667069; font-size: 14px; line-height: 1.5; }
+      form { padding: 20px 22px 24px; display: grid; gap: 14px; }
+      textarea { min-height: 220px; width: 100%; resize: vertical; border: 1px solid #d1c7b7; border-radius: 14px; padding: 15px; background: #fffdf8; color: inherit; font: 16px/1.6 inherit; }
+      input[type=file] { width: 100%; font: inherit; }
+      button { border: 0; border-radius: 999px; padding: 13px 18px; background: #47584d; color: #fff; font: 650 15px inherit; }
+      button:disabled { opacity: .55; }
+      #status { min-height: 22px; color: #4f6157; }
+    </style>
+    <script src="/offline-capture.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>오프라인 기록</h1>
+        <p>연결되지 않았습니다. 내용과 이미지 최대 3장을 이 기기에 임시 저장합니다.</p>
+      </header>
+      <form id="capture-form">
+        <label>
+          <span hidden>기록 내용</span>
+          <textarea id="body" required placeholder="무엇이든 먼저 남겨두세요."></textarea>
+        </label>
+        <label>
+          이미지 최대 3장
+          <input id="files" type="file" accept="image/*" multiple />
+        </label>
+        <button type="submit">이 기기에 임시 저장</button>
+        <p id="status" role="status" aria-live="polite"></p>
+      </form>
+    </main>
+  </body>
+</html>

@@ -13,11 +13,20 @@ type UserRow = {
 };
 
 function getAdminConfig() {
+  const configured = (name: string, developmentFallback: string) => {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(`${name} must be configured in production.`);
+    }
+    return developmentFallback;
+  };
+
   return {
     id: "user-light-keeper",
-    email: process.env.LIGHT_HOUSE_ADMIN_EMAIL ?? "keeper@lighthouse.local",
-    password: process.env.LIGHT_HOUSE_ADMIN_PASSWORD ?? "lighthouse",
-    displayName: process.env.LIGHT_HOUSE_ADMIN_NAME ?? "Light Keeper",
+    email: configured("LIGHT_HOUSE_ADMIN_EMAIL", "keeper@lighthouse.local").toLowerCase(),
+    password: configured("LIGHT_HOUSE_ADMIN_PASSWORD", "lighthouse"),
+    displayName: configured("LIGHT_HOUSE_ADMIN_NAME", "Light Keeper"),
   };
 }
 
@@ -37,9 +46,25 @@ async function getUserByEmail(email: string) {
   return found.rows[0] ?? null;
 }
 
+async function getUserById(id: string) {
+  const found = await queryD1<UserRow>(
+    `select
+       id,
+       email,
+       display_name as displayName,
+       hashed_password as hashedPassword
+     from users
+     where id = ?
+     limit 1`,
+    [id],
+  );
+
+  return found.rows[0] ?? null;
+}
+
 export async function syncConfiguredAdminUser() {
   const admin = getAdminConfig();
-  const existing = await getUserByEmail(admin.email);
+  const existing = (await getUserByEmail(admin.email)) ?? (await getUserById(admin.id));
   const hashedPassword = await hashPassword(admin.password);
 
   if (!existing) {
@@ -60,17 +85,19 @@ export async function syncConfiguredAdminUser() {
 
   const needsPasswordRefresh = !existing.hashedPassword || !(await verifyPassword(admin.password, existing.hashedPassword));
   const needsDisplayRefresh = existing.displayName !== admin.displayName;
+  const needsEmailRefresh = existing.email !== admin.email;
 
-  if (needsPasswordRefresh || needsDisplayRefresh) {
+  if (needsPasswordRefresh || needsDisplayRefresh || needsEmailRefresh) {
     await executeD1(
       `update users
-       set display_name = ?, hashed_password = ?, updated_at = datetime('now')
+       set email = ?, display_name = ?, hashed_password = ?, updated_at = datetime('now')
        where id = ?`,
-      [admin.displayName, hashedPassword, existing.id],
+      [admin.email, admin.displayName, hashedPassword, existing.id],
     );
 
     return {
       ...existing,
+      email: admin.email,
       displayName: admin.displayName,
       hashedPassword,
     } satisfies UserRow;

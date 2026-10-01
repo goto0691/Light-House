@@ -1,0 +1,31 @@
+# Local-only runtime initialization check. No production resources or secrets.
+name = "light-house-local-runtime-smoke"
+main = "../../../custom-worker.ts"
+tsconfig = "../../../tsconfig.json"
+# The installed Wrangler 4.121.0 workerd supports through 2026-08-11.
+# This verifies initialization, not exact production compatibility-date parity.
+compatibility_date = "2026-08-11"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+preview_urls = false
+
+[assets]
+directory = "../../../.open-next/assets"
+binding = "ASSETS"
+
+[vars]
+FLAG_V2_ROUTES = "1"
+FLAG_V2_WRITE = "0"
+FLAG_V2_AI = "0"
+FLAG_V2_OFFLINE = "0"
+FLAG_V2_DEFAULT_LIBRARY = "0"
+FLAG_V2_LEGACY_READONLY = "0"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "local-runtime-smoke"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[[r2_buckets]]
+binding = "ARCHIVE_ASSETS"
+bucket_name = "local-runtime-smoke"

@@ -1,22 +1,45 @@
 name = "project-light-house"
-compatibility_date = "2026-04-23"
+main = "apps/web/custom-worker.ts"
+compatibility_date = "2026-08-12"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = false
+
+[observability]
+enabled = true
+
+[triggers]
+crons = ["*/5 * * * *", "20 18 * * *"]
+
+[assets]
+directory = "apps/web/.open-next/assets"
+binding = "ASSETS"
 
 [vars]
-NEXT_PUBLIC_APP_URL = "http://localhost:3000"
+NEXT_PUBLIC_APP_URL = "https://project-light-house.gogo0691.workers.dev"
 NEXT_PUBLIC_FLAG_AI_ROUTING = "1"
-NEXT_PUBLIC_FLAG_SEMANTIC_SEARCH = "1"
-NEXT_PUBLIC_FLAG_PWA = "0"
+NEXT_PUBLIC_FLAG_SEMANTIC_SEARCH = "0"
+NEXT_PUBLIC_FLAG_PWA = "1"
+CLOUDFLARE_ACCOUNT_ID = "a77f7ed8b43ed86abb0401112766ede1"
+CLOUDFLARE_D1_DATABASE_ID = "b3cc2425-7bd4-4fce-a8b3-cade57c3c5e2"
+R2_ACCOUNT_ID = "a77f7ed8b43ed86abb0401112766ede1"
+R2_BUCKET = "light-house-assets"
+GEMINI_MODEL = "gemini-3.6-flash"
+GEMINI_MAIN_MODEL = "gemini-3.6-flash"
+GEMINI_GROUNDED_MODEL = "gemini-3.5-flash-lite"
+FLAG_V2_ROUTES = "1"
+FLAG_V2_WRITE = "1"
+FLAG_V2_AI = "1"
+FLAG_V2_OFFLINE = "1"
+FLAG_V2_DEFAULT_LIBRARY = "0"
+FLAG_V2_LEGACY_READONLY = "0"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "light-house-db"
+database_name = "light_house_db"
 database_id = "b3cc2425-7bd4-4fce-a8b3-cade57c3c5e2"
 
 [[r2_buckets]]
-binding = "ASSETS"
+binding = "ARCHIVE_ASSETS"
 bucket_name = "light-house-assets"
-
-[[vectorize]]
-binding = "VECTOR_INDEX"
-index_name = "zettel-embeddings"
 

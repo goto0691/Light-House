@@ -8,7 +8,7 @@ export function ProjectCard({ project }: { project: ProjectMock }) {
   const dashOffset = circumference - (circumference * project.progress) / 100;
 
   return (
-    <Link className="glass block rounded-[28px] p-5 transition hover:-translate-y-1 hover:shadow-[var(--shadow-glow),var(--shadow-lg)]" href={`/action-hub/${project.id}`}>
+    <Link className="glass block rounded-[28px] p-5 transition hover:-translate-y-1 hover:shadow-glow-lg" href={`/action-hub/${project.id}`}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-2xl">{project.icon}</p>
