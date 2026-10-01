@@ -1,5 +1,18 @@
 # 현재 작업 상태 · 재개 진입점
 
+## main 게시 통합 · 2026-10-01
+
+사용자가 main commit/push와 기존 Vercel 자동 배포를 승인했다. 실제 원격 `460e058`의 22개 커밋을 보존하는 3-way 통합은 `e8317ce`, V2 fixture migration 선택 보완은 `89dffda`다. [84번](./84_MAIN_INTEGRATION_EVIDENCE.md)에 출처와 운영 경계를 기록한다.
+
+- 원격의 Notion·출처/속성 매핑·zettel·readmodel/모바일 UI를 보존했다. V2 cutover guard와 shared service worker 충돌은 검증 후 해결했다
+- 통합 경계44 PASS, migration 선택 RED→GREEN 및 3개 schema 적용 순서23 PASS, tools36 PASS, typegen/typecheck·bindings/db exit0
+- 전체 lint 오류0/경고80(통합된 legacy UI 포함). 변경된 fixture 추가 lint 오류0
+- 통합 safe Worker build exit0, audited_files7484/secret_hits0. 이후 변경은 fixture/검증 script와 문서뿐이며 runtime/build 입력은 동일하다
+- 첫 통합 전체 실행은 fixture setup 오류 확인 후 **exit130으로 중단한 불완료 실행**이다. 최종 고정 소스 `89dffda1f230075f8d09cea5797e78fcd61d1658`의 단일 전체 회귀는 **174/174파일·3545/3545시험 PASS, 오류0, exit0, 1919.81초**로 10:01 UTC에 종료했다
+- 소스 변경·build/test 자원 소유자는 cloud 통합 작업이다. 최종 증거와 증분 bundle로 정상 main push를 이어간다. 이후 문서 갱신은 위 검증 소스의 앱 runtime·검사·migration·dependency를 바꾸지 않는다
+- local production server에서 login/sw/manifest200, routes OFF의 V2 capture404를 확인하고 종료했다. 실행 중인 검사나 개발 서버는 없다. 브라우저 interaction은 이번 통합 결과로 주장하지 않는다
+- 확인한 Vercel 주소: `https://light-house-inky.vercel.app/login` (게시 전 HTTP200). Cloudflare Worker 배포·원격 D1 migration·유료 서비스·실제 AI/개인 자료 gate는 이번 자동 배포 승인에 포함되지 않는다
+
 ## 현재 인계 · 2026-10-01 Cloud Linux
 
 사용자 승인으로 `71ec611`의 sanitized V2 소스를 dot cloud에서 이어받았다. 전체 목표는 계속 **active**이며 원격 push·migration·배포·실제 공급자 호출을 하지 않았다. [82번](./82_CLOUD_LINUX_COMPLETION_EVIDENCE.md)에 기준 소스, 변경, 검증 범위와 운영 gate를 기록한다. 아래 09-28 기록은 이전 환경의 역사 증거다.
