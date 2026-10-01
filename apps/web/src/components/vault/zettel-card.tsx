@@ -39,9 +39,9 @@ export function ZettelCard({ zettel, selected, onSelect, actions }: ZettelCardPr
             <Tag key={tag} value={`#${tag}`} variant="neutral" />
           ))}
           {relationCount ? (
-        <span className="tabular-nums rounded-md border border-white/10 bg-black/10 px-3 py-1 text-[11px] tracking-[0.08em] text-muted-foreground">
-          연결 {relationCount}
-        </span>
+            <span className="tabular-nums rounded-md border border-white/10 bg-black/10 px-3 py-1 text-[11px] tracking-[0.08em] text-muted-foreground">
+              연결 {relationCount}
+            </span>
           ) : null}
         </div>
         <p className="mt-3 line-clamp-2 text-xs leading-5 text-muted-foreground">{zettel.summary}</p>

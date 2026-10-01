@@ -17,3 +17,12 @@ dev-server*.log
 .codex/
 *.tsbuildinfo
 apps/web/package-lock.json
+.vercel
+.open-next/
+.opennext-build.lock
+.wrangler/
+.env*.local
+apps/web/test-results/
+apps/web/playwright-report/
+.private/
+artifacts/v2-migration/

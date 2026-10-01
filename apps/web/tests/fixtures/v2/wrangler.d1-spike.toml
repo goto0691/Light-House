@@ -1,0 +1,11 @@
+name = "light-house-v2-d1-spike"
+compatibility_date = "2026-04-23"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "light-house-v2-d1-spike"
+database_id = "00000000-0000-0000-0000-000000000009"
+
+[[r2_buckets]]
+binding = "ARCHIVE_ASSETS"
+bucket_name = "light-house-v2-r2-spike"

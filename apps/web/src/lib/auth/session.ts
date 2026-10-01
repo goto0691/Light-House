@@ -30,6 +30,11 @@ async function deleteSessionById(sessionId: string) {
 export async function createSession(input: { userId: string }) {
   const sessionId = createSessionId();
   const expiresAt = Date.now() + SESSION_TTL_MS;
+  const store = await cookies();
+  const previousSessionId = store.get(SESSION_COOKIE)?.value;
+  if (previousSessionId) {
+    await deleteSessionById(previousSessionId);
+  }
 
   await executeD1(
     `insert into sessions (id, user_id, expires_at)
@@ -37,7 +42,6 @@ export async function createSession(input: { userId: string }) {
     [sessionId, input.userId, expiresAt],
   );
 
-  const store = await cookies();
   store.set(SESSION_COOKIE, sessionId, {
     httpOnly: true,
     sameSite: "lax",
@@ -81,6 +85,7 @@ export async function getSession() {
   }
 
   if (session.expiresAt <= Date.now()) {
+    await deleteSessionById(session.sessionId);
     return null;
   }
 

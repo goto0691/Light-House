@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ShellProvider } from "@/components/providers/shell-provider";
@@ -28,16 +29,22 @@ function resolveDomain(pathname: string): DomainKey {
 
 export function AppShell({
   children,
+  defaultLibrary = false,
   glassOpacity = "full",
+  legacyReadonly = false,
+  v2Capture = false,
 }: {
   children: ReactNode;
+  defaultLibrary?: boolean;
   glassOpacity?: "full" | "low" | "off";
+  legacyReadonly?: boolean;
+  v2Capture?: boolean;
 }) {
   const pathname = usePathname();
   const domain = resolveDomain(pathname);
 
   return (
-    <ShellProvider>
+    <ShellProvider captureHref={v2Capture ? "/v2/capture" : undefined} searchHref={defaultLibrary ? "/v2/search" : undefined}>
       <div className="min-h-screen bg-background text-foreground" data-app-shell data-glass-opacity={glassOpacity}>
         <PWAProvider />
         <OfflineBanner />
@@ -45,9 +52,10 @@ export function AppShell({
         <div className="fixed inset-0 -z-10 bg-[linear-gradient(135deg,rgba(251,191,36,0.08),transparent_32%),linear-gradient(225deg,rgba(14,165,233,0.06),transparent_34%)]" />
         <div className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-40 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),transparent)]" />
         <div className="min-h-screen lg:flex">
-          <GlobalNav />
+          <GlobalNav defaultLibrary={defaultLibrary} v2Capture={v2Capture} />
           <LocalNav domain={domain} />
           <main className="flex min-h-screen min-w-0 flex-1 flex-col overflow-x-hidden">
+            {legacyReadonly ? <div className="border-b border-amber-400/25 bg-amber-400/10 px-4 py-2 text-center text-xs text-amber-100" role="status">이전 보관소는 읽기 전용입니다. 새 기록과 편집은 <Link className="font-semibold underline" href="/v2/library">Light House V2</Link>에서 진행하세요.</div> : null}
             <Breadcrumb />
             <div className="mx-auto flex w-full max-w-[1480px] flex-1 px-4 pb-24 pt-5 md:px-6 md:py-6 xl:px-8">
               <div className="min-w-0 flex-1">{children}</div>
@@ -57,7 +65,7 @@ export function AppShell({
         <SideDrawerHost />
         <CommandPalette />
         <NotificationCenter />
-        <QuickCaptureModal />
+        {!v2Capture && !legacyReadonly ? <QuickCaptureModal /> : null}
         <HotkeyDialog />
         <ToastViewport />
       </div>

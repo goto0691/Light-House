@@ -1,5 +1,7 @@
 # 🧩 Component Specifications
 
+> **역사적 V1 컴포넌트 자료 · 현행 실행 지침 아님 (2026-09-08)**: 아래 구형 모델 대상, 고정 디렉터리·props·모션 개수와 §17 프롬프트는 당시 설계 기록이다. 현재 Astra/V2 작업은 [루트 지침](../AGENTS.md) → [현재 상태](./V2/CURRENT_WORK_STATE.md)에서 시작하며, [V2 컴포넌트 계약](./V2/13_COMPONENT_ARCHITECTURE_AND_INTERACTIONS.md)과 실제 `apps/web/src/components/v2` 코드를 함께 확인한다. 필요한 계약만 읽고 접근성·모바일·오류 경로를 변경에 맞춰 검증한다.
+
 > **선행 문서**: [`02_DESIGN_SYSTEM.md`](./02_DESIGN_SYSTEM.md), [`05_PAGE_SPECIFICATIONS.md`](./05_PAGE_SPECIFICATIONS.md), [`06_INTERACTION_PATTERNS.md`](./06_INTERACTION_PATTERNS.md)
 > **대상**: Frontend 에이전트 (GPT-5.4 / Claude Code)
 > **목표**: 모든 화면 × 모든 컴포넌트를 **단 하나의 문서**에서 조회 가능하도록 고정.
@@ -1574,9 +1576,10 @@ AI 에이전트가 "이 화면에 뭐가 들어가야 하지?"를 역방향 조�
 
 ## 17. 에이전트 작업 프롬프트 템플릿
 
-AI 에이전트에게 화면 구현을 지시할 때 사용:
+아래는 V1 당시 프롬프트의 보존본이며 새 작업에 복사하지 않는다. 현재 작업에는 [루트 실행 지침](../AGENTS.md)과 해당 V2 계약을 사용한다:
 
 ```markdown
+<!-- V1 역사 템플릿: 현행 V2 작업에 사용하지 않는다. 현재 지침은 AGENTS.md 참조. -->
 ## 작업: [화면 라우트] 구현
 
 다음 문서를 순서대로 읽고 작업해줘:
@@ -1609,4 +1612,4 @@ AI 에이전트에게 화면 구현을 지시할 때 사용:
 
 ---
 
-**다음**: 이 문서의 체크리스트(§16)로 모든 컴포넌트를 검증한 뒤, [`07_DEVELOPMENT_ROADMAP.md`](./07_DEVELOPMENT_ROADMAP.md)의 Phase에 맞춰 실제 구현에 착수한다.
+**현재 작업**: [V2 현재 상태](./V2/CURRENT_WORK_STATE.md)에서 미완료 항목을 이어간다. V1 체크리스트와 [`07_DEVELOPMENT_ROADMAP.md`](./07_DEVELOPMENT_ROADMAP.md)는 당시 구현을 조사할 때만 참조한다.

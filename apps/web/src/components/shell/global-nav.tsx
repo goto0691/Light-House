@@ -33,7 +33,7 @@ function navTitle(label: string, hotkey?: string) {
   return formatted ? `${label} · 단축키 ${formatted}` : label;
 }
 
-export function GlobalNav() {
+export function GlobalNav({ defaultLibrary = false, v2Capture = false }: { defaultLibrary?: boolean; v2Capture?: boolean }) {
   const pathname = usePathname();
   const openCommandPalette = useShellStore((state) => state.openCommandPalette);
   const openQuickCapture = useShellStore((state) => state.openQuickCapture);
@@ -43,8 +43,8 @@ export function GlobalNav() {
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/notifications?unreadOnly=1&limit=1")
-      .then((response) => response.json())
-      .then((payload: { unreadCount?: number }) => {
+      .then(async (response) => (await response.json()) as { unreadCount?: number })
+      .then((payload) => {
         if (!cancelled) {
           setUnreadCount(payload.unreadCount ?? 0);
         }
@@ -64,9 +64,9 @@ export function GlobalNav() {
     <aside className="glass-elevated fixed inset-x-3 bottom-3 z-40 flex h-[68px] items-center justify-between border border-white/10 px-3 py-2 lg:sticky lg:inset-auto lg:top-0 lg:h-screen lg:w-[68px] lg:shrink-0 lg:flex-col lg:border-y-0 lg:border-l-0 lg:px-2 lg:py-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-full lg:flex-none lg:flex-col lg:items-center lg:gap-3">
         <Link
-          aria-label="오늘 보기로 이동"
+          aria-label={defaultLibrary ? "V2 보관함으로 이동" : "오늘 보기로 이동"}
           className="focus-ring group relative hidden h-11 w-11 items-center justify-center rounded-lg border border-primary/35 bg-primary/12 text-sm font-semibold text-primary shadow-[0_0_28px_rgba(251,191,36,0.16)] hover:bg-primary/18 lg:flex"
-          href="/dashboard"
+          href={defaultLibrary ? "/v2/library" : "/dashboard"}
         >
           <span className="font-display text-base tracking-[0.08em]">LH</span>
           <span className="pointer-events-none absolute -bottom-6 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.24em] text-muted-foreground backdrop-blur group-hover:block">
@@ -104,6 +104,11 @@ export function GlobalNav() {
         {UTILITY.map((item) => {
           const Icon = item.icon;
           const active = isActive(pathname, item.path);
+
+          if ((item.key === "capture" && v2Capture) || (item.key === "search" && defaultLibrary)) {
+            const href = item.key === "capture" ? "/v2/capture" : "/v2/search";
+            return <Link aria-label={item.label} className="focus-ring relative flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/6 hover:text-foreground" href={href} key={item.key} title={navTitle(item.label, item.hotkey)}><Icon className="h-5 w-5" strokeWidth={1.75} /></Link>;
+          }
 
           if (item.key === "search" || item.key === "capture" || item.key === "notifications") {
             return (

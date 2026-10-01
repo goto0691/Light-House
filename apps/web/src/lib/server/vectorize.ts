@@ -62,7 +62,7 @@ function getRequiredEnv(name: string) {
 }
 
 function getCloudflareToken() {
-  return process.env.CLOUDFLARE_API_TOKEN ?? getRequiredEnv("DATABASE_AUTH_TOKEN");
+  return process.env.CLOUDFLARE_API_TOKEN?.trim() || getRequiredEnv("DATABASE_AUTH_TOKEN");
 }
 
 function getCloudflareApiBase() {

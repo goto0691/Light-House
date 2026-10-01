@@ -50,9 +50,8 @@ export function AISettingsClient({ initial }: AISettingsClientProps) {
           <label className="block space-y-2 rounded-md border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted-foreground">
             <span className="block">대체 모델</span>
             <select className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-foreground" onChange={(event) => setFallbackModel(event.target.value)} value={fallbackModel}>
-              <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash-Lite</option>
-              <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
               <option value="local-template-v1">Local Template</option>
             </select>
           </label>

@@ -1,0 +1,8 @@
+/* Pinned, unicode-range-subsetted font files are bundled by Next from npm.
+   Builds and visitors do not need access to Google Fonts. */
+:root {
+  --font-sans: "Noto Sans KR Variable", Arial, sans-serif;
+  --font-serif: "Noto Serif KR Variable", Georgia, serif;
+  --font-display: "Source Serif 4 Variable", Georgia, serif;
+  --font-mono: "JetBrains Mono Variable", "Courier New", monospace;
+}

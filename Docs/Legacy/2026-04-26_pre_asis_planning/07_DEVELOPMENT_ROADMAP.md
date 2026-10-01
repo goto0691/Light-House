@@ -1,5 +1,7 @@
 # 🗓️ Development Roadmap
 
+> **역사적 V1 로드맵**: 아래 초기화 명령·역할별 Start Here·Vercel/Slack 절차는 현재 V2 실행 지시가 아니다. 기존 작업을 이어갈 때는 [루트 지침](../AGENTS.md)과 [V2 현재 상태](./V2/CURRENT_WORK_STATE.md)를 사용한다. 당시 설계는 출처로 보존한다.
+
 > **선행 문서**: [`06_INTERACTION_PATTERNS.md`](./06_INTERACTION_PATTERNS.md)
 > **대상**: Orchestrator + 모든 코딩 에이전트
 > **목표**: 7개 Phase, 총 약 10주 스프린트. 각 Phase는 **독립적으로 데모 가능**하도록 설계.
@@ -424,7 +426,7 @@ NEXT_PUBLIC_FLAG_PWA=1
 
 ---
 
-## 8. 에이전트별 "지금 당장" 지시서
+## 8. V1 최초 구축 당시 역할별 지시서 (현재 실행 금지)
 
 ### Backend Agent — Start Here
 1. `pnpm create-turbo@latest` 로 Monorepo 초기화
@@ -474,7 +476,7 @@ NEXT_PUBLIC_FLAG_PWA=1
 
 ---
 
-## 10. 다음 단계
+## 10. V1 당시 다음 단계 (역사적 기록)
 
 모든 에이전트는:
 

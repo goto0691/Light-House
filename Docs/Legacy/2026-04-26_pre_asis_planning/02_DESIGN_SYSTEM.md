@@ -1,5 +1,7 @@
 # 🎨 Design System
 
+> **역사적 V1 디자인 자료 · 현행 실행 지침 아님 (2026-09-08)**: 아래 GPT-5.4 관련 설명, 작업 헌장, 강제 워크시트·모션·전수 반복 검사, 복사용 프롬프트는 당시 설계 기록이다. Astra의 현재 능력이나 V2 작업 방식에 대한 근거로 사용하지 않는다. 현재 작업은 [루트 지침](../AGENTS.md)과 [현재 상태](./V2/CURRENT_WORK_STATE.md), UI는 [V2 컴포넌트 계약](./V2/13_COMPONENT_ARCHITECTURE_AND_INTERACTIONS.md)·[시각 기준선](./V2/18_DESIGN_SYSTEM_VISUAL_BASELINE.md)·[확정 디자인 검토](./V2/19_DESIGN_ALTERNATIVES_AND_REVIEW.md)를 확인한다. 이 파일의 규칙을 V2에 일괄 적용하거나 모델명만 Astra로 치환하지 않는다.
+
 > **선행 문서**: [`01_INFORMATION_ARCHITECTURE.md`](./01_INFORMATION_ARCHITECTURE.md)
 > **대상**: Frontend 에이전트 (GPT-5.4 / Claude Code)
 > **철학**: "Calm, deep, glassy" — 시선을 빼앗지 않고 데이터에 집중하게 만드는 어두운 유리.
@@ -9,8 +11,7 @@
 
 ## 0. AI 에이전트 작업 헌장 (Agent Working Charter)
 
-> **AI 에이전트가 이 프로젝트에서 UI를 빌드하기 전 반드시 숙지해야 할 하드 룰.**
-> 이 섹션은 GPT-5.4, Claude Code 등 모든 프론트엔드 에이전트에게 적용된다.
+> **아래는 V1 당시 작업 헌장의 보존본이다.** 현재 Astra/V2 구현의 선행 조건이 아니며, 현행 지침은 [AGENTS.md](../AGENTS.md)를 따른다.
 
 ### 0.1. 빌드 전 3단계 워크시트
 
@@ -1488,6 +1489,8 @@ App/Utility Surface에서는 다음 3원칙:
 
 ## 19. 반복 개선 프로토콜 (Iterative Refinement Protocol)
 
+> 이 절의 4단계 반복·전수 점검은 역사적 V1 절차다. V2에서는 실제 변경과 발견한 실패에 맞춰 검증하며, 유효한 통과 결과를 이유 없이 반복하지 않는다.
+
 > **GPT-5.4는 한 번에 완벽하지 않다**. 4단계 반복 구조로 품질을 올린다.
 
 ### 19.1. 4단계 개선 플로우
@@ -1556,12 +1559,15 @@ App/Utility Surface에서는 다음 3원칙:
 
 ## 20. 에이전트 프롬프트 템플릿 (Agent Prompt Templates)
 
-> **에이전트에게 작업을 시킬 때 쓰는 복사-붙여넣기 템플릿.** §17 결정 트리와 §18 디테일을 강제로 통과하게 하는 구조.
+> **역사적 예시, 새 작업에 복사하지 않음.** 현재 프롬프트는 목표·관련 V2 계약·수정 범위·검증 결과를 명시하고 [루트 지침](../AGENTS.md)을 사용한다.
+
+> **당시 설명:** V1 에이전트용 복사-붙여넣기 템플릿으로, §17 결정 트리와 §18 디테일을 통과하도록 구성했다. 현재 V2 지시가 아니다.
 
 ### 20.1. 컴포넌트 단위 생성 프롬프트
 
 ```markdown
 ## 작업: <ComponentName> 생성
+<!-- V1 역사 템플릿: 현행 V2 작업에 사용하지 않는다. 현재 지침은 AGENTS.md 참조. -->
 
 ### 컨텍스트
 - Surface 타입: [Landing / Dashboard / Directory / Deep Work / Utility / Drawer]
@@ -1602,6 +1608,7 @@ App/Utility Surface에서는 다음 3원칙:
 
 ```markdown
 ## 작업: [라우트] 화면 구현
+<!-- V1 역사 템플릿: 현행 V2 작업에 사용하지 않는다. 현재 지침은 AGENTS.md 참조. -->
 
 ### 선행 읽기
 - `Docs/05_PAGE_SPECIFICATIONS.md` 해당 섹션
@@ -1635,6 +1642,7 @@ App/Utility Surface에서는 다음 3원칙:
 
 ```markdown
 ## 작업: [경로] 리팩터링
+<!-- V1 역사 템플릿: 현행 V2 작업에 사용하지 않는다. 현재 지침은 AGENTS.md 참조. -->
 
 ### 목적
 [구체적 이유 — 성능·가독성·접근성]
@@ -1659,6 +1667,7 @@ App/Utility Surface에서는 다음 3원칙:
 
 ```markdown
 ## 작업: [컴포넌트/화면] UX 비평
+<!-- V1 역사 템플릿: 현행 V2 작업에 사용하지 않는다. 현재 지침은 AGENTS.md 참조. -->
 
 다음 6개 질문으로 자체 비평:
 1. 시선 흐름이 의도대로인가?
@@ -1676,9 +1685,11 @@ App/Utility Surface에서는 다음 3원칙:
 
 ## 21. 문서 사용 가이드 (How to Use This Document)
 
+> 이 절은 V1 당시의 읽기·리뷰·문서 갱신 순서다. 현재 V2에서 전체 문서 읽기나 V1 카탈로그 동시 갱신을 요구하지 않는다. 현행 진입점은 [현재 상태](./V2/CURRENT_WORK_STATE.md)다.
+
 ### 21.1. 에이전트 로딩 순서
 
-AI 에이전트는 작업 시작 시 본 문서를 **다음 순서로 읽는다**:
+V1 당시에는 다음 읽기 순서를 사용했다:
 
 1. **§0** — 하드 룰·함정 (가장 먼저, 절대 규칙)
 2. **§11–§13** — 비주얼 테시스 + Surface 판단 (작업 맥락 고정)
@@ -1706,4 +1717,4 @@ PR 리뷰 시 본 문서 체크 순서:
 
 ---
 
-**다음**: [`03_DATABASE_SCHEMA.md`](./03_DATABASE_SCHEMA.md)에서 전체 Drizzle 스키마를 확정한다.
+**당시 후속 경로**: V1의 [`03_DATABASE_SCHEMA.md`](./03_DATABASE_SCHEMA.md). 현재 V2 구현은 [현재 상태](./V2/CURRENT_WORK_STATE.md)에서 이어가며 기존 스키마를 다시 확정·초기화하지 않는다.

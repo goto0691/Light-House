@@ -8,12 +8,8 @@ import { flushOfflineCaptures } from "@/lib/offline-capture-queue";
 export function PWAProvider() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") {
-      if ("serviceWorker" in navigator) {
-        void navigator.serviceWorker.getRegistrations().then((registrations) => Promise.all(registrations.map((registration) => registration.unregister()))).catch(() => undefined);
-      }
-      if ("caches" in window) {
-        void caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))).catch(() => undefined);
-      }
+      // V2 owns the shared /sw.js registration and offline-capture cache too.
+      // Entering a legacy page must not delete another feature's local state.
       return;
     }
 

@@ -6,7 +6,7 @@
   "main": "./index.ts",
   "types": "./index.ts",
   "dependencies": {
-    "drizzle-orm": "^0.44.5",
+    "drizzle-orm": "0.45.2",
     "ulidx": "^2.4.1"
   },
   "devDependencies": {

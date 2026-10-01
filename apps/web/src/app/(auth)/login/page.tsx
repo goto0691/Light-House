@@ -20,11 +20,6 @@ export default async function LoginPage() {
           개인 작업 공간에 안전하게 들어갑니다. 오늘의 기록, 지식금고, 작업 흐름을 이어서 확인할 수 있습니다.
         </p>
         <LoginForm />
-        <div className="mt-6 rounded-lg border border-white/10 bg-white/5 p-4 text-xs text-muted-foreground">
-          기본 계정: <span className="text-foreground">keeper@lighthouse.local</span>
-          <br />
-          기본 비밀번호: <span className="text-foreground">lighthouse</span>
-        </div>
       </section>
     </main>
   );

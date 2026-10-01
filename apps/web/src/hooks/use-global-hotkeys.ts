@@ -12,7 +12,7 @@ function isEditableTarget(target: EventTarget | null) {
   return element.isContentEditable || tag === "input" || tag === "textarea" || tag === "select";
 }
 
-export function useGlobalHotkeys() {
+export function useGlobalHotkeys(options: { captureHref?: string; searchHref?: string } = {}) {
   const router = useRouter();
   const sequence = useRef<string[]>([]);
   const openCommandPalette = useShellStore((state) => state.openCommandPalette);
@@ -38,13 +38,15 @@ export function useGlobalHotkeys() {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        openCommandPalette();
+        if (options.searchHref) router.push(options.searchHref);
+        else openCommandPalette();
         return;
       }
 
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "n") {
         event.preventDefault();
-        openQuickCapture();
+        if (options.captureHref) router.push(options.captureHref);
+        else openQuickCapture();
         return;
       }
 
@@ -81,5 +83,5 @@ export function useGlobalHotkeys() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [openCommandPalette, openHotkeyDialog, openQuickCapture, router, toggleLNB]);
+  }, [openCommandPalette, openHotkeyDialog, openQuickCapture, options.captureHref, options.searchHref, router, toggleLNB]);
 }

@@ -1,0 +1,150 @@
+{
+  "contract": "recorded-evaluation-v1",
+  "report_version": 1,
+  "mode": "synthetic",
+  "provenance": "synthetic-recordings",
+  "live_provider_verified": false,
+  "identity": {
+    "build_sha": "6b8be40556b326a8c413f902fc73ec7eecf24816",
+    "schema_sha256": "sha256:76188e94c941e418caa30f089297d740d7e1a38ef591f2d025f06fe698822999",
+    "model_config_sha256": "sha256:2a117133aa88270d7c184eb7f0c5a3166f809c754b1c521d48333fe96759b048",
+    "prompt_sha256": "sha256:bf944689dedac4ec8c5414c65e72085f71f029d8e8c4b484770457d178df620a",
+    "registry_sha256": "sha256:0ab67cea17e3f186be23a400c3106e50e32b17d0b9c16d07d2edda11a3d9a9e7"
+  },
+  "corpus_sha256": "sha256:10613997b563670a2c1434f7821730e490790423b738823815e628226973a94f",
+  "readiness": {
+    "current_hashes_verified": false,
+    "human_approved_cases": 0,
+    "ready_cases": 0
+  },
+  "cases": [
+    {
+      "case_id": "GC-01",
+      "metrics": {
+        "source_hash_equality": {
+          "matched": 1,
+          "total": 1,
+          "unknown": 0,
+          "rate": 1
+        },
+        "exact_typed_value_recall": {
+          "matched": 1,
+          "total": 1,
+          "unknown": 0,
+          "rate": 1
+        },
+        "type_alias_precision": {
+          "matched": 1,
+          "total": 1,
+          "unknown": 0,
+          "rate": 1
+        },
+        "type_alias_recall": {
+          "matched": 1,
+          "total": 1,
+          "unknown": 0,
+          "rate": 1
+        },
+        "ranked_id_top1": {
+          "matched": 0,
+          "total": 1,
+          "unknown": 0,
+          "rate": 0
+        },
+        "ranked_id_top5": {
+          "matched": 1,
+          "total": 1,
+          "unknown": 0,
+          "rate": 1
+        },
+        "ranked_id_top10": {
+          "matched": 1,
+          "total": 1,
+          "unknown": 0,
+          "rate": 1
+        },
+        "query_all_required_top10": {
+          "matched": 1,
+          "total": 1,
+          "unknown": 0,
+          "rate": 1
+        }
+      },
+      "issues": [],
+      "unknown_count": 0
+    }
+  ],
+  "aggregate": {
+    "metrics": {
+      "source_hash_equality": {
+        "matched": 1,
+        "total": 1,
+        "unknown": 0,
+        "rate": 1
+      },
+      "exact_typed_value_recall": {
+        "matched": 1,
+        "total": 1,
+        "unknown": 0,
+        "rate": 1
+      },
+      "type_alias_precision": {
+        "matched": 1,
+        "total": 1,
+        "unknown": 0,
+        "rate": 1
+      },
+      "type_alias_recall": {
+        "matched": 1,
+        "total": 1,
+        "unknown": 0,
+        "rate": 1
+      },
+      "ranked_id_top1": {
+        "matched": 0,
+        "total": 1,
+        "unknown": 0,
+        "rate": 0
+      },
+      "ranked_id_top5": {
+        "matched": 1,
+        "total": 1,
+        "unknown": 0,
+        "rate": 1
+      },
+      "ranked_id_top10": {
+        "matched": 1,
+        "total": 1,
+        "unknown": 0,
+        "rate": 1
+      },
+      "query_all_required_top10": {
+        "matched": 1,
+        "total": 1,
+        "unknown": 0,
+        "rate": 1
+      }
+    },
+    "fatal_count": 0,
+    "major_count": 0,
+    "unknown_count": 0
+  },
+  "rubric": {
+    "status": "not_scored",
+    "maximum": 16,
+    "threshold": 13,
+    "average_points": null,
+    "cases_at_or_above_13": null,
+    "policy": "per_case_vs_average_unresolved"
+  },
+  "promotion": {
+    "eligible": false,
+    "decision": "review_required",
+    "codes": [
+      "SYNTHETIC_ONLY",
+      "RUBRIC_NOT_SCORED",
+      "RUBRIC_POLICY_UNRESOLVED",
+      "OTHER_RELEASE_GATES_NOT_EVALUATED"
+    ]
+  }
+}

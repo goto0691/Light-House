@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Light House">
+  <rect width="512" height="512" rx="112" fill="#47584d"/>
+  <path d="M98 184c72-45 142-54 210-27 42 17 77 47 106 90-66-14-123-9-170 15-52 26-93 69-123 128-29-65-36-134-23-206Z" fill="#f4d99c"/>
+  <path d="M169 331V182l87-62 87 62v149h-55v-86h-64v86h-55Z" fill="#fbf6ec"/>
+  <path d="M256 104V63M205 119l-25-36M307 119l25-36" stroke="#f4d99c" stroke-width="18" stroke-linecap="round"/>
+</svg>
