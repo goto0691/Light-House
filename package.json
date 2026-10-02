@@ -18,7 +18,7 @@
     "typecheck:eval:live": "tsc --project tools/v2-eval/private-live/tsconfig.json",
     "typecheck:cutover": "tsc --project tools/v2-cutover/tsconfig.json",
     "test": "npm run test --workspace @light-house/web",
-    "test:tools": "node --import tsx --test tools/v2-migration/private-sample-core.test.ts tools/v2-eval/evaluator.test.ts tools/v2-eval/authoring-approval.test.ts tools/v2-eval/product-observations.test.ts tools/v2-cutover/recorded-evidence.test.ts && npm run test:eval:replay && npm run test:eval:live",
+    "test:tools": "node --import tsx --test tools/v2-migration/private-sample-core.test.ts tools/v2-eval/evaluator.test.ts tools/v2-eval/authoring-approval.test.ts tools/v2-eval/product-observations.test.ts tools/v2-cutover/recorded-evidence.test.ts tools/v2-release/normalize-node-globals.test.mjs && npm run test:eval:replay && npm run test:eval:live",
     "test:eval": "node --import tsx --test tools/v2-eval/evaluator.test.ts tools/v2-eval/authoring-approval.test.ts tools/v2-eval/product-observations.test.ts && npm run test:eval:replay && npm run test:eval:live",
     "test:eval:replay": "tsx --tsconfig tools/v2-eval/private-replay/tsconfig.json --test tools/v2-eval/private-replay/replay.test.ts",
     "test:eval:live": "tsx --tsconfig tools/v2-eval/private-live/tsconfig.json --test tools/v2-eval/private-live/live.test.ts",
@@ -62,7 +62,7 @@
     "ajv": "8.20.0",
     "drizzle-kit": "^0.31.4",
     "tsx": "^4.20.6",
-    "wrangler": "4.121.0",
+    "wrangler": "4.122.0",
     "yaml": "2.9.0"
   }
 }

@@ -1,4 +1,5 @@
-const CACHE_NAME = "lighthouse-shell-v2";
+// Refresh older shells that cached a redirected HTML response on Workers.
+const CACHE_NAME = "lighthouse-shell-v3";
 const SHELL_ASSETS = ["/offline-capture.html", "/offline-capture.js", "/v2-icon-192.png", "/v2-icon-512.png"];
 const DB_NAME = "lighthouse_capture_v1";
 const DB_VERSION = 2;

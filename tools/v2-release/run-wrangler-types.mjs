@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+
+import { normalizeNodeGlobals } from "./normalize-node-globals.mjs";
 
 const mode = process.argv[2] ?? "check";
 if (mode !== "generate" && mode !== "check") {
@@ -34,3 +37,15 @@ const result = spawnSync(process.execPath, args, {
 
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;
+
+if (process.exitCode === 0) {
+  const target = path.join(root, "apps", "web", "worker-configuration.d.ts");
+  const source = readFileSync(target, "utf8");
+  const normalized = normalizeNodeGlobals(source).replaceAll("\r\n", "\n");
+  if (mode === "generate") {
+    if (normalized !== source) writeFileSync(target, normalized);
+  } else if (normalized !== source) {
+    process.stderr.write("Worker Node globals are out of date. Run npm run bindings:types.\n");
+    process.exitCode = 1;
+  }
+}
