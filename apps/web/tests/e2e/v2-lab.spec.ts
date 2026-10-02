@@ -43,10 +43,12 @@ test("Capture fixture separates source commit from AI processing", async ({ page
   await expect(page.getByText("원본 저장 완료 · AI 정리 중")).toBeVisible();
 });
 
-test("Product Capture accepts a pasted screenshot and never checkpoints restricted payload", async ({ page }) => {
+test("Product Capture accepts a pasted screenshot and never checkpoints restricted payload", async ({ context, page }) => {
   await page.goto("/v2/capture");
   await expect(page.getByRole("heading", { name: "먼저 남겨두세요." })).toBeVisible();
-  await expect(page.getByText("V2 쓰기 기능이 아직 비활성화되어 있습니다.")).toBeVisible();
+  // Exercise the real local checkpoint with an explicit browser network state.
+  await context.setOffline(true);
+  expect(await page.evaluate(() => navigator.onLine)).toBe(false);
 
   const body = page.getByRole("textbox", { name: "기록 본문" });
   await body.fill("논쟁 화면을 원문과 함께 보관한다.");

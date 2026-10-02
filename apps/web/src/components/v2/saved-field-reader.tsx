@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { V2SavedViewFieldValue } from "@/lib/v2/retrieval/saved-view-fields";
 import { SAVED_FIELD_PAGE_CONTRACT, SAVED_FIELD_PAGE_UNITS as PAGE_UNITS, SAVED_FIELD_MAX_STORED_BYTES as MAX_STORED_BYTES, type SavedFieldPage as FieldPage } from "@/lib/v2/retrieval/saved-field-page";
 import "./saved-field-reader.css";
@@ -61,6 +61,12 @@ function FieldReaderSession(props: Props) {
   const [busy, setBusy] = useState(false), [previewInvalidated, setPreviewInvalidated] = useState(false), [previewSuperseded, setPreviewSuperseded] = useState(false), [limitExceeded, setLimitExceeded] = useState(false), [denied, setDenied] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   const active = useRef(true), epoch = useRef(0), controller = useRef<AbortController | null>(null), busyRef = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; controller.current?.abort(); }; }, []);
+  useLayoutEffect(() => {
+    if (!open || !page) return;
+    // Focus the committed page; an animation frame can run before React mounts it.
+    textArea.current?.scrollTo(0, 0);
+    textArea.current?.focus();
+  }, [open, page]);
   function cancel() { epoch.current++; controller.current?.abort(); controller.current = null; busyRef.current = false; setBusy(false); }
   function close() { cancel(); setOpen(false); setPage(null); setHistory([0]); setPosition(0); setError(""); setMessage(""); trigger.current?.focus(); }
   function deny() { cancel(); setPage(null); setDenied(true); setOpen(false); setError(""); setMessage(""); onAccessDenied(); }
@@ -102,7 +108,6 @@ function FieldReaderSession(props: Props) {
       if (purpose === "next") { setHistory((items) => [...items.slice(0, position + 1), offset]); setPosition(position + 1); }
       else if (purpose === "previous") setPosition(position - 1);
       else { setHistory([0]); setPosition(0); }
-      requestAnimationFrame(() => { if (stillCurrent()) { textArea.current?.scrollTo(0, 0); textArea.current?.focus(); } });
     } catch (caught) {
       if (stillCurrent()) setError(caught instanceof Error ? caught.message : "필드 응답을 확인하지 못했습니다.");
     } finally { if (stillCurrent()) { busyRef.current = false; controller.current = null; setBusy(false); } }

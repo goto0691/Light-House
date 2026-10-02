@@ -173,11 +173,19 @@ test("closing during a full copy discards late data and reopening starts at offs
 });
 
 test("keyboard and 320px reader maintain bounded scrolling, literal text and accessibility", async ({ page }, testInfo) => {
-  const context = await harness(page); await page.setViewportSize({ width: 320, height: 740 }); await open(page);
+  const context = await harness(page); await page.setViewportSize({ width: 320, height: 740 });
+  await page.getByRole("button", { name: "전체 값 열기", exact: true }).focus();
+  await page.getByRole("button", { name: "전체 값 열기", exact: true }).press("Enter");
   await expect(current(page)).toBeFocused();
   const bounds = await current(page).evaluate((element) => ({ height: element.clientHeight, scroll: element.scrollHeight, width: document.documentElement.scrollWidth, viewport: innerWidth }));
   expect(bounds.height).toBeLessThanOrEqual(334); expect(bounds.scroll).toBeGreaterThan(bounds.height); expect(bounds.width).toBeLessThanOrEqual(bounds.viewport);
   const axe = await new AxeBuilder({ page }).include(".v2-saved-field-reader").analyze(); expect(axe.violations).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("saved-field-reader-320.png"), fullPage: true });
+  await scope(page).getByRole("button", { name: "다음 구간", exact: true }).focus();
+  await scope(page).getByRole("button", { name: "다음 구간", exact: true }).press("Enter");
+  await expect(current(page)).toHaveText(text.slice(4095, 8191)); await expect(current(page)).toBeFocused();
+  await scope(page).getByRole("button", { name: "이전 구간", exact: true }).focus();
+  await scope(page).getByRole("button", { name: "이전 구간", exact: true }).press("Enter");
+  await expect(current(page)).toHaveText(text.slice(0, 4095)); await expect(current(page)).toBeFocused();
   await current(page).press("Escape"); await expect(scope(page)).toHaveCount(0); await expect(page.getByRole("button", { name: "전체 값 열기", exact: true })).toBeFocused(); expect(context.unexpected).toEqual([]);
 });
