@@ -14,6 +14,10 @@ if (process.env.VERCEL !== "1") {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  // The Vercel project builds only apps/web; monorepo test fixtures are not runtime inputs.
+  typescript: {
+    tsconfigPath: process.env.VERCEL === "1" ? "tsconfig.vercel.json" : "tsconfig.json",
+  },
   async headers() {
     return [
       {

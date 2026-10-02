@@ -6,6 +6,8 @@
 
 Vercel의 `VERCEL=1` 환경에서는 Cloudflare 개발 초기화를 건너뛰도록 Next 설정만 수정했다. 로컬 개발 및 Worker 빌드의 초기화 옵션과 원격 binding 금지는 유지한다. 합성 config 실행에서 기존 오류를 재현하고 Vercel·일반 로컬·명시 `VERCEL=0` 세 경로를 확인했다. 실제 자동 배포 결과는 새 커밋으로 별도 확인하며, 이 수정이 원격 D1 migration 또는 V2 운영 전환을 승인하지 않는다.
 
+첫 수정 `7052292`의 실제 Vercel webpack 컴파일은 성공했다. 다음 TypeScript 단계가 앱 밖의 테스트 전용 `tools/v2-eval`·`packages/db/schema` 및 `drizzle-orm`을 찾지 못했다. Vercel 전용 `tsconfig.vercel.json`으로 앱 런타임 소스·생성된 라우트 타입을 계속 strict 검사하며, 기존 `tsconfig.json`과 전체 `npm run typecheck`의 테스트 검사 범위는 유지한다. 타입 오류 무시 옵션은 사용하지 않는다.
+
 ## main 게시 통합 · 2026-10-01
 
 사용자가 main commit/push와 기존 Vercel 자동 배포를 승인했다. 실제 원격 `460e058`의 22개 커밋을 보존하는 3-way 통합은 `e8317ce`, V2 fixture migration 선택 보완은 `89dffda`다. [84번](./84_MAIN_INTEGRATION_EVIDENCE.md)에 출처와 운영 경계를 기록한다.
