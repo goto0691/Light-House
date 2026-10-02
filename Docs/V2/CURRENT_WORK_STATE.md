@@ -1,5 +1,11 @@
 # 현재 작업 상태 · 재개 진입점
 
+## Vercel 배포 수정 · 2026-10-02
+
+`e4f4bae`를 GitHub main에 정상 fast-forward push했다. 해당 Vercel Production 배포는 Next 설정의 무조건 Cloudflare 개발 초기화가 `/wrangler.toml`을 읽으려 하며 실패했다. 프로젝트는 `apps/web`, Node `24.x`, `npm install`, `npm run build`다.
+
+Vercel의 `VERCEL=1` 환경에서는 Cloudflare 개발 초기화를 건너뛰도록 Next 설정만 수정했다. 로컬 개발 및 Worker 빌드의 초기화 옵션과 원격 binding 금지는 유지한다. 합성 config 실행에서 기존 오류를 재현하고 Vercel·일반 로컬·명시 `VERCEL=0` 세 경로를 확인했다. 실제 자동 배포 결과는 새 커밋으로 별도 확인하며, 이 수정이 원격 D1 migration 또는 V2 운영 전환을 승인하지 않는다.
+
 ## main 게시 통합 · 2026-10-01
 
 사용자가 main commit/push와 기존 Vercel 자동 배포를 승인했다. 실제 원격 `460e058`의 22개 커밋을 보존하는 3-way 통합은 `e8317ce`, V2 fixture migration 선택 보완은 `89dffda`다. [84번](./84_MAIN_INTEGRATION_EVIDENCE.md)에 출처와 운영 경계를 기록한다.

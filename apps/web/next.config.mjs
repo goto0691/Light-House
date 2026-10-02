@@ -2,10 +2,14 @@ import { fileURLToPath } from "node:url";
 
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-initOpenNextCloudflareForDev({
-  configPath: fileURLToPath(new URL("../../wrangler.toml", import.meta.url)),
-  remoteBindings: false,
-});
+// Vercel bundles this config outside the monorepo and provides no Wrangler runtime.
+// Keep local Cloudflare development and the safe Worker build unchanged.
+if (process.env.VERCEL !== "1") {
+  initOpenNextCloudflareForDev({
+    configPath: fileURLToPath(new URL("../../wrangler.toml", import.meta.url)),
+    remoteBindings: false,
+  });
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
