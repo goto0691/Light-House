@@ -8,6 +8,8 @@ Vercel의 `VERCEL=1` 환경에서는 Cloudflare 개발 초기화를 건너뛰도
 
 첫 수정 `7052292`의 실제 Vercel webpack 컴파일은 성공했다. 다음 TypeScript 단계가 앱 밖의 테스트 전용 `tools/v2-eval`·`packages/db/schema` 및 `drizzle-orm`을 찾지 못했다. Vercel 전용 `tsconfig.vercel.json`으로 앱 런타임 소스·생성된 라우트 타입을 계속 strict 검사하며, 기존 `tsconfig.json`과 전체 `npm run typecheck`의 테스트 검사 범위는 유지한다. 타입 오류 무시 옵션은 사용하지 않는다.
 
+후속 `ca11942`는 테스트 전용 타입 오류를 해소했으나 전용 include에서 Cloudflare의 생성된 `worker-configuration.d.ts`를 빠뜨려 `DB`·`ARCHIVE_ASSETS` 타입을 찾지 못했다. 해당 선언 파일을 Vercel 검사 입력에 명시해 기존 binding 타입을 유지한다.
+
 ## main 게시 통합 · 2026-10-01
 
 사용자가 main commit/push와 기존 Vercel 자동 배포를 승인했다. 실제 원격 `460e058`의 22개 커밋을 보존하는 3-way 통합은 `e8317ce`, V2 fixture migration 선택 보완은 `89dffda`다. [84번](./84_MAIN_INTEGRATION_EVIDENCE.md)에 출처와 운영 경계를 기록한다.
