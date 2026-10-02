@@ -20,6 +20,7 @@ const tempRoots: string[] = [];
 const sourceA = "synthetic source A";
 const sourceB = "synthetic source B";
 const hash = (source: string) => `sha256:${createHash("sha256").update(source).digest("hex")}`;
+const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
 
 function approvedExpected(caseId: string, sourceHashes: string[]) {
   return {
@@ -152,12 +153,14 @@ describe("private corpus manifest safety", () => {
     });
   });
 
-  test.each(["file", "directory"])("rejects a source %s symlink outside the corpus root", async (kind) => {
+  test.each(["file", "directory"])("rejects a source %s resolved through a link outside the corpus root", async (kind) => {
     const corpus = await makeCorpus();
     await writeFile(join(corpus.outside, "a.txt"), sourceA);
-    await symlink(kind === "file" ? join(corpus.outside, "a.txt") : corpus.outside, join(corpus.root, "source-link"), kind === "file" ? "file" : "dir");
+    // Windows junctions exercise the same realpath escape without requiring symlink privileges.
+    const directFileLink = kind === "file" && process.platform !== "win32";
+    await symlink(directFileLink ? join(corpus.outside, "a.txt") : corpus.outside, join(corpus.root, "source-link"), directFileLink ? "file" : directoryLinkType);
     corpus.cases[0].status = "ready";
-    corpus.cases[0].source_paths = [kind === "file" ? "source-link" : "source-link/a.txt"];
+    corpus.cases[0].source_paths = [directFileLink ? "source-link" : "source-link/a.txt"];
     await corpus.saveExpected();
     await corpus.saveManifest();
 
@@ -169,10 +172,11 @@ describe("private corpus manifest safety", () => {
   test.each(["ready", "awaiting_source"] as const)("rejects an expected-result symlink outside the corpus root for %s", async (status) => {
     const corpus = await makeCorpus();
     await writeFile(join(corpus.outside, "expected.yaml"), stringify(approvedExpected("GC-01", [hash(sourceA)])));
-    await symlink(join(corpus.outside, "expected.yaml"), join(corpus.root, "expected-link.yaml"), "file");
+    if (process.platform === "win32") await symlink(corpus.outside, join(corpus.root, "expected-link"), directoryLinkType);
+    else await symlink(join(corpus.outside, "expected.yaml"), join(corpus.root, "expected-link.yaml"), "file");
     corpus.cases[0].status = status;
     corpus.cases[0].source_paths = ["sources/a.txt"];
-    corpus.cases[0].expected_path = "expected-link.yaml";
+    corpus.cases[0].expected_path = process.platform === "win32" ? "expected-link/expected.yaml" : "expected-link.yaml";
     await corpus.saveManifest();
 
     const report = await validateCorpusManifest(corpus.manifestPath);
@@ -182,8 +186,8 @@ describe("private corpus manifest safety", () => {
 
   test("accepts symlinks that stay inside the canonical corpus root", async () => {
     const corpus = await makeCorpus();
-    await symlink(join(corpus.root, "sources"), join(corpus.root, "source-link"), "dir");
-    await symlink(corpus.root, join(corpus.tempRoot, "corpus-link"), "dir");
+    await symlink(join(corpus.root, "sources"), join(corpus.root, "source-link"), directoryLinkType);
+    await symlink(corpus.root, join(corpus.tempRoot, "corpus-link"), directoryLinkType);
     corpus.cases[0].status = "ready";
     corpus.cases[0].source_paths = ["source-link/a.txt"];
     await corpus.saveExpected();

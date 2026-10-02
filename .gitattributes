@@ -1,2 +1,3 @@
 tools/v2-eval/fixtures/*.report.json text eol=lf
 apps/web/worker-configuration.d.ts text eol=lf
+apps/web/public/licenses/fonts/*.txt text eol=lf
