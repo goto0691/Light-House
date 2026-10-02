@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import Ajv2020 from "ajv/dist/2020";
 
 import expectedSchema from "./schemas/expected-result.schema.json";
+import type { UserDelegatedApproval } from "./authoring-approval";
 
 export const CONTRACT = "recorded-evaluation-v1" as const;
 export const CASE_ID = /^GC-(0[1-9]|1[0-9]|20)$/;
@@ -14,7 +15,8 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 export type Expected = {
   version: 1;
   case_id: string;
-  authoring_status: "draft" | "human_approved";
+  authoring_status: "draft" | "human_approved" | "assistant_reviewed";
+  approval?: UserDelegatedApproval;
   source_hashes: string[];
   must_create: Record<string, Json>;
   must_preserve: Record<string, Json>[];

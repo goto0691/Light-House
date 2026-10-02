@@ -1,5 +1,41 @@
 # 현재 작업 상태 · 재개 진입점
 
+## V2 최종 완성 재개 · 2026-10-03 KST
+
+사용자가 V2를 끝까지 완성하도록 요청했다. 작업 브랜치는 `codex/v2-completion-local`, 시작 소스는 `7a5d771`이다. 동기화 때 보존한 stash와 기존 환경 파일은 유지한다. 아래 과거 인계의 완료 구현을 다시 시작하지 않고 50번 완료표의 실제 잔여 작업을 진행한다.
+
+- root: 통합 소스·현재 상태/50번·최종 증거, Next/브라우저/typegen/build 및 긴 workerd/D1 회귀의 단일 실행 소유자.
+- `video_review`: 영상 항목 판단 기능을 동결했고 실제 SQLite에서 드러난 반복 복원·ID 충돌/idempotency 결함을 최소 보완한다. `restore-bundle-v1.ts` 파일 소유권은 root의 polymorphic FK 보완 후 해당 agent로 이관했다.
+- `eval_observations`: 제품 export에서 관측을 수집하는 adapter, 승인된 query와 실제 검색 plan 연결, 격리 SQLite의 실제 저장·검색·export replay. Next 산출물과 원격 자원은 사용하지 않는다.
+- `release_audit`: root 승인 범위의 cutover freshness/recorded-evidence 최소 보완을 마쳤고 승인·collector 독립 리뷰 및 원격 준비의 읽기 전용 확인을 맡는다.
+- 사용자는 기존 Notion 백업을 사용하고 정답 작성을 위임했다. `.private/golden-corpus`의 정확 원문 20개와 source-grounded 정답을 독립 검토했다. `assistant_reviewed`/사용자 위임 20개를 사람 승인 0개와 구별하며 proof·원문·규칙 hash를 확인한다. 텍스트 baseline이고 기존 다중매체20개 slot coverage나 외부 사실·실제 AI 품질을 검증했다고 주장하지 않는다. 위임 context proof binding을 추가하는 동안 gate를 다시 확인한다.
+- 설정된 실제 모델의 합성 S1 텍스트와 공개 S4 영상 각 1회는 HTTP503 `provider_server`/`video_provider_busy`였다. S1 원문 저장·읽기·검색은 유지됐고 이미지 단계는 실행하지 않았다. 개인 자료는 공급자에게 전송하지 않았다.
+- `bindings:check`는 Windows checkout의 생성 선언 CRLF 때문에 처음 실패했다. 같은 의미의 LF 재생성과 `.gitattributes` 고정 후 최종 exit0, `db:check` exit0. 현재 Chromium은 설치됐으며 새 browser/full suite/Worker build 결과는 아직 미확인이다.
+
+실행 핸들과 최종 검사 결과는 확인되는 작업 경계에서 갱신한다. 원격 migration/배포/cutover와 실제 기기 gate는 구체적인 준비 결과를 바탕으로 처리하며 이 문서의 과거 승인 기록만으로 새 원격 작업을 실행하지 않는다.
+
+### 통합 검증 checkpoint · 2026-10-03 00:55 KST
+
+- 영상 항목 판단·nonresumable 반복 복원·cutover freshness 계약은 로컬 `bb44d48`에 보존했다. root의 영상 브라우저 최종10/10 PASS/exit0(43.2초), 실제 desktop/mobile screenshot·axe·overflow·복사·재시도/권한 경로를 확인했다. 최초 새 spec6개 실패는 route 등록 순서가 local API mock을 우회한 것으로, `fallback()` 수정 후 전부 통과했다.
+- 독립 검토가 실제 `/api/v2/restores/import`의 resumable workflow에도 owner collision 뒤 repeat 결함을 재현했다. 해당 `resumable-restore-v2.ts`와 신규 public workflow 시험은 `release_audit`가 root 승인으로 최소 보완 중이다. 실행 중이던 전체 Vitest `69736`은 수정 전 불완료 실행으로 exit1 중단했고 PASS로 계산하지 않는다. 종료 후 해당 vitest 프로세스0을 확인했다. 완료 후 단일 고정 소스로 전체를 다시 실행한다.
+- 전체 Playwright `96412`/root는 현재 진행 중이다. write1/AI0 local dev와 합성 API 대역이며 실제 공급자·실기기·원격 저장을 대신하지 않는다. Next dev/typegen/build의 다른 실행 소유자는 없다.
+- root 통합 도구 검사: Node71/71 + 격리 replay5/5 PASS/skip0/exit0. web·evaluator·replay·cutover 전체 타입 exit0. app 전체 lint 오류0/기존 경고80, evaluator/cutover 오류0; 최종 통합 lint 추가 실행 `24651` 확인 중이다.
+- 실제 Notion20개 private replay는 capture/getRecord/retrieval/resumable export→ZIP→collector/evaluator를 실행해 source hash20/20, 제목 top1 19/20·top10 20/20을 확인했다. type/typed 추출·live/Worker는 미측정이며 evaluator는 blocked/promotion=false이다. 최종 commit identity로 새 출력 실행을 남겼다.
+- 원격에는 SELECT만 보냈다. ledger 로컬41/적용18/pending23/unexpected0, schema metadata144테이블/전체11,176행, R2목록1,534개/4,033,625bytes를 private 폴더에 보존했다. bookmark GET도 성공했다. R2 ETag를 SHA로 간주하거나 이 목록을 검증된 복구 백업으로 승격하지 않는다. V1 8파일은 컬럼이 이미 일치해 ledger 누락 가능성이 높고, V2 0018–0032 정확15파일과 분리해 독립 검토 중이다. 원격 table/ledger/R2 객체를 쓰거나 migration/deploy한 적 없다.
+- `inventory-d1.ts`/`inventory-r2.ts`의 tsx 실행에서 `import.meta.dirname`이 비어 실패했다. 지원되는 `fileURLToPath(import.meta.url)` 기반 경로로 바꾼 뒤 실제 read-only 원격 inventory 두 실행이 exit0으로 끝났다. `wrangler migrations list`는 내부에서 migration table 초기화를 하므로 엄밀한 read-only 감사에 사용하지 않았다.
+
+## Windows 로컬 개발 재개 · 2026-10-02
+
+사용자가 현재 프로젝트 폴더에서 V2 개발을 이어가기 위해 GitHub 소스 동기화를 요청했다. 원격에는 별도 V2 브랜치 없이 V2가 `main`에 통합되어 있다. 기존 로컬 `460e058`에서 원격 `7a5d771221d7398c1d8e88fb5d4ecca8eeb24ea1`까지 7개 커밋을 정상 fast-forward했고, 최종 원격 조회도 같은 HEAD를 확인했다.
+
+- 미커밋 작업 43개 파일(추적 파일 변경과 새 파일 포함)은 `stash@{0}` / `73a8f184160644c6c9d0f36050bca3ec5410aa57`, 이름 `codex/pre-v2-sync-2026-10-02-local-work`로 보존했다. 최신 V2 소스에 다시 적용하지 않았으며 필요하면 별도 복원·비교한다. 기존 `.env.local`도 보존했다.
+- Node `24.11.1`, npm `11.7.0`에서 `npm ci --no-audit --no-fund` exit0. lockfile 기준 의존성 설치를 완료했다.
+- `npm exec --workspace @light-house/web -- next typegen` exit0. 첫 타입 검사는 이전 로컬 native 페이지를 참조하는 오래된 `.next/dev/types` 때문에 실패했다. 해당 생성 캐시를 `.codex/pre-v2-sync-2026-10-02-dev-types`로 옮겨 보존한 뒤 최종 root `npm run typecheck`(web + evaluator) exit0을 확인했다. 제품 코드와 검사 기준은 변경하지 않았다.
+- 이 로컬 대화가 현재 폴더의 후속 개발·공유 생성물 실행 자원을 맡는다. 종료 확인 시 이 작업 폴더의 Node/workerd/esbuild 프로세스는 0개다. 개발 서버는 실행하지 않았다. 이 상태 문서 외에는 소스 변경이 없다.
+- 이번 검증 범위는 Git 동기화·의존성 설치·라우트 타입 생성·전체 타입 검사다. 전체 회귀·브라우저·Worker build·실제 AI·원격 migration·배포는 이번 요청에서 실행하지 않았다.
+
+다음 작업은 사용자의 후속 V2 개발 요청을 이 체크아웃에서 진행한다. 기존 기능별 잔여 작업과 운영 gate는 아래 인계 기록과 [50번 완료표](./50_COMPLETION_GOAL_AND_EXECUTION_PLAN.md)를 따른다. 과거 실행 핸들이나 전체 회귀를 자동으로 재시작하지 않는다.
+
 ## Vercel 배포 수정 · 2026-10-02
 
 `e4f4bae`를 GitHub main에 정상 fast-forward push했다. 해당 Vercel Production 배포는 Next 설정의 무조건 Cloudflare 개발 초기화가 `/wrangler.toml`을 읽으려 하며 실패했다. 프로젝트는 `apps/web`, Node `24.x`, `npm install`, `npm run build`다.

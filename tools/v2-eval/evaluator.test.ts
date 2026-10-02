@@ -284,20 +284,27 @@ test("private approved expected edits invalidate the recorded observation identi
 }));
 test("private source and expected paths cannot follow an outside-root symlink", async () => temporary(async (root) => {
   const corpusRoot = join(root, "corpus"); await mkdir(corpusRoot); const input = await privateCorpus(corpusRoot);
-  const outside = join(root, "outside.yaml"); await writeFile(outside, stringify(input.entries[0]));
-  await rm(join(corpusRoot, "expected/GC-01.yaml")); await symlink(outside, join(corpusRoot, "expected/GC-01.yaml"));
+  // Windows directory junctions exercise the same realpath boundary without requiring symlink privileges.
+  const outside = join(root, "outside"); await mkdir(outside);
+  for (const item of input.entries) await writeFile(join(outside, `${item.case_id}.yaml`), stringify(item));
+  await rm(join(corpusRoot, "expected"), { recursive: true });
+  await symlink(outside, join(corpusRoot, "expected"), process.platform === "win32" ? "junction" : "dir");
   await assert.rejects(loadPrivateCorpus(input.manifestPath), inputError("CORPUS_NOT_READY"));
 }));
 test("exclusive output never overwrites inputs or follows an existing/dangling symlink", async () => temporary(async (root) => {
   const path = join(root, "private-source"); await writeFile(path, secret);
   await assert.rejects(writeNewReport(path, "safe report"), inputError("REPORT_WRITE_FAILED"));
   assert.equal(await readFile(path, "utf8"), secret);
-  for (const [name, target] of [["existing", path], ["dangling", join(root, "absent")]]) {
-    const link = join(root, name); await symlink(target, link);
+  const existingTarget = process.platform === "win32" ? join(root, "protected-directory") : path;
+  if (process.platform === "win32") await mkdir(existingTarget);
+  for (const [name, target] of [["existing", existingTarget], ["dangling", join(root, "absent")]]) {
+    const link = join(root, name); await symlink(target, link, process.platform === "win32" ? "junction" : "file");
     await assert.rejects(writeNewReport(link, "safe report"), inputError("REPORT_WRITE_FAILED"));
   }
   const newPath = join(root, "new-report"); await writeNewReport(newPath, "safe report");
-  assert.equal((await stat(newPath)).mode & 0o777, 0o600);
+  assert.equal(await readFile(newPath, "utf8"), "safe report");
+  // POSIX mode bits are not an access-control mechanism on Windows.
+  if (process.platform !== "win32") assert.equal((await stat(newPath)).mode & 0o777, 0o600);
 }));
 test("CLI redacts parser, file-system, schema and argument errors on stdout and stderr", async () => temporary(async (root) => {
   const invalidJson = join(root, secret); await writeFile(invalidJson, `{${secret}`);

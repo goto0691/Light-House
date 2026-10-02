@@ -9,6 +9,8 @@ import { corpusDigest, exactKeys, expectedResults, identity, invalid, record, ty
 import { evaluateRecorded } from "./evaluator";
 import { validateCorpusManifest } from "./manifest";
 import manifestSchema from "./schemas/golden-corpus-manifest.schema.json";
+import { approvedExpected } from "./authoring-approval";
+import type { EvaluationReport } from "./report";
 
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
 export async function readJson(path: string): Promise<unknown> {
@@ -39,7 +41,7 @@ type Manifest = { corpus_id: string; cases: { case_id: string; status: string; s
 const validateManifest = new Ajv2020({ strict: false }).compile<Manifest>(manifestSchema);
 
 /** A fresh readiness check and independently hash-checked snapshot, never a cached readyCount. */
-export async function loadPrivateCorpus(manifestPath: string): Promise<{ corpus_sha256: string; expected: Expected[] }> {
+export async function loadPrivateCorpus(manifestPath: string): Promise<{ corpus_sha256: string; expected: Expected[]; readiness: EvaluationReport["readiness"] }> {
   const readiness = await validateCorpusManifest(manifestPath);
   // Existing validator's diagnostic strings can contain private paths. Never return them.
   if (!readiness.readyForPrivateEvaluation || readiness.readyCount !== 20) invalid("CORPUS_NOT_READY");
@@ -51,7 +53,8 @@ export async function loadPrivateCorpus(manifestPath: string): Promise<{ corpus_
     const expected: Expected[] = [];
     for (const item of manifest.cases) {
       const entry = expectedResults([await readYaml(await privatePath(root, item.expected_path))])[0];
-      if (item.status !== "ready" || entry.authoring_status !== "human_approved" || entry.case_id !== item.case_id || !item.source_paths.length) invalid("CORPUS_CHANGED");
+      if (item.status !== "ready" || entry.case_id !== item.case_id || !item.source_paths.length
+        || !await approvedExpected(entry, async (path) => readFile(await privatePath(root, path)))) invalid("CORPUS_CHANGED");
       const hashes: string[] = [];
       for (const path of item.source_paths) {
         const bytes = await readFile(await privatePath(root, path));
@@ -60,7 +63,11 @@ export async function loadPrivateCorpus(manifestPath: string): Promise<{ corpus_
       if (JSON.stringify(hashes.sort()) !== JSON.stringify([...entry.source_hashes].sort())) invalid("CORPUS_CHANGED");
       expected.push(entry);
     }
-    return { corpus_sha256: corpusDigest(manifest.corpus_id, expected), expected };
+    const human = expected.filter((item) => item.authoring_status === "human_approved").length;
+    const delegated = expected.length - human;
+    return { corpus_sha256: corpusDigest(manifest.corpus_id, expected), expected,
+      readiness: { current_hashes_verified: true, human_approved_cases: human, ready_cases: 20,
+        ...(delegated ? { user_delegated_cases: delegated } : {}) } };
   } catch { return invalid("CORPUS_CHANGED"); }
 }
 
@@ -70,7 +77,7 @@ export async function runPrivate(manifestPath: string, identityPath: string, obs
   const observations = await readJson(observationsPath);
   const report = evaluateRecorded({
     mode: "private-recorded", identity: requiredIdentity, ...corpus, observations,
-    readiness: { current_hashes_verified: true, human_approved_cases: 20, ready_cases: 20 },
+    readiness: corpus.readiness,
   });
   // Recheck current files after scoring, so a changed source/expected cannot retain an old ready result.
   const current = await loadPrivateCorpus(manifestPath);

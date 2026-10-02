@@ -111,8 +111,11 @@ export function evaluateRecorded(input: {
   if (observed.corpus_sha256 !== input.corpus_sha256) invalid("CORPUS_IDENTITY_MISMATCH");
   const ids = approved.map((item) => item.case_id).sort();
   if (canonical(ids) !== canonical(observed.cases.map((item) => item.case_id).sort())) invalid("CASE_SET_MISMATCH");
-  if (input.mode === "private-recorded" && (approved.length !== 20 || approved.some((item) => item.authoring_status !== "human_approved")
-    || input.readiness.current_hashes_verified !== true || input.readiness.ready_cases !== 20 || input.readiness.human_approved_cases !== 20)) invalid("CORPUS_NOT_READY");
+  const humanCount = approved.filter((item) => item.authoring_status === "human_approved").length;
+  const delegatedCount = approved.filter((item) => item.authoring_status === "assistant_reviewed").length;
+  if (input.mode === "private-recorded" && (approved.length !== 20 || humanCount + delegatedCount !== 20
+    || input.readiness.current_hashes_verified !== true || input.readiness.ready_cases !== 20
+    || input.readiness.human_approved_cases !== humanCount || (input.readiness.user_delegated_cases ?? 0) !== delegatedCount)) invalid("CORPUS_NOT_READY");
   const cases = [...approved].sort((a, b) => a.case_id.localeCompare(b.case_id)).map((item) => scoreCase(item, observed.cases.find((entry) => entry.case_id === item.case_id)!));
   const aggregate = summarize(cases);
   return {
@@ -123,6 +126,7 @@ export function evaluateRecorded(input: {
       current_hashes_verified: input.readiness.current_hashes_verified,
       human_approved_cases: input.readiness.human_approved_cases,
       ready_cases: input.readiness.ready_cases,
+      ...(delegatedCount ? { user_delegated_cases: delegatedCount } : {}),
     },
     cases, aggregate,
     rubric: { status: "not_scored", maximum: 16, threshold: 13, average_points: null, cases_at_or_above_13: null, policy: "per_case_vs_average_unresolved" },

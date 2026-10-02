@@ -213,3 +213,90 @@ node_modules/.bin/eslint --config apps/web/eslint.config.mjs \
 합성 demo는 GC-01 한 건이다. hash/typed/alias 측정은 각각1/1, required ID는 실제5위라 top1=0/1, top5=1/1, top10=1/1, all-required query=1/1이다. fatal/major/unknown 기록은0이지만 16점 rubric·기타 release gate를 채점하지 않았으므로 review_required다. checked-in report bytes를 CLI 재생 결과와 시험에서 정확히 대조한다.
 
 시험의 20/20 private-mode 파일은 임시 디렉터리에 만든 **합성** 자료다. 실제 private corpus 선정·사람 승인·실제 Gemini baseline·비용/usage·UX/실기기·원격 운영 검증은 수행하지 않았다. source hash 관측·typed/alias/ranked-ID 결과를 제품에서 신뢰 가능하게 채집하는 adapter와 자유 의미 규칙의 사람 판정 계약이 후속 작업이다.
+
+## 8. 로컬 제품 export 관측 수집 · 2026-10-03
+
+`product-observations.ts`와 `collect-product.ts`는 이미 생성된 **migration profile, schema v2-032 제품 export**의 로컬 파일에서 위의 기록 관측 subset을 수집한다. ZIP을 직접 풀거나 DB·R2·검색 route·공급자를 호출하지 않는다. export manifest가 나열한 payload 파일은 전부 실제 byte hash와 길이를 대조하고, 수집한 native row의 envelope·owner·필요 FK를 확인한다. 이 수집 receipt는 서명된 제품 실행 증명이나 전체 restore 검증이 아니다.
+
+모든 입력과 출력은 corpus manifest가 있는 private 디렉터리 안에 두며, export는 그 아래에 이미 안전하게 풀어 둔 디렉터리를 지정한다. absolute input도 canonical realpath가 private root 안에 있어야 한다. traversal과 root 밖 symlink/junction을 거부하고, 출력은 기존 파일을 덮어쓰지 않는 신규 생성만 지원한다. 원문·실제값·query·owner/record ID·파일 경로·오류 원문은 stdout/stderr에 출력하지 않는다. 원문은 복사하지 않고 관측 JSON의 typed 값과 logical ID는 private 파일에만 저장한다.
+
+```sh
+node --import tsx tools/v2-eval/collect-product.ts \
+  --manifest .private/golden-corpus/manifest.yaml \
+  --identity .private/golden-corpus/model-runs/identity.json \
+  --mapping .private/golden-corpus/model-runs/product-mapping.json \
+  --export-root .private/golden-corpus/model-runs/product-export \
+  --output .private/golden-corpus/model-runs/product-observations.json \
+  --receipt .private/golden-corpus/model-runs/product-collection-receipt.json
+```
+
+`--identity`는 기존 identity 계약 그대로다. 별도의 private mapping 계약은 `product-observation-mapping-v1`이다.
+
+| mapping 항목 | 의미 |
+| --- | --- |
+| `contract`, `export_id`, `owner_id` | mapping 계약, 해당 export manifest ID, 정확한 제품 계정 owner ID |
+| `identity`, `corpus_sha256` | 외부 identity 및 현재 공유 readiness loader가 읽은 전체 corpus fingerprint와 정확히 일치 |
+| `allowed_privacy` | 이 수집에서 접근할 privacy level의 명시적 고유 목록. 제품 export에 restricted가 있다는 이유만으로 normal mapping을 넓히지 않음 |
+| `record_ids` | `{record_id, observation_id}`의 일대일 목록. 제품 document ID를 expected의 logical recall ID로 연결 |
+| `cases` | GC-01–20 정확히 한 번씩. 각 항목은 `case_id`, 비어 있지 않은 `document_ids`, `source_item_ids`가 필수 |
+| case `typed_values` | 선택 `{id, document_id, field_definition_id, scale_field_definition_id?}` 목록. observation 식별자와 실제 필드 정의 ID의 명시적 연결 |
+| case `primary_type_document_ids` | 선택 목록. 해당 case의 document IDs 안에서 accepted primary assignment를 수집할 대상을 지정 |
+| case `recall_queries` | 선택 `{id, response_path, response_sha256, plan_sha256}` 목록. 이미 저장한 첫 페이지 `retrieval-results-v1` JSON의 exact bytes와 실제 query plan digest를 연결 |
+
+생략된 typed/type/recall collection은 기존 envelope에서 계속 unknown이다. 명시적으로 빈 collection을 지정하면 수집한 빈 배열이므로 missing expected 값은 measured miss다. source item은 지정한 document와 동일 capture여야 하고 실제 document-source link가 있어야 한다. document의 owner·capture owner·current revision FK를 확인한다. 읽은 user-owned native 테이블에 다른 owner의 행이 있으면 수집 전체를 거부한다.
+
+- **원문:** text는 native `raw_text`의 UTF-8 bytes를 그대로 해싱한다. CRLF·Unicode·공백·마지막 줄바꿈을 정규화하지 않는다. attachment link가 있는 source는 committed attachment metadata에 연결된 단일 export original 파일 bytes를 해싱한다. DB의 stored hash를 관측값으로 복사하지 않는다. stored hash/attachment byte length와 실제 bytes의 불일치는 `SOURCE_MUTATION`으로 기록한다. 같은 bytes의 중복 source는 envelope의 hash 집합으로 표현하므로 source multiplicity를 증명하지 않는다.
+- **명시값:** accepted/current(`superseded_at=null`)의 `user_explicit`/`user_locked` 필드만 읽고 native typed column과 `value_json`의 정확한 동치를 확인한다. duplicate current row·값 충돌·type/registry 불일치는 거부한다. null·unsupported JSON은 0/false/빈 문자열로 바꾸지 않고 collection unknown을 유지한다. rating scale은 실제로 저장된 별도 explicit number field에 mapping한 경우만 수집한다. 척도가 없는 rating은 `SCALE_NOT_STORED`이며 `/5` 단위나 expected를 보고 척도를 만들지 않는다. 현재 envelope가 collection 단위 unknown만 표현하므로 한 항목이 표현 불가능하면 해당 case의 typed collection 전체를 unknown으로 둔다.
+- **유형:** 지정 document의 accepted primary assignment에서 실제 registry key를 읽는다. secondary·제안 상태·fallback UI type을 primary 값으로 바꾸지 않는다.
+- **리콜:** 보존된 제품 response의 계약·query plan·checksum·page1·page size/총건수·전체 첫 페이지·결과 owner/privacy·중복 ID를 확인한다. mapping query ID는 같은 case의 승인된 literal `query`·required IDs·top_k10 규칙과 연결해야 한다. response의 fullText는 그 query와 정확히 같고 product default relevance-desc plan과 일치해야 한다. 추가 type/property/entity/date filter나 임의 정렬·다른 query를 넣고 digest를 재계산해도 거부한다. 자연어를 구조 filter로 바꾼 plan의 의미 동등성은 이 adapter에서 추정하지 않는다. 결과 순서는 그대로 유지한다. mapping이 없는 결과도 실제 record ID로 원래 순위에 남긴다. 이 ID가 required logical ID나 이미 mapping한 observation ID와 충돌하면 거부하므로 unmapped 결과가 허위 hit가 되지 않는다. 이 collector가 query를 실행했다거나 저장한 응답의 출처를 독립 증명했다는 뜻은 아니다.
+
+채집 뒤 corpus readiness/identity/mapping, export manifest 및 모든 payload checksum, 검색 response bytes를 다시 대조한다. 파일 lock은 제공하지 않으므로 마지막 검사 이후 변경까지 막는 attestation은 아니다. export metadata·관측 입력은 파일별 8 MiB로 제한하고 binary original은 stream hash로 읽는다. 필요한 native 테이블 subset의 row 의미를 검사하며 전체 backup/restore graph를 검증했다고 주장하지 않는다.
+
+private receipt 계약은 `product-observation-receipt-v1`이며 identity/corpus·mapping/manifest/관측 bytes digest·export root hash·case별 수집 상태/unknown reason/건수만 포함한다. 원문·actual typed 값·query·owner/record mapping 내용은 receipt에 넣지 않는다. receipt의 `live_provider_verified`, `live_search_executed`, `promotion_eligible`은 모두 false다. output/receipt는 서로 다른 신규 파일이어야 하며 기존 output 또는 receipt가 있으면 사전 거부한다. 마지막 신규 쓰기 중 경합/실패가 발생하면 첫 신규 파일만 남을 수 있으므로 완성된 쌍으로 취급하지 않는다.
+
+CLI exit0은 **관측/receipt 파일 생성 성공**만 의미한다. 실제 공급자 실행·평가 PASS·promotion이 아니다. 입력/수집/쓰기 실패는 exit1과 고정 안전 코드다. 생성된 관측은 기존 `private-recorded` evaluator에 별도로 입력하며 unknown/review_required 및 promotion false 계약은 유지한다.
+
+추가 검증은 `node --import tsx --test tools/v2-eval/product-observations.test.ts` **19/19 PASS·skip0·exit0(32.51초)**, `npm run typecheck:eval` exit0, 신규 adapter/CLI/test의 전용 ESLint 오류/경고0·exit0이다. file symlink 권한이 없던 최초 시험은 directory junction으로 실제 Windows canonical escape를 확인하도록 보강했다. primitive 경계 시험의 공용 fixture registry 변경이 다른 case에 영향을 주던 오류도 시험 대상으로 격리했다. 독립 audit가 찾은 승인 query와 실제 plan의 누락된 연결은 다른 query/필터/정렬을 재해시한 RED를 재현한 뒤 위의 literal/default-plan fence로 보완했고, 최종 단일19개 실행에서 확인했다. 시험은 임시 private 디렉터리의 **합성 20-case 제품-format export**이며 실제 개인 corpus·실제 검색·Gemini·원격 운영 성공으로 합산하지 않는다.
+
+## 9. 격리 SQLite 제품 replay · 2026-10-03
+
+`tools/v2-eval/private-replay/`의 재사용 가능한 로컬 harness는 현재 공유 readiness gate를 통과한 **실제 Notion Markdown 20개**를 입력으로 제품의 저장→읽기→제목 검색→내보내기→기록 관측 수집 흐름을 실행한다. 이 자료는 가용한 text baseline이며 25번의 최초 image/audio/mixed 20개 slot을 충족했다는 뜻은 아니다. expected 정답의 source hash·제목 recall·문서형식에 따른 type alias는 원문을 읽은 독립 검토 proof에 묶었다. blank 필드·미완성 글·과거 AI/외부 서술에서 새로운 사실이나 값은 만들지 않았다.
+
+```sh
+tsx --tsconfig tools/v2-eval/private-replay/tsconfig.json \
+  tools/v2-eval/private-replay/run.ts \
+  --manifest .private/golden-corpus/manifest.yaml \
+  --identity .private/golden-corpus/model-runs/local-product-replay-identity-20261003.json \
+  --output-directory .private/golden-corpus/model-runs/new-local-product-replay
+```
+
+실행은 node:sqlite 메모리 DB에서 실제 0006–0032 migration 27개와 FK/transaction을 적용한다. 기존 로컬/원격 DB를 여는 인자는 없다. 원문 bytes를 exact UTF-8로 읽어 production `prepareCaptureCommit`에 `channel: import`, `aiEnabled: false`로 전달한다. `D1SourceFoundationRepository.commitCapture/getRecord`에서 정확한 원문을 대조하고 동일 commit을 다시 실행해 idempotent receipt를 확인한다. 제목 query는 실제 `D1RetrievalRepository.searchPage`의 default literal relevance plan으로 실행하고 그 API-shape response를 private 파일에만 저장한다.
+
+내보내기는 `D1PortabilityRepository.createExport`와 **현재 `resumable-export-v2` stage/advance coordinator**를 사용한다. R2 binding은 로컬 메모리 adapter이며 Cloudflare 런타임을 대신 검증한 것이 아니다. 완료한 native ZIP의 SHA/길이와 native parser의 CRC·경로·중복·용량 검사를 거쳐 새로운 private 디렉터리에 해제한다. 실제 제품 packager가 생성한 manifest/native JSONL로 §8 collector를 실행한 뒤 기존 recorded evaluator까지 연결한다. 분석 job/run·property·type assignment가 생기면 harness를 거부하므로 expected alias를 제품 결과로 넣어 type PASS를 만들지 않는다.
+
+산출물은 새 private 디렉터리의 ZIP, `product-export/`, 기록된 query responses, mapping/identity, 관측/수집 receipt, recorded report, replay receipt다. output 디렉터리가 이미 있으면 기존 결과를 덮어쓰지 않는다. 실패 시 새 디렉터리의 부분 산출물은 보존하며 완성된 실행으로 취급하지 않는다. 원문·제목·query·실제값은 자동 CLI/공개 보고에 표시하지 않고 고정 코드·집계 metric만 출력한다. CLI exit0은 파일 생성과 로컬 흐름 실행 성공이다. evaluator의 unknown/blocked 상태나 promotion false는 그대로 남긴다.
+
+첫 실제 text baseline 결과:
+
+| 항목 | 결과 |
+| --- | --- |
+| readiness | ready20, human0/user-delegated20 |
+| 원문 bytes 관측 | 20/20 일치, rate1 |
+| 제목 required ID top1 | 19/20, rate0.95 |
+| 제목 required ID top10 | 20/20, rate1 |
+| 현재 canonical export 행 | capture/source/document/object 각각20. 동일 commit 재시도 후 추가 row 없음 |
+| native export coordinator | 67회 advance 후 성공, native ZIP→collector 완료 |
+| 측정 subset severity | fatal0/major0. 기타 의미·권한·운영 invariant의 부재 증명은 아님 |
+| type/typed 품질 | 분석/추출을 실행하지 않아 unknown. type unknown20 |
+| evaluator 판정 | blocked, rubric null, promotion eligible=false |
+| 실제 공급자·Worker·API auth·원격 서비스 | 실행/검증하지 않음 |
+
+top1 미회수는 GC-05이고 top10에는 포함됐다. 이는 제목 조회의 실제 SQLite 순위이며 자연어 의도 해석·semantic entity recall·이미지/음성 품질 결과로 확장하지 않는다. private replay receipt의 identity는 당시 Git HEAD와 **uncommitted changes 포함** 한계를 명시했다. 최종 commit 뒤에는 별도 identity와 신규 output으로 실행해 후보 source identity를 고정한다. 첫 실행 산출물은 `.private/golden-corpus/model-runs/local-product-replay-20261003-01/` 안에 있으며 private 내용을 공개 fixture로 복사하지 않았다.
+
+격리 harness의 scoped 검증은 아래 **5/5 PASS·skip0·exit0(17.31초)**, 전용 tsc exit0, 새 collector/harness ESLint 오류/경고0·exit0이다. FK ON/실제 transaction rollback, BOM·CRLF·공백 byte 보존, 실제 capture/search/current packager→collector, 분석 unknown, exclusive output, owner/path/UTF-8, CLI 비노출을 확인한다. 첫 실행의 시험 metric 이름 오타는 실제 `type_alias_recall`로 수정했다. 해당 5개는 합성 시험이며 위의 실제20개 관측과 별도로 기록한다.
+
+```sh
+tsx --tsconfig tools/v2-eval/private-replay/tsconfig.json \
+  --test tools/v2-eval/private-replay/replay.test.ts
+tsc --project tools/v2-eval/private-replay/tsconfig.json
+```

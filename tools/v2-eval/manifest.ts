@@ -8,6 +8,8 @@ import { parse } from "yaml";
 
 import manifestSchema from "./schemas/golden-corpus-manifest.schema.json";
 import expectedSchema from "./schemas/expected-result.schema.json";
+import { approvedExpected } from "./authoring-approval";
+import type { Expected } from "./contracts";
 
 type ManifestCase = {
   case_id: string;
@@ -25,12 +27,7 @@ type CorpusManifest = {
   cases: ManifestCase[];
 };
 
-type ExpectedResult = {
-  version: 1;
-  case_id: string;
-  authoring_status: "draft" | "human_approved";
-  source_hashes: string[];
-};
+type ExpectedResult = Expected;
 
 export type CorpusValidationReport = {
   structurallyValid: boolean;
@@ -38,6 +35,8 @@ export type CorpusValidationReport = {
   caseCount: number;
   expectedDraftCount: number;
   readyCount: number;
+  humanApprovedCount?: number;
+  userDelegatedCount?: number;
   errors: string[];
 };
 
@@ -113,6 +112,8 @@ export async function validateCorpusManifest(manifestPath: string): Promise<Corp
 
   let expectedDraftCount = 0;
   let readyCount = 0;
+  let humanApprovedCount = 0;
+  let userDelegatedCount = 0;
   for (const item of manifest.cases) {
     let expected: ExpectedResult | null = null;
     try {
@@ -132,8 +133,8 @@ export async function validateCorpusManifest(manifestPath: string): Promise<Corp
     }
 
     if (item.status !== "ready") continue;
-    if (!expected || expected.authoring_status !== "human_approved") {
-      errors.push(`${item.case_id} is ready but expected result is not human_approved`);
+    if (!expected || !await approvedExpected(expected, async (path) => readFile(await resolvePrivatePath(corpusRoot, path)))) {
+      errors.push(`${item.case_id} is ready but expected result has no verified approval`);
       continue;
     }
     if (item.source_paths.length === 0) {
@@ -148,6 +149,8 @@ export async function validateCorpusManifest(manifestPath: string): Promise<Corp
         continue;
       }
       readyCount += 1;
+      if (expected.authoring_status === "human_approved") humanApprovedCount += 1;
+      else userDelegatedCount += 1;
     } catch (error) {
       errors.push(`${item.case_id} source read failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -160,6 +163,8 @@ export async function validateCorpusManifest(manifestPath: string): Promise<Corp
     caseCount: manifest.cases.length,
     expectedDraftCount,
     readyCount,
+    humanApprovedCount,
+    userDelegatedCount,
     errors,
   };
 }

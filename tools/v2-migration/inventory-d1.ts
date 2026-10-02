@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadEnvConfig } from "@next/env";
 
-loadEnvConfig(path.resolve(import.meta.dirname, "..", "..", "apps", "web"), process.env.NODE_ENV !== "production");
+loadEnvConfig(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "apps", "web"), process.env.NODE_ENV !== "production");
 
 type WranglerResult = { results?: Record<string, unknown>[] } | { result?: { results?: Record<string, unknown>[] } };
 const args = new Set(process.argv.slice(2));

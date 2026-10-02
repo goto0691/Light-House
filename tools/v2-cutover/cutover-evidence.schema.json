@@ -1,14 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://light-house.local/schemas/cutover-evidence.v1.json",
+  "$comment": "Evidence v1 remains readable. Boolean declarations are insufficient for release: the CLI binds a validated recorded report to current corpus and candidate identity, and checks its current clock.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "measuredAt", "ownerCaptureStartedAt", "captureDefaultAt", "privateCorpus", "runtime", "devices", "migration", "experience", "operations"],
   "properties": {
     "version": { "const": 1 },
-    "measuredAt": { "type": "string", "minLength": 1 },
-    "ownerCaptureStartedAt": { "type": ["string", "null"] },
-    "captureDefaultAt": { "type": ["string", "null"] },
+    "measuredAt": { "$ref": "#/$defs/timestamp" },
+    "ownerCaptureStartedAt": { "$ref": "#/$defs/nullableTimestamp" },
+    "captureDefaultAt": { "$ref": "#/$defs/nullableTimestamp" },
     "privateCorpus": {
       "type": "object",
       "additionalProperties": false,
@@ -53,7 +54,7 @@
         "structuralReconciliationPassed": { "type": "boolean" },
         "substantiveSamplePassed": { "type": "boolean" },
         "finalDeltaReconciled": { "type": "boolean" },
-        "verifiedSnapshotAt": { "type": ["string", "null"] }
+        "verifiedSnapshotAt": { "$ref": "#/$defs/nullableTimestamp" }
       }
     },
     "experience": {
@@ -74,5 +75,9 @@
         "rollbackDrillPassed": { "type": "boolean" }
       }
     }
+  },
+  "$defs": {
+    "timestamp": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$" },
+    "nullableTimestamp": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] }
   }
 }

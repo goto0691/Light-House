@@ -27,7 +27,7 @@ export type EvaluationReport = {
   live_provider_verified: false;
   identity: Identity;
   corpus_sha256: string;
-  readiness: { current_hashes_verified: boolean; human_approved_cases: number; ready_cases: number };
+  readiness: { current_hashes_verified: boolean; human_approved_cases: number; ready_cases: number; user_delegated_cases?: number };
   cases: CaseReport[];
   aggregate: { metrics: Metrics; fatal_count: number; major_count: number; unknown_count: number };
   rubric: {
@@ -60,7 +60,8 @@ const validateReport = ajv.compile<EvaluationReport>(object({
   provenance: { enum: ["synthetic-recordings", "private-recorded-observations"] }, live_provider_verified: { const: false },
   identity: object(Object.fromEntries(IDENTITY_KEYS.map((key) => [key, { type: "string", pattern: key === "build_sha" ? "^[a-f0-9]{40}$" : HASH.source }]))),
   corpus_sha256: { type: "string", pattern: HASH.source },
-  readiness: object({ current_hashes_verified: { type: "boolean" }, human_approved_cases: { ...integer, maximum: 20 }, ready_cases: { ...integer, maximum: 20 } }),
+  readiness: { ...object({ current_hashes_verified: { type: "boolean" }, human_approved_cases: { ...integer, maximum: 20 }, ready_cases: { ...integer, maximum: 20 } }),
+    properties: { current_hashes_verified: { type: "boolean" }, human_approved_cases: { ...integer, maximum: 20 }, ready_cases: { ...integer, maximum: 20 }, user_delegated_cases: { ...integer, maximum: 20 } } },
   cases: { type: "array", minItems: 1, maxItems: 20, items: object({
     case_id: { type: "string", pattern: CASE_ID.source }, metrics: metricsSchema, unknown_count: integer,
     issues: { type: "array", maxItems: ISSUE_CODES.length, items: object({ code: { enum: ISSUE_CODES }, severity: { enum: ["fatal", "major", "unknown"] }, count: { ...integer, minimum: 1 } }) },
@@ -128,8 +129,8 @@ export function parseReport(value: unknown): EvaluationReport {
   const isPrivate = value.mode === "private-recorded";
   if (value.provenance !== (isPrivate ? "private-recorded-observations" : "synthetic-recordings")
     || value.readiness.current_hashes_verified !== isPrivate
-    || (isPrivate && (value.readiness.ready_cases !== 20 || value.readiness.human_approved_cases !== 20 || value.cases.length !== 20))
-    || (!isPrivate && (value.readiness.ready_cases !== 0 || value.readiness.human_approved_cases !== 0))
+    || (isPrivate && (value.readiness.ready_cases !== 20 || value.readiness.human_approved_cases + (value.readiness.user_delegated_cases ?? 0) !== 20 || value.cases.length !== 20))
+    || (!isPrivate && (value.readiness.ready_cases !== 0 || value.readiness.human_approved_cases !== 0 || (value.readiness.user_delegated_cases ?? 0) !== 0))
     || new Set(value.cases.map((item) => item.case_id)).size !== value.cases.length) invalid("REPORT_INVALID");
   for (const item of value.cases) {
     if (new Set(item.issues.map((issue) => issue.code)).size !== item.issues.length

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2022"],
+    "types": ["node"],
+    "incremental": false,
+    "paths": { "@/*": ["apps/web/src/*"] }
+  },
+  "include": ["*.ts"]
+}

@@ -1,9 +1,10 @@
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadEnvConfig } from "@next/env";
 
-loadEnvConfig(path.resolve(import.meta.dirname, "..", "..", "apps", "web"), process.env.NODE_ENV !== "production");
+loadEnvConfig(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "apps", "web"), process.env.NODE_ENV !== "production");
 
 const valueAfter = (name: string) => { const index = process.argv.indexOf(name); return index >= 0 ? process.argv[index + 1] : undefined; };
 const runId = valueAfter("--run-id") ?? new Date().toISOString().replace(/[:.]/g, "-");

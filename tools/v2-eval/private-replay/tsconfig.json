@@ -1,0 +1,10 @@
+{
+  "extends": "../../../apps/web/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../../../apps/web",
+    "types": ["node"],
+    "incremental": false
+  },
+  "include": ["*.ts", "../../../apps/web/worker-configuration.d.ts"],
+  "exclude": ["../../../apps/web/node_modules"]
+}
