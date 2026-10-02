@@ -293,6 +293,8 @@ tsx --tsconfig tools/v2-eval/private-replay/tsconfig.json \
 
 top1 미회수는 GC-05이고 top10에는 포함됐다. 이는 제목 조회의 실제 SQLite 순위이며 자연어 의도 해석·semantic entity recall·이미지/음성 품질 결과로 확장하지 않는다. private replay receipt의 identity는 당시 Git HEAD와 **uncommitted changes 포함** 한계를 명시했다. 최종 commit 뒤에는 별도 identity와 신규 output으로 실행해 후보 source identity를 고정한다. 첫 실행 산출물은 `.private/golden-corpus/model-runs/local-product-replay-20261003-01/` 안에 있으며 private 내용을 공개 fixture로 복사하지 않았다.
 
+Windows 최종 pin/타입·Worker/PWA 보완 뒤 문서를 함께 commit하고 신규 `local-product-replay-20261003-final/`을 사용한다. 기존 identity는 package-lock·build가 바뀌었으므로 재사용하지 않는다. `private-live-approval-20261003-final.json`의 authorized:false preparation이 계산한 현재 identity를 별도 private 파일로 고정한다. 실제 실행의 source-clean/commit·hash·집계와 프로세스 exit는 ignored `.codex/v2-completion/final-verification.json`에서 확인한다. 준비 요청은 key/provider를 읽거나 전송을 승인하지 않는다.
+
 격리 harness의 scoped 검증은 아래 **5/5 PASS·skip0·exit0(17.31초)**, 전용 tsc exit0, 새 collector/harness ESLint 오류/경고0·exit0이다. FK ON/실제 transaction rollback, BOM·CRLF·공백 byte 보존, 실제 capture/search/current packager→collector, 분석 unknown, exclusive output, owner/path/UTF-8, CLI 비노출을 확인한다. 첫 실행의 시험 metric 이름 오타는 실제 `type_alias_recall`로 수정했다. 해당 5개는 합성 시험이며 위의 실제20개 관측과 별도로 기록한다.
 
 ```sh
@@ -300,3 +302,11 @@ tsx --tsconfig tools/v2-eval/private-replay/tsconfig.json \
   --test tools/v2-eval/private-replay/replay.test.ts
 tsc --project tools/v2-eval/private-replay/tsconfig.json
 ```
+
+## 10. 실제 private S1 평가의 승인·호출 경계
+
+`tools/v2-eval/private-live`는 §9의 원문 보존 흐름을 실제 production S1 처리로 확장하는 별도 도구다. 현재 Git HEAD·분석 구현·schema·model selector·SDK lock·corpus 원문/정답·fresh private 출력과 20회 상한을 승인 대상에 결합한다. preparation은 `authorized:false` 요청만 만들고 provider/key에 접근하지 않는다. 원문 정답 작성 위임은 Google Gemini 전송 승인이 아니다. 실제 실행에는 명시적 `--live`와 정확한 target의 별도 사용자 전송 승인 기록이 필요하다.
+
+production capture/queue/governor/processing runner, 실제 resumable export, 기존 collector/evaluator를 재사용하며 원격 DB/R2는 사용하지 않는다. 총20회·입력1회·자동재시도/모델fallback없음·첫 실패 후 추가 호출0·동시 reservation을 검사한다. SDK fake HTTP의503/429에서 각각 요청1회·안전한 분류를 확인하고, 제공되지 않은 token usage를 unknown으로 보존한다. API key·원문·모델 출력·오류 본문은 stdout에 내보내지 않으며 원문/결과/관측은 private 파일에만 기록한다. 자격 증명은 산출물에 저장하지 않는다.
+
+key가 존재하는 환경의 독립 검토에서 승인 전 Git 자식이 부모 환경을 상속하는 결함을 재현했다. Git 세 호출을 system/path allowlist로 제한하고 credential 접근·부모 환경 열거·자식 credential 전달0을 실제 Git/Node에서 독립 확인했다. 수정 후 root 도구 전체71+replay5+live12는 단일 실행 PASS·skip0·exit0이고 live12는56.12초였다. 전용 타입/lint도 exit0이며 실제 개인 원문/공급자 실행은 아직0회다. 성공한20개 모델 응답도 의미 품질 승인이나 전체 V2 완료가 아니다. 기존 명시 selector를 바꾸지 않고 type/typed/rubric unknown과 blocked/promotion=false를 유지한다. 원문 전송 승인 후의 독립 의미 검토가 필요하다. 실행 명령·검증과 승인 범위는 [도구 README](../../tools/v2-eval/private-live/README.md), 현재 통합 결과는 [85번](./85_WINDOWS_COMPLETION_CANDIDATE.md)에 기록한다.

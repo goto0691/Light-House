@@ -37,7 +37,7 @@ Light House V2를 확정 기획에 따라 개인 실사용 가능한 상태로 �
 
 | ID | 영역 | 현재 상태 | 완료 증거 |
 | --- | --- | --- | --- |
-| G01 | 기존 V2 기능·운영 gate 현재 감사 | 로컬 감사·오프라인 평가 기반 구현, 실제 평가 잔여 | 문서/코드/검증 대조, [83번](./83_PRIVATE_EVALUATOR_FOUNDATION.md) recorded evaluator32개·기존 manifest25개 검증. 자유 규칙·사람 rubric·실제 공급자/corpus·운영 evidence는 미확인 |
+| G01 | 기존 V2 기능·운영 gate 현재 감사 | 사용자 위임 정답·실제 제품 private replay 완료, AI 의미 평가 잔여 | [83번](./83_PRIVATE_EVALUATOR_FOUNDATION.md)·[85번](./85_WINDOWS_COMPLETION_CANDIDATE.md): Notion 정확 원문20개와 source-grounded expected/독립 proof, 실제 저장·제목 검색·export/collector, 원문 전송 별도 승인에 결합한 bounded live 도구. 최종 도구95 PASS. primary/typed/의미 rubric은 unknown이며 promotion 차단 |
 | G02 | 수동 링크 저장·개별 복사 | 로컬 통합 후보 확인 완료 | 49번 기준선 + 2026-09-28 통합 후보 전체 회귀(vitest 전체·링크 계열 브라우저 404 PASS·쓰기 flag spec 36 PASS) |
 | G03 | OS 공유 자료의 명시적 출처 전환 | 로컬 사용자 경로 완료 | 51번: 계약 12/12, 결합 브라우저 34/34. 실제 OS Share 전달은 G11 |
 | G04 | snapshot·manifest·파생 조각 정본 | 로컬 저장·이동성 경로 검증 완료 | 0031·membership·해시·CAS·18/18 foundation, 반복 복원 수정 후 링크 이동성 파일 최종 9/9 PASS(726.265초). 별도 SQLite 15/15 및 기존 fixture 갱신 근거는 52·53번 |
@@ -45,9 +45,9 @@ Light House V2를 확정 기획에 따라 개인 실사용 가능한 상태로 �
 | G06 | 프롬프트 연결·이미지 대응·조립본 | 로컬 사용자 경로·이동성 검증 완료 | 54·58–69번. 기존 DB/API/UI·draft/pending·정확 과거 AI 근거에 더해 실제 S2 이관, base-present 삭제/tombstone, full+delta·46테이블 ZIP·fresh/repeat 복원13 PASS. ID 충돌 RED 보완 후 SQLite 결합18 PASS. 현재 전체 통합·원격 운영은 G10/G11 |
 | G07 | 목적별 Record 표시·저장 뷰·검색 | 로컬 사용자 경로 완료 | 70–75번 + 81번 자연어 리콜(명시 해석·카탈로그 경계·공유 governor, 합성 공급자·desktop/mobile 8 PASS). 실제 해석 품질은 G11 운영 확인 |
 | G08 | 일반 웹·Threads·Instagram 수집 adapter | 일반 웹 허용 호스트 완료, SNS 자동은 사용자 결정 | 79번: 정확 호스트 허용·redirect/DNS/크기/시간 경계·불변 저장·부분/차단 상태, 회귀 닫음. SNS는 URL 보존+수동 보완, Meta 앱 권한·임의 호스트 egress 정책은 사용자 결정 |
-| G09 | YouTube/영상 입력·구간 분석 | 로컬 완료, 실제 제공자 경로 확인(진단 모델) | 80번: 명시 구간 분석·이어서 분석·시각 근거·출처 SQL 증명·할당량 공유. unit36·SQLite/HTTP5·browser4 PASS, 진단 모델 실제 1회 성공. 설정 모델 1회 확인 잔여 |
-| G10 | 전체 회귀·접근성·보안·Worker package | Cloud Linux 전체 Vitest·package 확인 · 현재 UI 검증 잔여 | 2026-10-01 고정 소스172파일3528시험 PASS/오류0, type/lint/bindings/db·safe Worker build exit0/secret0, local Worker 기동200. 현재 Chromium/localhost 제한으로 UI는 미확인. 과거 Playwright845 PASS/51 SKIP을 현재 결과로 재사용하지 않음. [82번](./82_CLOUD_LINUX_COMPLETION_EVIDENCE.md). 원격 runtime·D1 비용은 G11 |
-| G11 | 개인 corpus·실기기·원격 운영 전환 | 승인/환경 확인 필요 | 현재 preflight·백업·원격 migration 상태, 사용자 확인과 배포/복구 근거 |
+| G09 | YouTube/영상 입력·구간 분석 | 항목 판단까지 로컬 완료, 설정 모델 성공 잔여 | 80·85번: 기존 구간 분석과 항목별 확정/기각·복사·권한·이동성, 영상 판단 desktop/mobile10 PASS. 과거 진단 모델 성공과 이번 설정 모델503을 구별. 설정 모델 실제 성공은 미확인 |
+| G10 | 전체 회귀·접근성·보안·Worker package | Windows 로컬 통합 검증 완료, 실제 운영 gate 별도 | [85번](./85_WINDOWS_COMPLETION_CANDIDATE.md): 타입/lint/bindings/db exit0, 도구95 PASS. 전체browser883 PASS/21 SKIP, Capture/Library flag 각1 PASS. 전체Vitest3,598P6F(exit1)의 Windows 실패2파일24P로 보완. 최소Wrangler pin 뒤 실제runtime 관련34P. 최종Worker exit0·7,505파일secret0, native D1/R2·정확HTML·fresh/기존캐시Chrome오프라인10검사PASS. 단일전체Vitest exit0·실제Android/원격운영으로 바꾸지 않음 |
+| G11 | 개인 corpus·실기기·원격 운영 전환 | private 텍스트 baseline·원격 준비 완료, 운영 gate 잔여 | 85번: 사용자 위임20개와 실제 로컬 보존/제목 리콜, Android 대상 확정. remote SELECT inventory와 legacy ledger8개 보정/V2 migration15개/AI0·cron없는 Worker 설정 준비. 실제 백업복구·권한·승인·원격 runtime·실기기·운영 기간은 미확인 |
 
 ### 전체 진행률 보고 · 2026-09-22
 
