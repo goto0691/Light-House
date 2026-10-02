@@ -1113,12 +1113,12 @@ async function validateStagedLinkRow(db: D1DatabaseBinding, batchId: string, des
   validateLinkRestoreRow(descriptor.table, row, (table, id) => references.get(`${table}\0${id}`), fragmentEvidence);
 }
 
-async function mappingsForNeeds(db: D1DatabaseBinding, batchId: string, needs: readonly { table: string; sourceId: string }[]) {
+async function mappingsForNeeds(db: D1DatabaseBinding, batchId: string, needs: readonly { table: string; sourceId: string }[], userId?: string) {
   const unique = [...new Map(needs.map((need) => [`${need.table}\0${need.sourceId}`, need])).values()];
   if (!unique.length) return new Map<string, string>();
   const where = unique.map(() => `(table_name=? and source_id=?)`).join(" or ");
-  const rows = await db.prepare(`select table_name,source_id,target_id from v2_restore_id_mappings where restore_batch_id=? and (${where})`)
-    .bind(batchId, ...unique.flatMap((need) => [need.table, need.sourceId]))
+  const rows = await db.prepare(`select table_name,source_id,target_id from v2_restore_id_mappings where restore_batch_id=? and (${where})${userId === undefined ? "" : " and user_id=?"}`)
+    .bind(batchId, ...unique.flatMap((need) => [need.table, need.sourceId]), ...(userId === undefined ? [] : [userId]))
     .all<{ table_name: string; source_id: string; target_id: string }>();
   return new Map(rows.results.map((mapping) => [`${mapping.table_name}\0${mapping.source_id}`, mapping.target_id]));
 }
@@ -1130,6 +1130,55 @@ function rewriteReferences(descriptor: CanonicalTableDescriptor, row: Record<str
     if (mapped) value[need.column] = mapped;
   }
   return value;
+}
+
+/** A succeeded plan binds the source namespace to its current canonical target.
+ * Its map alone cannot authorize reuse: check its receipt and current content,
+ * including the normalized owner, before placing that target in a new plan. */
+async function previousSucceededCandidate(input: {
+  db: D1DatabaseBinding; batch: RestoreBatchRow; descriptor: CanonicalTableDescriptor;
+  sourceEnvelope: Record<string, unknown>; source: Record<string, unknown>;
+}) {
+  // Synthetic materialized checkpoints and legacy helper batches have no
+  // verified archive identity/receipts and keep the ordinary collision rules.
+  if (!/^[a-f0-9]{64}$/.test(input.batch.archive_sha256) || !/^sha256:[a-f0-9]{64}$/.test(input.batch.manifest_root_hash)) return null;
+  const previous = await input.db.prepare(`select id from v2_restore_batches
+    where user_id=? and archive_sha256=? and manifest_root_hash=? and workflow_version=? and status='succeeded'
+    order by rowid desc limit 1`).bind(input.batch.user_id, input.batch.archive_sha256, input.batch.manifest_root_hash, RESTORE_WORKFLOW_VERSION)
+    .first<{ id: string }>();
+  if (!previous) return null;
+  const receipt = await input.db.prepare(`select source_row_hash,candidate_row_json,restored_row_key,restored_row_hash,apply_status
+    from v2_restore_rows where restore_batch_id=? and table_name=? and row_key=? limit 1`)
+    .bind(previous.id, input.descriptor.table, rowKey(input.descriptor, input.sourceEnvelope))
+    .first<{ source_row_hash: string; candidate_row_json: string; restored_row_key: string; restored_row_hash: string; apply_status: string }>();
+  const sourceHash = sha256Hex(canonicalJson(unwrapCanonicalRow(input.sourceEnvelope, input.descriptor.table)));
+  if (!receipt || receipt.source_row_hash !== sourceHash || !["applied", "reused"].includes(receipt.apply_status)) {
+    throw new RestoreContractError("restore_conflict", "The previous restore source receipt is missing or changed.");
+  }
+  const priorCandidate = parseJson<Record<string, unknown>>(receipt.candidate_row_json, {});
+  if (!Object.keys(priorCandidate).length || sha256Hex(canonicalJson(priorCandidate)) !== receipt.restored_row_hash
+    || rowKey(input.descriptor, priorCandidate) !== receipt.restored_row_key) {
+    throw new RestoreContractError("restore_conflict", "The previous restore target receipt is damaged.");
+  }
+  const needs = mappingNeeds(input.descriptor, input.source, true);
+  const primary = input.descriptor.primaryKey[0];
+  const primaryNeed = input.descriptor.primaryKey.length === 1 && typeof input.source[primary] === "string"
+    ? { table: input.descriptor.table, sourceId: String(input.source[primary]) } : null;
+  const mappings = await mappingsForNeeds(input.db, previous.id, [...needs, ...(primaryNeed ? [primaryNeed] : [])], input.batch.user_id);
+  for (const need of [...needs, ...(primaryNeed ? [primaryNeed] : [])]) {
+    if (!mappings.get(`${need.table}\0${need.sourceId}`)) throw new RestoreContractError("restore_conflict", "The previous restore identity map is missing or changed.");
+  }
+  let candidate = rewriteReferences(input.descriptor, input.source, mappings, true);
+  if (primaryNeed) candidate = { ...candidate, [primary]: mappings.get(`${primaryNeed.table}\0${primaryNeed.sourceId}`)! };
+  candidate = sanitizeRestoredLinkJob(input.descriptor.table, candidate);
+  if (canonicalJson(comparableRows(input.descriptor, candidate)) !== canonicalJson(comparableRows(input.descriptor, priorCandidate))) {
+    throw new RestoreContractError("restore_conflict", "The previous restore identity map does not match its source receipt.");
+  }
+  const existing = await existingRowByColumns(input.db, input.descriptor, candidate, input.descriptor.primaryKey);
+  if (!existing || canonicalJson(comparableExisting(input.descriptor, existing, candidate)) !== canonicalJson(comparableRows(input.descriptor, candidate))) {
+    throw new RestoreContractError("restore_conflict", "The previous restore target changed owner/content or was removed.");
+  }
+  return { candidate, existing };
 }
 
 function recordPrimaryMappingStatement(input: { db: D1DatabaseBinding; batch: RestoreBatchRow; descriptor: CanonicalTableDescriptor; source: Record<string, unknown>; candidate: Record<string, unknown>; disposition: string; now: string }) {
@@ -1191,9 +1240,10 @@ async function planNextRow(input: { db: D1DatabaseBinding; batch: ClaimedRestore
       throw new RestoreContractError("reference_closure_invalid", `${descriptor.table}.${need.column} refers outside the staged restore graph.`);
     }
   }
-  const provisional = sanitizeRestoredLinkJob(descriptor.table, rewriteReferences(descriptor, source, mappings, false));
+  const previous = await previousSucceededCandidate({ db: input.db, batch: input.batch, descriptor, sourceEnvelope, source });
+  const provisional = previous?.candidate ?? sanitizeRestoredLinkJob(descriptor.table, rewriteReferences(descriptor, source, mappings, false));
 
-  const primaryExisting = await existingRowByColumns(input.db, descriptor, provisional, descriptor.primaryKey);
+  const primaryExisting = previous?.existing ?? await existingRowByColumns(input.db, descriptor, provisional, descriptor.primaryKey);
   const alternateExisting = descriptor.alternateKey ? await existingRowByColumns(input.db, descriptor, provisional, descriptor.alternateKey) : null;
   const hasDeferredReference = mappingNeeds(descriptor, source, true).some((need) => !mappingNeeds(descriptor, source, false).some((hard) => hard.table === need.table && hard.column === need.column));
   const primaryIsForeignKey = descriptor.primaryKey.length === 1 && Object.hasOwn(descriptor.foreignKeys ?? {}, descriptor.primaryKey[0]);
@@ -1202,9 +1252,9 @@ async function planNextRow(input: { db: D1DatabaseBinding; batch: ClaimedRestore
   // Joined identities cannot be forked separately from their parent. Exact
   // provisional equality is safe to reuse; final soft-reference rewriting and
   // apply-time target hashes still reject any later mapping or target drift.
-  if (primaryExisting && (!hasDeferredReference || primaryIsForeignKey) && canonicalJson(comparableExisting(descriptor, primaryExisting, provisional)) === canonicalJson(comparableRows(descriptor, provisional))) {
+  if (previous || primaryExisting && (!hasDeferredReference || primaryIsForeignKey) && canonicalJson(comparableExisting(descriptor, primaryExisting, provisional)) === canonicalJson(comparableRows(descriptor, provisional))) {
     disposition = "reused";
-    candidate = { ...provisional, ...Object.fromEntries(descriptor.primaryKey.map((column) => [column, primaryExisting[column]])) };
+    candidate = { ...provisional, ...Object.fromEntries(descriptor.primaryKey.map((column) => [column, primaryExisting![column]])) };
   } else if (alternateExisting) {
     if (descriptor.alternateKeyResolution === "conflict") disposition = "conflict";
     else {
