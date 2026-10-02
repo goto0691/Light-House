@@ -20,6 +20,7 @@ import {
   nextEnvFilePaths,
   scanArtifactsForEnvSecrets,
 } from "./secret-artifact-audit.mjs";
+import { assertWorkerFilesystemSupport } from "./worker-filesystem-preflight.mjs";
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const monorepoRoot = path.resolve(appDir, "..", "..");
@@ -373,6 +374,10 @@ async function buildWorker() {
 const recoverOnly = process.argv.slice(2).includes("--recover-stale-lock");
 const unknownArguments = process.argv.slice(2).filter((argument) => argument !== "--recover-stale-lock");
 if (unknownArguments.length) throw new Error(`Unknown safe-build arguments: ${unknownArguments.join(", ")}`);
+if (!recoverOnly) {
+  assertWorkerFilesystemSupport();
+  console.log(`safe-worker-runtime: node=${process.version} recursive_copy=verified recursive_cleanup=verified`);
+}
 if (recoverOnly) removeConfirmedStaleBuildLock();
 const releaseBuildLock = acquireBuildLock();
 try {
