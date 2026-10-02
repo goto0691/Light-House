@@ -82,7 +82,7 @@ function StoredImage({ attachmentId, filename }: { attachmentId: string; filenam
   </a>}<small>보관한 첨부 · 특정 글과의 대응은 미확인</small></div>;
 }
 
-export function RecordSourceMaterials({ sources, fieldTargets = {}, analysisSummary }: { sources: V2RecordProjection["sources"]; fieldTargets?: Readonly<Record<string, string>>; analysisSummary?: string }) {
+export function RecordSourceMaterials({ sources, fieldTargets = {}, analysisSummary, videoReview }: { sources: V2RecordProjection["sources"]; fieldTargets?: Readonly<Record<string, string>>; analysisSummary?: string; videoReview?: { recordId: string; currentRevisionId: string; writeEnabled: boolean } }) {
   const manualSources = sources.filter((source) => source.manualLink);
   const fetchedTextCount = manualSources.filter((source) => source.publicFetch && source.rawText?.trim().length).length;
   const providedTextCount = manualSources.filter((source) => !source.publicFetch && source.rawText?.trim().length).length;
@@ -102,7 +102,7 @@ export function RecordSourceMaterials({ sources, fieldTargets = {}, analysisSumm
       if (video) return <article className="v2-record-material" data-source-class="ai_video_note" id={`source-${source.id}`} key={source.id}>
         <header><div className="v2-record-material__title"><FileText aria-hidden="true" size={17} /><div><h3>AI 영상 분석 노트</h3><p>{formatTimecode(video.requestedStartSeconds)}–{formatTimecode(video.requestedEndSeconds)} 구간 · 원본 영상 미보관 · 공식 자막 아님</p></div></div>
           <div className="v2-record-source-actions">{sources.some((item) => item.id === video.requestedSourceItemId) ? <a className="v2-record-original" href={`#source-${video.requestedSourceItemId}`}>영상 링크로</a> : null}<a className="v2-record-original" href={youtubeTimecodeUrl(video.videoId, video.requestedStartSeconds)} rel="noreferrer" target="_blank"><ExternalLink aria-hidden="true" size={14} /> 구간 시작에서 열기</a></div></header>
-        {source.rawText ? <VideoAnalysisNoteView label={`AI 영상 분석 노트 ${source.displayOrder + 1}`} note={video} rawText={source.rawText} /> : null}
+        {source.rawText ? <VideoAnalysisNoteView key={`${videoReview?.recordId ?? "static"}:${source.id}:${source.contentHash}:${videoReview?.currentRevisionId ?? ""}`} label={`AI 영상 분석 노트 ${source.displayOrder + 1}`} note={video} rawText={source.rawText} reviewContext={videoReview ? { ...videoReview, sourceItemId: source.id, contentHash: source.contentHash } : undefined} /> : null}
         <details className="v2-source-hash"><summary>보존 정보</summary><code>{source.contentHash}</code></details>
       </article>;
       const url = safeSourceUrl(manual?.url ?? (source.kind === "url" ? source.rawText : null));

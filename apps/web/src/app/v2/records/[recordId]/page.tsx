@@ -76,7 +76,7 @@ export default async function V2RecordPage({ params, searchParams }: PageProps<"
             <pre className="v2-record-markdown">{record.bodyMarkdown}</pre>
             <RecordKnowledge presentationJson={JSON.stringify(presentation)} />
             {showLinks && links ? <RecordLinkAnalysis key={`${session.userId}:${record.recordId}`} initial={links} recordId={record.recordId} recoveryIdentity={{ ownerId: session.userId, ...recoveryPolicy }} /> : null}
-            <RecordSourceMaterials analysisSummary={showLinks ? "외부 텍스트 분석과 공개 웹 텍스트 수집은 위 링크 정리 패널에서 별도 요청 · 자동 OCR·영상 분석 안 함" : undefined} fieldTargets={Object.fromEntries(sourceFieldTargets)} sources={record.sources} />
+            <RecordSourceMaterials analysisSummary={showLinks ? "외부 텍스트 분석과 공개 웹 텍스트 수집은 위 링크 정리 패널에서 별도 요청 · 자동 OCR·영상 분석 안 함" : undefined} fieldTargets={Object.fromEntries(sourceFieldTargets)} sources={record.sources} videoReview={record.currentRevisionId ? { recordId: record.recordId, currentRevisionId: record.currentRevisionId, writeEnabled: flags.write } : undefined} />
           </>
         )}
       </article>

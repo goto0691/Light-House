@@ -46,7 +46,7 @@ export async function VideoAnalysisAuditFixture() {
     <RecordLinkAnalysis initial={links} recordId={links.recordId} recoveryIdentity={{ ownerId: "link-owner", recordId: links.recordId, currentVersion: 1, privacyLevel: "normal" }} />
     <RecordSourceMaterials sources={[
       { id: "video-url", kind: "url", displayOrder: 0, rawText: "", contentHash: links.members[0].contentHash, manualLink: links.members[0].manualLink, attachmentId: null, filename: null, mimeType: null, sizeBytes: null },
-      { id: "video-note", kind: "transcript", displayOrder: 1, rawText: noteText, contentHash: await linkSha256Hex(noteText), manualLink: null, attachmentId: null, filename: null, mimeType: null, sizeBytes: null, videoAnalysis: note },
-    ]} />
+      { id: "video-note", kind: "transcript", displayOrder: 1, rawText: noteText, contentHash: `sha256:${await linkSha256Hex(noteText)}`, manualLink: null, attachmentId: null, filename: null, mimeType: null, sizeBytes: null, videoAnalysis: note },
+    ]} videoReview={{ recordId: links.recordId, currentRevisionId: "revision-video", writeEnabled: true }} />
   </article></main>;
 }

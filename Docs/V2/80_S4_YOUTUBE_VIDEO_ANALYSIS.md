@@ -41,4 +41,16 @@
 
 - 설정 모델(`gemini-3.6-flash`)로 같은 스크립트를 1회 실행해 확인한다(한도 초기화 후).
 - 설명란·댓글·재생목록·채널 자동 수집은 하지 않는다. YouTube 공식 자막 다운로드는 편집 권한이 필요하므로 설계하지 않았다([47번](./47_LINK_CAPTURE_CASEBOOK_AND_ROUTING.md)).
-- 영상 속 장면별 이미지 보관, 화자 식별 정확도 개선, 노트 항목 단위 사용자 확인/거절은 후속 개선이다.
+- 영상 속 장면별 이미지 보관, 화자 식별 정확도 개선은 후속 개선이다.
+
+## 항목별 사용자 판단 · 2026-10-03
+
+Record의 영상 노트에서 요약·구간·발화·화면 글·분석 한계를 각각 **확인/거절**할 수 있다. 이는 사용자 판단이며 AI 정확성·공식 자막·외부 사실의 확정이 아니다. 원 AI 노트와 URL·개인 메모·전문 검색 문자열은 변경하지 않는다. 거절한 항목도 보존 검색으로 찾을 수 있으며, 정확한 저장 위치에서 `사용자 거절` 상태를 읽는다. `원 AI 영상 분석 복사`는 분석 당시 텍스트를 그대로 복사하고 그 사실을 명시한다. 별도의 `사용자 판단 포함 복사`는 각 항목의 판단과 원 AI 노트를 함께 제공한다.
+
+- 새 정본 테이블이나 migration을 추가하지 않는다. 기존 `v2_review_items`의 `analysis_review`/`processing_run_id=null`과 `v2_review_receipts`의 `target_kind=review_item`/`target_id=null`을 사용한다. 영수증은 필수 `review_item_id` FK로 연결하며 생성과 동시에 resolved여서 열린 일반 AI 검토 목록을 늘리지 않는다.
+- 판단을 바꾸면 새 리뷰/영수증을 덧붙인다. 항목별 `expectedStateVersion`, 현재 기록 revision, 현재 snapshot ID/version, 정확 source hash·본문·metadata, 현재 snapshot membership을 transaction 안에서 재검사한다. 늦은 탭의 판단이 새 판단을 덮어쓰지 않는다. 같은 요청 키는 원 요청 hash가 같을 때만 영수증을 재생한다.
+- `GET/POST /api/v2/records/[recordId]/video-reviews/[sourceItemId]`는 서버 session/owner·restricted 재인증·source adapter 증명을 확인한다. AI flag가 꺼져도 사용자 판단은 저장할 수 있으며 공급자를 호출하지 않는다. 현재 선택본에서 제외한 과거 노트는 판단 이력을 읽을 수 있지만 새 판단은 저장하지 않는다. 과거 성공 영수증의 exact 재생은 새 쓰기를 만들지 않는다.
+- source ID는 요청 권한 검증에만 사용한다. 리뷰 payload에는 source hash와 전체 AI 노트의 텍스트·시각·분석 identity를 포함한 안정 fingerprint를 저장하되 복원 시 바뀌는 `requestedSourceItemId`를 제외한다. 정본 PK/FK 재매핑 뒤에도 같은 판단이 연결되고, 새 분석은 이전 판단을 물려받지 않는다.
+- UI는 실패한 요청을 메모리에서 같은 키로 재시도하고, 충돌 시 새 상태를 읽은 뒤 판단한다. 노트와 판단을 로컬 저장소에 복제하지 않는다. 늦은 응답과 unmount를 세대로 폐기하며 권한 거절 뒤에는 노트 텍스트와 복사 버튼을 숨긴다.
+
+로컬 검사: 신규 SQLite/HTTP 13개와 순수 계약 8개, 기존 영상 SQLite/HTTP 5개와 순수 계약 36개를 함께 실행해 **4파일62 PASS/exit0**을 확인했다. full/repeat 정본 복원, 최초 owner-ID 충돌 복원, canonical export privacy와 정확 source 보존이 포함된다. 추가 full→incremental→materialize→실제 SQLite restore 검사 1개 PASS다. 버킷은 메모리 대역이며 workerd·원격 R2 성공을 뜻하지 않는다. 기존 일반 영수증/evidence의 non-null polymorphic target-ID 복원 누락도 별도 RED로 재현했고 공유 복원 수정과 최종 통합 검사는 주 구현자가 담당한다. 브라우저용 실제 컴포넌트 desktop/mobile spec은 준비했으며 실행 결과는 주 구현자의 최종 증거에 기록한다.

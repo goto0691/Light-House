@@ -12,6 +12,15 @@ import { parseStoredZip, type ParsedZipEntry } from "@/lib/v2/portability/zip-st
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const IMPORT_BATCH_STATEMENT_LIMIT = 80;
+const POLYMORPHIC_TARGET_TABLES: Readonly<Record<string, string>> = {
+  type_assignment: "v2_object_type_assignments",
+  property_value: "v2_property_values",
+  entity: "v2_entity_records",
+  event: "v2_event_records",
+  relation: "v2_relation_edges",
+  review_item: "v2_review_items",
+  document: "v2_documents",
+};
 
 export class RestoreContractError extends Error {
   constructor(readonly code: string, message: string) { super(message); this.name = "RestoreContractError"; }
@@ -69,15 +78,6 @@ function rowKey(descriptor: CanonicalTableDescriptor, row: Record<string, unknow
 
 export function validateReferenceClosure(rowsByTable: ReadonlyMap<string, readonly Record<string, unknown>[]>) {
   const softReferences = CANONICAL_SOFT_REFERENCES_V1;
-  const polymorphicTargets: Readonly<Record<string, string>> = {
-    type_assignment: "v2_object_type_assignments",
-    property_value: "v2_property_values",
-    entity: "v2_entity_records",
-    event: "v2_event_records",
-    relation: "v2_relation_edges",
-    review_item: "v2_review_items",
-    document: "v2_documents",
-  };
   const keySets = new Map<string, Set<string>>();
   for (const descriptor of CANONICAL_TABLES_V1) {
     if (descriptor.primaryKey.length !== 1) continue;
@@ -92,7 +92,7 @@ export function validateReferenceClosure(rowsByTable: ReadonlyMap<string, readon
         if (targets && !targets.has(String(value))) throw new RestoreContractError("reference_closure_invalid", `${descriptor.table}.${column} refers outside the bundle.`);
       }
       if ((descriptor.table === "v2_evidence_refs" || descriptor.table === "v2_review_receipts") && typeof row.target_id === "string") {
-        const targetTable = polymorphicTargets[String(row.target_kind)];
+        const targetTable = POLYMORPHIC_TARGET_TABLES[String(row.target_kind)];
         if (!targetTable) throw new RestoreContractError("reference_closure_invalid", `${descriptor.table}.target_kind is not restorable.`);
         if (!keySets.get(targetTable)?.has(row.target_id)) throw new RestoreContractError("reference_closure_invalid", `${descriptor.table}.target_id refers outside the bundle.`);
       }
@@ -399,9 +399,24 @@ async function resolveRestoreCandidate(input: {
   descriptor: CanonicalTableDescriptor;
   source: Record<string, unknown>;
   mappings: Map<string, string>;
+  previousMappings?: ReadonlyMap<string, string>;
   forkId: () => string;
 }) {
-  const candidate = sanitizeRestoredLinkJob(input.descriptor.table, rewriteForeignKeys(input.source, input.descriptor, input.mappings));
+  let candidate = sanitizeRestoredLinkJob(input.descriptor.table, rewriteForeignKeys(input.source, input.descriptor, input.mappings));
+  const primary = input.descriptor.primaryKey[0];
+  const priorTarget = input.descriptor.primaryKey.length === 1 && typeof input.source[primary] === "string"
+    ? input.previousMappings?.get(`${input.descriptor.table}\0${input.source[primary]}`) : undefined;
+  if (priorTarget !== undefined) {
+    candidate = sanitizeRestoredLinkJob(input.descriptor.table, { ...candidate, [primary]: priorTarget });
+    const priorExisting = await existingRow(input.db, input.descriptor, candidate);
+    // A durable collision map is a hint, never permission to overwrite or to
+    // reuse a target that has since changed owner/content or been deleted.
+    if (!priorExisting || canonicalJson(comparableExisting(input.descriptor, priorExisting, candidate)) !== canonicalJson(comparableCandidate(input.descriptor, candidate))) {
+      return { candidate, disposition: "conflict" as const };
+    }
+    recordPrimaryMapping(input.descriptor, input.source, candidate, input.mappings);
+    return { candidate, disposition: "reused" as const };
+  }
   const primaryExisting = await existingRow(input.db, input.descriptor, candidate);
   if (primaryExisting && canonicalJson(comparableExisting(input.descriptor, primaryExisting, candidate)) === canonicalJson(comparableCandidate(input.descriptor, candidate))) {
     recordPrimaryMapping(input.descriptor, input.source, candidate, input.mappings);
@@ -431,18 +446,43 @@ async function resolveRestoreCandidate(input: {
   return { candidate, disposition: "created" as const };
 }
 
+async function previousSucceededMappings(db: D1DatabaseBinding, userId: string, bundle: VerifiedExportBundle) {
+  const previous = await db.prepare(`select collision_map_json from v2_restore_batches
+    where user_id=? and archive_sha256=? and manifest_root_hash=? and status='succeeded' order by rowid desc limit 1`)
+    .bind(userId, bundle.archiveSha256, bundle.manifest.rootHash).first<{ collision_map_json: string }>();
+  if (!previous) return undefined;
+  let value: unknown;
+  try { value = JSON.parse(previous.collision_map_json); } catch { throw new RestoreContractError("restore_conflict", "The previous restore identity map is damaged."); }
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.values(value).some((id) => typeof id !== "string" || !id)) {
+    throw new RestoreContractError("restore_conflict", "The previous restore identity map is damaged.");
+  }
+  const mappings = new Map<string, string>();
+  for (const descriptor of RESTORE_TABLE_ORDER_V2) {
+    if (descriptor.primaryKey.length !== 1) continue;
+    for (const exported of bundle.rowsByTable.get(descriptor.table) ?? []) {
+      const source = normalizeForUser(exported, userId, descriptor.table), sourceId = source[descriptor.primaryKey[0]];
+      if (typeof sourceId !== "string") continue;
+      const key = `${descriptor.table}\0${sourceId}`, target = (value as Record<string, unknown>)[key];
+      if (typeof target !== "string" || !target) throw new RestoreContractError("restore_conflict", "The previous restore identity map is incomplete.");
+      mappings.set(key, target);
+    }
+  }
+  return mappings;
+}
+
 export async function createRestoreDryRun(db: D1DatabaseBinding, userId: string, bundle: VerifiedExportBundle): Promise<RestoreDryRun> {
   if (bundle.manifest.profile !== "migration") throw new RestoreContractError("restore_profile_invalid", "Only migration bundles can be restored.");
   const totals = { create: 0, reuse: 0, fork: 0, conflict: 0, invalid: 0 };
   const tables: { table: string; rows: number; create: number; reuse: number; fork: number; conflict: number }[] = [];
-  const mappings = new Map<string, string>();
+  const previousMappings = await previousSucceededMappings(db, userId, bundle);
+  const mappings = new Map(previousMappings);
   for (const descriptor of RESTORE_TABLE_ORDER_V2) {
     const summary = { table: descriptor.table, rows: 0, create: 0, reuse: 0, fork: 0, conflict: 0 };
     for (const exported of orderSourceSelfReferences(bundle.rowsByTable.get(descriptor.table) ?? [], descriptor)) {
       summary.rows += 1;
       const source = normalizeForUser(exported, userId, descriptor.table);
       const sourceKey = rowKey(descriptor, exported);
-      const resolved = await resolveRestoreCandidate({ db, descriptor, source, mappings, forkId: () => `dry-run-fork:${sha256Hex(`${descriptor.table}\0${sourceKey}`).slice(0, 32)}` });
+      const resolved = await resolveRestoreCandidate({ db, descriptor, source, mappings, previousMappings, forkId: () => `dry-run-fork:${sha256Hex(`${descriptor.table}\0${sourceKey}`).slice(0, 32)}` });
       const countKey: "create" | "reuse" | "fork" | "conflict" = resolved.disposition === "created" ? "create" : resolved.disposition === "reused" ? "reuse" : resolved.disposition === "forked" ? "fork" : "conflict";
       summary[countKey] += 1;
       totals[countKey] += 1;
@@ -467,6 +507,10 @@ function rewriteForeignKeys(row: Record<string, unknown>, descriptor: CanonicalT
   for (const [column, targetTable] of Object.entries({ ...(descriptor.foreignKeys ?? {}), ...(CANONICAL_SOFT_REFERENCES_V1[descriptor.table] ?? {}) })) {
     const current = sourceReferences[column];
     if (typeof current === "string") value[column] = mappings.get(`${targetTable}\0${current}`) ?? current;
+  }
+  if ((descriptor.table === "v2_evidence_refs" || descriptor.table === "v2_review_receipts") && typeof sourceReferences.target_id === "string") {
+    const targetTable = POLYMORPHIC_TARGET_TABLES[String(sourceReferences.target_kind)];
+    if (targetTable) value.target_id = mappings.get(`${targetTable}\0${sourceReferences.target_id}`) ?? sourceReferences.target_id;
   }
   return value;
 }
@@ -510,14 +554,15 @@ function orderSelfReferences(rows: PlannedRow[], descriptor: CanonicalTableDescr
 }
 
 async function planImport(db: D1DatabaseBinding, userId: string, bundle: VerifiedExportBundle) {
-  const mappings = new Map<string, string>();
+  const previousMappings = await previousSucceededMappings(db, userId, bundle);
+  const mappings = new Map(previousMappings);
   const planned: PlannedRow[] = [];
   for (const descriptor of RESTORE_TABLE_ORDER_V2) {
     for (const exported of orderSourceSelfReferences(bundle.rowsByTable.get(descriptor.table) ?? [], descriptor)) {
       const source = normalizeForUser(exported, userId, descriptor.table);
       const sourceKey = rowKey(descriptor, exported);
       const sourceHash = sha256Hex(canonicalJson(unwrapCanonicalRow(exported, descriptor.table)));
-      const resolved = await resolveRestoreCandidate({ db, descriptor, source, mappings, forkId: ulid });
+      const resolved = await resolveRestoreCandidate({ db, descriptor, source, mappings, previousMappings, forkId: ulid });
       if (resolved.disposition === "conflict") throw new RestoreContractError("restore_conflict", `${descriptor.table} has an alternate or non-forkable collision.`);
       planned.push({ descriptor, exported, candidate: resolved.candidate, sourceKey, sourceHash, disposition: resolved.disposition });
     }
@@ -569,14 +614,22 @@ export async function importVerifiedBundle(input: {
   db: D1DatabaseBinding; bucket: R2BucketBinding; userId: string; bundle: VerifiedExportBundle; expectedDryRunHash: string; idempotencyKey: string; now?: string;
 }) {
   const now = input.now ?? new Date().toISOString();
+  const existingBatch = await input.db.prepare(`select id,status,archive_sha256,manifest_root_hash,dry_run_hash,summary_json from v2_restore_batches where user_id=? and idempotency_key=? limit 1`)
+    .bind(input.userId, input.idempotencyKey).first<{ id: string; status: string; archive_sha256: string; manifest_root_hash: string; dry_run_hash: string; summary_json: string }>();
+  if (existingBatch) {
+    if (existingBatch.archive_sha256 !== input.bundle.archiveSha256 || existingBatch.manifest_root_hash !== input.bundle.manifest.rootHash || existingBatch.dry_run_hash !== input.expectedDryRunHash) {
+      throw new RestoreContractError("idempotency_conflict", "Restore idempotency key was used for another archive or approved dry-run.");
+    }
+    let originalDryRun: RestoreDryRun;
+    try { originalDryRun = JSON.parse(existingBatch.summary_json) as RestoreDryRun; } catch { throw new RestoreContractError("restore_conflict", "The original restore result is damaged."); }
+    if (!originalDryRun || originalDryRun.dryRunHash !== existingBatch.dry_run_hash || originalDryRun.archiveSha256 !== existingBatch.archive_sha256 || originalDryRun.manifestRootHash !== existingBatch.manifest_root_hash) {
+      throw new RestoreContractError("restore_conflict", "The original restore result does not match its request.");
+    }
+    return { batchId: existingBatch.id, status: existingBatch.status, replayed: true, dryRun: originalDryRun };
+  }
   const dryRun = await createRestoreDryRun(input.db, input.userId, input.bundle);
   if (dryRun.dryRunHash !== input.expectedDryRunHash) throw new RestoreContractError("dry_run_changed", "The archive or target state changed after dry-run.");
   if (dryRun.counts.conflict || dryRun.counts.invalid) throw new RestoreContractError("restore_conflict", "Dry-run has unresolved conflicts.");
-  const existingBatch = await input.db.prepare(`select id,status,archive_sha256,dry_run_hash from v2_restore_batches where user_id=? and idempotency_key=? limit 1`).bind(input.userId, input.idempotencyKey).first<{ id: string; status: string; archive_sha256: string; dry_run_hash: string }>();
-  if (existingBatch) {
-    if (existingBatch.archive_sha256 !== input.bundle.archiveSha256 || existingBatch.dry_run_hash !== dryRun.dryRunHash) throw new RestoreContractError("idempotency_conflict", "Restore idempotency key was used for another archive.");
-    return { batchId: existingBatch.id, status: existingBatch.status, replayed: true, dryRun };
-  }
   const batchId = ulid();
   await input.db.prepare(`insert into v2_restore_batches (id,user_id,idempotency_key,archive_sha256,manifest_root_hash,dry_run_hash,status,summary_json,collision_map_json,created_at,approved_at,started_at) values (?,?,?,?,?,?,'importing',?,'{}',?,?,?)`).bind(batchId, input.userId, input.idempotencyKey, input.bundle.archiveSha256, input.bundle.manifest.rootHash, dryRun.dryRunHash, canonicalJson(dryRun), now, now, now).run();
   const uploadedKeys: string[] = [];

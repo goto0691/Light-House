@@ -3,6 +3,34 @@
 > 상태: live infrastructure와 V2 canary 완료 · private corpus/device/observation/grounded quota gate 미충족
 > 검증일: 2026-08-13
 
+## 2026-10-03 로컬 사전검증 보완
+
+아래 8월의 live canary와 검사는 당시 결과로 보존한다. 현재 `cutover:preflight`는 evidence v1 JSON 구조를 읽지만 단순 boolean이나 과거 결과만으로 전환을 허용하지 않는다.
+
+- 모든 시각은 실제 달력에서 유효한 UTC ISO 문자열(`YYYY-MM-DDTHH:mm:ssZ` 또는 `.SSSZ`)이어야 한다. 날짜만, 로컬 날짜, 시간대 offset, 불가능한 날짜는 거부한다. 순수 계약에는 명시 `now`를 전달할 수 있고 실제 CLI는 현재 UTC 시각을 사용한다.
+- 측정 evidence는 사전검증 기준 시각보다 미래이면 안 되며 최대 24시간 이내여야 한다. 운영자가 옛 evidence의 날짜만 갱신하는 것은 새 측정을 대신하지 못한다.
+- `capture_default`의 검증 snapshot은 측정 시각 직전 최대 24시간 이내여야 한다. `library_default`와 `closure`는 기존 Capture 전환 시각 직전 24시간의 snapshot인지 확인한다. 관찰 기간 동안 당시 복구점이 오래됐다는 이유만으로 새 전환 전 snapshot을 요구하지 않는다.
+- `closure`는 Capture 기본 전환 후 **30일**과 rollback drill을 모두 요구한다. Library의 7일 관찰 기준을 종료 기준으로 재사용하지 않는다.
+- CLI는 현재 source/expected 파일을 hash 검증한 corpus digest·정확 case 집합·승인 count를 재계산하고, `parseReport()`로 구조·집계·promotion을 다시 검사한 recorded evaluator report에 결합한다. 승인된 expected는 사람 승인과 사용자 위임 후 독립 검토를 구분하며 승인 수의 합계가 20이어야 한다.
+- 별도 identity JSON의 `build_sha`, `schema_sha256`, `model_config_sha256`, `prompt_sha256`, `registry_sha256` 모두가 보고서와 같아야 한다. build SHA는 현재 Git HEAD와도 같아야 하고 runtime·migration·build·평가 소스에 미커밋 변경이 있으면 차단한다. explicit identity는 해당 후보를 실제로 측정한 산출물에서 준비하며 임의 hash로 채우지 않는다.
+- 기록 평가가 `live_provider_verified=false`, `rubric=not_scored`, `promotion.eligible=false`이면 실제 공급자·독립 rubric·출시 판단 blocker가 남는다. foundation report의 결정론적 metric을 실제 모델 품질이나 최종 출시 승인으로 승격하지 않는다. 보고서 누락·identity/corpus 불일치·unknown·fatal도 전환을 차단한다.
+- CLI는 private 경로, source/query/value, hash/identity, arbitrary parser/Git 오류를 출력하지 않는다. contract 소유 blocker key·설명과 aggregate 준비 count만 출력하며 실패 시 `recommendedEnv=null`, exit1이다.
+
+```powershell
+# 아래 두 파일은 동일한 현재 후보/corpus의 평가 산출물이다.
+# 기본값은 .private/cutover/identity.json, .private/cutover/recorded-report.json이다.
+npm.cmd run cutover:preflight -- --target=capture_default `
+  --identity=.private/cutover/identity.json `
+  --report=.private/cutover/recorded-report.json
+
+# 순수 로컬 계약과 private 값을 출력하지 않는 CLI 경계 검사
+npm.cmd run test --workspace @light-house/web -- --maxWorkers=1 tests/unit/v2/cutover-contract.test.ts
+node --import tsx --test tools/v2-cutover/recorded-evidence.test.ts
+node node_modules/typescript/bin/tsc --project tools/v2-cutover/tsconfig.json
+```
+
+24시간은 현재 개인 운영의 사전검증·전환 전 복구점 freshness 상한이다. 26번의 전환 직전 snapshot 및 T+30 종료 계약을 실행 가능한 검사로 구체화한 것이며 실제 device·live 모델·원격 migration/배포·관찰 기간을 로컬 시험으로 대체하지 않는다.
+
 ## 2026-08-29 후속 hardening 상태
 
 - local repository는 `0026` terminal reconciliation, `0027` migration quarantine/CAS, `0028` owner-safe FTS, `0029` provider invocation lease까지 확장됐다. current canonical archive 구현 계약은 `v2-020`이고 `v2-017`·`v2-018`·`v2-020`을 지원한다. 아래 2026-08-13 canary에는 이 후속 코드가 배포돼 있지 않다.

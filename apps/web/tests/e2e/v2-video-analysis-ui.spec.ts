@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import type { LinkPresentationV1, PresentedLinkSource } from "../../src/lib/v2/domain/link-presentation-v1";
 import { linkSha256Hex } from "../../src/lib/v2/domain/link-snapshot-v1";
 import { renderVideoAnalysisText } from "../../src/lib/v2/domain/video-analysis-source";
+import { VIDEO_REVIEW_CONTRACT, videoReviewItems } from "../../src/lib/v2/domain/video-review-v1";
 import { syntheticVideoNote } from "../../src/components/v2/lab/video-analysis-audit-fixture";
 
 const endpoint = "**/api/v2/records/video-analysis-fixture/links";
@@ -11,6 +12,12 @@ const endpoint = "**/api/v2/records/video-analysis-fixture/links";
 async function open(page: import("@playwright/test").Page) {
   await page.route("**/*", (route) => ["localhost", "127.0.0.1", "[::1]"].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
   await page.route("**/api/v2/records/video-analysis-fixture/recovery-policy", (route) => route.fulfill({ json: { recoveryPolicy: { ownerId: "link-owner", recordId: "video-analysis-fixture", currentVersion: 1, privacyLevel: "normal" }, contentReadable: true } }));
+  const note = syntheticVideoNote(0, 600);
+  const contentHash = `sha256:${await linkSha256Hex(renderVideoAnalysisText(note))}`;
+  await page.route("**/api/v2/records/video-analysis-fixture/video-reviews/video-note", (route) => route.fulfill({ json: { reviews: {
+    contract: VIDEO_REVIEW_CONTRACT, recordId: "video-analysis-fixture", sourceItemId: "video-note", contentHash,
+    currentRevisionId: "revision-video", currentSnapshotId: "video-snapshot-1", currentSnapshotVersion: 1, canReview: true, items: videoReviewItems(note),
+  } } }));
   await page.goto("/v2-lab?surface=video-analysis");
   return JSON.parse((await page.getByTestId("video-analysis-fixture-data").textContent())!) as LinkPresentationV1;
 }

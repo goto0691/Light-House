@@ -1,0 +1,8 @@
+.v2-video-review-banner { border: 1px solid #d9c4a7; border-radius: 8px; background: #fffdf7; padding: 10px; font-size: 13px; overflow-wrap: anywhere; }
+.v2-video-review-banner p { margin: 0 0 8px; }
+.v2-video-review-control { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; font-size: 12px; }
+.v2-video-review-control button { min-height: 44px; min-width: 44px; border: 1px solid #a99872; border-radius: 6px; background: #fffdf7; padding: 5px 10px; color: #514934; }
+.v2-video-review-control button:focus-visible { outline: 2px solid #405c4d; outline-offset: 2px; }
+.v2-video-review-control button:disabled { opacity: .65; cursor: default; }
+.v2-video-review-control [data-review-status="confirmed"] { color: #29513a; font-weight: 600; }
+.v2-video-review-control [data-review-status="rejected"] { color: #8b3026; font-weight: 600; }

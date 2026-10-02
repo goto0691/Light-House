@@ -4,6 +4,8 @@ import { Clapperboard, ExternalLink } from "lucide-react";
 import { useId, useState } from "react";
 
 import { ExactSourceText } from "@/components/v2/record-source-materials";
+import { useVideoReviews, type VideoReviewContext } from "@/components/v2/video-review-controls";
+import { renderReviewedVideoNote } from "@/lib/v2/domain/video-review-v1";
 import {
   formatTimecode, parseTimecode, VIDEO_ANALYSIS_LIMITS, youtubeTimecodeUrl, type VideoAnalysisSourceV1,
 } from "@/lib/v2/domain/video-analysis-source";
@@ -18,27 +20,35 @@ function TimeLink({ note, start, end }: { note: VideoAnalysisSourceV1; start: nu
 }
 
 /** An AI note shown apart from originals: every item keeps its evidence time. */
-export function VideoAnalysisNoteView({ note, rawText, label }: { note: VideoAnalysisSourceV1; rawText: string; label: string }) {
+export function VideoAnalysisNoteView({ note, rawText, label, reviewContext }: { note: VideoAnalysisSourceV1; rawText: string; label: string; reviewContext?: VideoReviewContext }) {
+  const review = useVideoReviews(reviewContext);
   const coverage = note.observedEndSeconds !== null && note.observedEndSeconds < note.requestedEndSeconds - 5
     ? `요청 구간 ${clipLabel(note)} · 영상이 ${formatTimecode(note.observedEndSeconds)} 무렵 끝난 것으로 보고됨`
     : `분석 구간 ${clipLabel(note)}`;
   return <div className="v2-video-note">
+    {review.banner}
+    {review.blocked ? null : <>
     <p className="v2-source-provenance">AI가 공개 영상의 일부 장면과 소리를 샘플링해 만든 노트입니다. 원본 영상은 보관하지 않았고 공식 자막을 읽은 것도 아닙니다. 빠른 장면이나 작은 글자는 놓쳤을 수 있습니다.</p>
     <p className="v2-video-meta">{coverage} · 분석 시각 {note.analyzedAt.slice(0, 16).replace("T", " ")} · 모델 {note.modelId}{note.timecodeBasis === "clip_relative_shifted" ? " · 모델이 구간 기준 시각으로 답해 전체 영상 기준으로 보정함" : ""}</p>
-    <p className="v2-video-summary"><strong>요약</strong> {note.summary}</p>
+    <div><p className="v2-video-summary"><strong>요약</strong> {note.summary}</p>{review.control("summary", 0)}</div>
     {note.segments.length ? <section aria-label="구간별 내용"><h4>구간별 내용</h4><ol className="v2-video-list">{note.segments.map((item, index) => <li key={`segment-${index}`}>
-      <TimeLink end={item.endSeconds} note={note} start={item.startSeconds} /><div><strong>{item.title}</strong><p>{item.summary}</p></div>
+      <TimeLink end={item.endSeconds} note={note} start={item.startSeconds} /><div><strong>{item.title}</strong><p>{item.summary}</p>{review.control("segment", index)}</div>
     </li>)}</ol></section> : null}
     {note.speech.length ? <section aria-label="들린 발화"><h4>들린 발화 <small>AI 전사 · 공식 자막 아님</small></h4><ol className="v2-video-list">{note.speech.map((item, index) => <li key={`speech-${index}`}>
-      <TimeLink end={item.endSeconds} note={note} start={item.startSeconds} /><p>{item.speaker ? <strong>{item.speaker}: </strong> : null}{item.text}</p>
+      <TimeLink end={item.endSeconds} note={note} start={item.startSeconds} /><div><p>{item.speaker ? <strong>{item.speaker}: </strong> : null}{item.text}</p>{review.control("speech", index)}</div>
     </li>)}</ol></section> : null}
     {note.screenText.length ? <section aria-label="화면 속 텍스트"><h4>화면 속 텍스트 <small>AI 판독 · 정확도 미검증</small></h4><ol className="v2-video-list">{note.screenText.map((item, index) => <li key={`screen-${index}`}>
-      <TimeLink end={item.endSeconds} note={note} start={item.startSeconds} /><p className="v2-video-screen-text">{item.text}</p>
+      <TimeLink end={item.endSeconds} note={note} start={item.startSeconds} /><div><p className="v2-video-screen-text">{item.text}</p>{review.control("screen_text", index)}</div>
     </li>)}</ol></section> : null}
-    {note.limitations.length ? <section aria-label="분석 한계"><h4>분석 한계</h4><ul>{note.limitations.map((item, index) => <li key={`limit-${index}`}>{item}</li>)}</ul></section> : null}
+    {note.limitations.length ? <section aria-label="분석 한계"><h4>분석 한계</h4><ul>{note.limitations.map((item, index) => <li key={`limit-${index}`}>{item}{review.control("limitation", index)}</li>)}</ul></section> : null}
+    {review.reviews ? <details className="v2-video-raw"><summary>사용자 판단을 포함한 노트 복사</summary>
+      <ExactSourceText copiedMessage="사용자 판단과 원 AI 노트를 함께 복사했습니다. 공식 자막이 아닙니다." copyLabel="사용자 판단 포함 복사" label="사용자 판단을 포함한 AI 영상 노트" selectionLabel="노트와 판단 선택" text={renderReviewedVideoNote(rawText, review.reviews.items)} />
+    </details> : null}
     <details className="v2-video-raw"><summary>노트 전체 텍스트</summary>
-      <ExactSourceText copiedMessage="AI 영상 분석 노트만 복사했습니다. 원본 자막이 아닙니다." copyLabel="AI 영상 분석 복사" label={label} selectionLabel="노트 선택" text={rawText} />
+      <p>원 AI 노트입니다. 이후의 사용자 확인·거절을 반영하지 않은 분석 당시 텍스트입니다.</p>
+      <ExactSourceText copiedMessage="원 AI 영상 분석 노트만 복사했습니다. 사용자 판단은 반영하지 않았고 공식 자막이 아닙니다." copyLabel="원 AI 영상 분석 복사" label={label} selectionLabel="노트 선택" text={rawText} />
     </details>
+    </>}
   </div>;
 }
 
