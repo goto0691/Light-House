@@ -1,5 +1,15 @@
 # 현재 작업 상태 · 재개 진입점
 
+## main 게시 인계 · 2026-10-03 KST
+
+사용자가 “일단 커밋하고 메인에 푸시합니다.”라고 요청했다. 원격을 fetch해 `origin/main`이 `7a5d771221d7398c1d8e88fb5d4ecca8eeb24ea1`이고 후보보다10커밋 뒤에 있음을 확인했다. V2 후보 `25e4d1ae7b6fb4bed4f550df77eee061c3723f75`를 로컬 `main`에 충돌 없이 fast-forward했다. 현재 작업 브랜치는 `main`이며 `codex/v2-completion-local`은 검증 후보 위치에 보존한다.
+
+- 이 인계 문서만 추가 commit한 뒤 `git push origin main`으로 게시한다. 최종 완료 판정은 `git ls-remote origin refs/heads/main`의 SHA와 로컬 `HEAD` 일치, clean tree, 기존 stash/환경 파일 보존으로 확인한다. 실행 결과는 ignored `.codex/v2-completion/main-push-verification.json`에 남긴다.
+- 앱/Worker 구현은 `7e472e4`, 문서 포함 검증 identity는 `25e4d1a`다. 기존 `.codex/v2-completion/final-verification.json`과 private replay의 exact HEAD는 해당 당시 증거로 유지한다. 이번 문서 commit은 제품·시험·migration·dependency를 바꾸지 않으므로 전체 회귀/build를 반복하지 않는다. Git diff/링크·인계 내용만 검사한다.
+- 최종 source-clean private20 replay와 `authorized:false` live 요청 준비는 `25e4d1a`에서 완료했다. 원문 hash20/20·제목 top1 19/20·top10 20/20이며 실제 공급자 호출0, 의미 평가 blocked를 유지한다. 이후 실제 실행 요청을 준비할 때는 새 HEAD에 다시 결합해야 하며 기존 요청을 자동 승인하지 않는다.
+- 기존 stash `73a8f184160644c6c9d0f36050bca3ec5410aa57`과 환경 파일2개를 보존한다. `.private`·`.codex`·환경 파일은 게시 변경에 포함되지 않는다. root가 Git/인계 소유자이며 기존 agent와 모든 검사/서버 핸들은 종료 상태다.
+- 다음 개발은 [50번 완료표](./50_COMPLETION_GOAL_AND_EXECUTION_PLAN.md)와 [85번 후보 증거](./85_WINDOWS_COMPLETION_CANDIDATE.md)의 잔여 gate를 따른다. 별도 원문 전송·Cloudflare 운영 변경 승인, 성공한 모델의 독립 의미 평가, Android 실기기·운영기간은 남아 있다. main push 요청으로 해당 승인을 대체하지 않는다.
+
 ## V2 최종 완성 재개 · 2026-10-03 KST
 
 사용자가 V2를 끝까지 완성하도록 요청했다. 작업 브랜치는 `codex/v2-completion-local`, 시작 소스는 `7a5d771`이다. 동기화 때 보존한 stash와 기존 환경 파일은 유지한다. 아래 과거 인계의 완료 구현을 다시 시작하지 않고 50번 완료표의 실제 잔여 작업을 진행한다.
