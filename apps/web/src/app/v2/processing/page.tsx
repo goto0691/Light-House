@@ -1,3 +1,4 @@
+import { mainAnalyzerConfigured } from "@/lib/v2/ai/main-analyzer-gateway";
 import { notFound } from "next/navigation";
 import { ProcessingStatusView } from "@/components/v2/processing-status-view";
 import { requireSession } from "@/lib/auth/session";
@@ -16,7 +17,7 @@ export default async function V2ProcessingPage() {
   // The authenticated page and GET share the same read-only, minimal DTO.
   // A storage outage is retriable in the client; never render it as an empty archive.
   const initialPage = await new D1ProcessingStatusRepository(getV2CloudflareBindings().db, session.userId).list({
-    runtime: { enabled: flags.ai && flags.write, configured: Boolean(process.env.GEMINI_API_KEY?.trim()) },
+    runtime: { enabled: flags.ai && flags.write, configured: mainAnalyzerConfigured() },
   }).catch(() => null);
   return <ProcessingStatusView initialPage={initialPage} />;
 }

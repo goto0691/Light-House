@@ -1,3 +1,4 @@
+import { mainAnalyzerConfigured } from "@/lib/v2/ai/main-analyzer-gateway";
 import { Archive, Compass, Plus, Settings, SlidersHorizontal, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -33,7 +34,7 @@ export default async function V2SearchPage({ searchParams }: { searchParams: Pro
   for (const [key, value] of Object.entries(raw)) if (typeof value === "string") params.set(key, value);
   const { plan, source: planSource, invalid: planInvalid } = pagePlanFromSearchParams(params);
   const queried = hasV2QueryConditions(plan);
-  const naturalSearch = flags.ai && Boolean(process.env.GEMINI_API_KEY?.trim());
+  const naturalSearch = flags.ai && mainAnalyzerConfigured();
   // AI-applied or JSON plans are not fully representable by the form controls, so their conditions are listed explicitly.
   const showApplied = queried && (params.get("nl") === "1" || planSource === "plan");
   const db = getV2CloudflareBindings().db;

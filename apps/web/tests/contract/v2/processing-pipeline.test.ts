@@ -6,6 +6,7 @@ import { getPlatformProxy } from "wrangler";
 
 import type { AnalysisEnvelopeV1 } from "@/lib/v2/ai/analysis-envelope-v1";
 import { V2ModelError } from "@/lib/v2/ai/gateway";
+import { GeminiProviderError } from "@/lib/v2/ai/gemini-role-gateways";
 import { FakeV2GroundedResearchGateway, FakeV2StructuredModelGateway } from "@/lib/v2/ai/fake-gateway";
 import { runNextGroundingJob } from "@/lib/v2/ai/grounding-runner";
 import { runNextAnalysisJob } from "@/lib/v2/ai/processing-runner";
@@ -433,6 +434,53 @@ describe("I3 outbox, lease, and validated analysis pipeline", () => {
     }
     const capture = await db.prepare(`select processing_status from v2_capture_bundles limit 1`).first<{ processing_status: string }>();
     expect(capture?.processing_status).toBe("failed_retryable");
+  });
+
+  test("provider overload waits without consuming attempts for 72 hours, then attempts count again", async () => {
+    await seed();
+    const queue = new D1ProcessingQueueRepository(db);
+    await queue.dispatchPending(10, "2026-08-12T12:00:00.000Z");
+    const busy = () => new GeminiProviderError({ status: 503, category: "provider_server", code: "provider_unavailable", retryable: true });
+    const run = async (at: string) => {
+      const gateway = { calls: 0, async generate() { this.calls += 1; throw busy(); } };
+      const result = await runNextAnalysisJob({ queue, gateway, workerId: `busy-${at}`, now: new Date(at) });
+      return { result, calls: gateway.calls };
+    };
+    const job = () => db.prepare("select status,attempt from v2_processing_jobs where stage='analyze' limit 1").first<{ status: string; attempt: number }>();
+    for (const at of ["2026-08-12T12:01:00.000Z", "2026-08-12T18:00:00.000Z", "2026-08-13T12:00:00.000Z", "2026-08-14T12:00:00.000Z", "2026-08-15T11:00:00.000Z"]) {
+      await expect(run(at)).resolves.toMatchObject({ result: { outcome: "retry_wait" }, calls: 1 });
+      await expect(job()).resolves.toEqual({ status: "retry_wait", attempt: 0 });
+    }
+    // Past the 72-hour window the same overload consumes attempts and finally stops.
+    for (const [index, at] of ["2026-08-15T12:01:00.000Z", "2026-08-15T13:00:00.000Z", "2026-08-15T14:00:00.000Z"].entries()) {
+      await expect(run(at)).resolves.toMatchObject({ result: { outcome: "retry_wait" } });
+      await expect(job()).resolves.toEqual({ status: "retry_wait", attempt: index + 1 });
+    }
+    await expect(run("2026-08-15T15:00:00.000Z")).resolves.toMatchObject({ result: { outcome: "needs_review" } });
+    await expect(job()).resolves.toEqual({ status: "needs_review", attempt: 4 });
+  }, 120_000);
+
+  test("a non-capacity provider failure still consumes attempts", async () => {
+    await seed();
+    const queue = new D1ProcessingQueueRepository(db);
+    await queue.dispatchPending(10, "2026-08-12T12:00:00.000Z");
+    const gateway = { async generate(): Promise<never> { throw new GeminiProviderError({ status: null, category: "transport_or_sdk", code: "provider_unavailable", retryable: true }); } };
+    await expect(runNextAnalysisJob({ queue, gateway, workerId: "transport", now: new Date("2026-08-12T12:01:00.000Z") })).resolves.toMatchObject({ outcome: "retry_wait" });
+    await expect(db.prepare("select attempt from v2_processing_jobs where stage='analyze' limit 1").first()).resolves.toEqual({ attempt: 1 });
+  });
+
+  test("a sustained outage backs the governor off to one probe per hour", async () => {
+    const governor = new D1AiRuntimeGovernor(db);
+    let at = new Date("2026-08-12T12:00:00.000Z");
+    const cooldowns: number[] = [];
+    for (let failure = 1; failure <= 9; failure += 1) {
+      await expect(governor.tryAcquire("main_analyzer", `outage-${failure}`, at)).resolves.toMatchObject({ allowed: true });
+      await governor.recordFailure("main_analyzer", `outage-${failure}`, "provider_unavailable", at);
+      const state = await governor.inspect("main_analyzer");
+      cooldowns.push((Date.parse(state!.retry_after!) - at.getTime()) / 60_000);
+      at = new Date(Date.parse(state!.retry_after!) + 1_000);
+    }
+    expect(cooldowns).toEqual([0.5, 1, 2, 4, 8, 16, 32, 60, 60]);
   });
 
   test("a result arriving after a user revision is retained as stale and never promoted", async () => {

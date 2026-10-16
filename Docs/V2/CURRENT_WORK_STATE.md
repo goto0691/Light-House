@@ -1,5 +1,18 @@
 # 현재 작업 상태 · 재개 진입점
 
+## ChatGPT 플랜 주 분석 · 2026-10-17 KST
+
+사용자 결정(2026-10-16): 주 분석은 사용자의 ChatGPT 구독(Sign in with ChatGPT 플랜 사용)으로 처리한다. 구독이 끝나거나 쓸 수 없으면 Gemini 3.6 Flash로 넘어간다. Gemini는 무료 등급을 유지한다. 상세·검증은 [86번](./86_CHATGPT_PLAN_MAIN_ANALYZER.md)이다. 이 변경은 Claude Code 세션이 로컬 `00df2cc`로 만들고, `origin/main`(`0c4c0bc`) 위에 옮겨 게시했다.
+
+- **경로:** `gpt-6.1-sol`이 먼저 처리하고 Gemini가 폴백한다. 대상은 글·이미지·PDF 분석, 링크 텍스트 정리, 자연어 검색 해석이다. YouTube 영상 분석과 grounded 보강은 Gemini를 유지한다. 실행마다 `model_id`에 공급자가 남는다.
+- **실제 확인(10-16):**
+  - 설정 Gemini 모델: S1 0/4, S4 0/1(모두 503), S5 7/8.
+  - ChatGPT 플랜 경로: S1 글·이미지 성공(근거 원문 일치·검색 회수), S5 8/8.
+- **보완:** 할당량·과부하 실패는 72시간 동안 시도 횟수를 소모하지 않는다. governor는 최대 1시간 간격까지 물러난다([77번 2026-10-16](./77_S1_CAPTURE_ANALYSIS_RECALL_EVIDENCE.md)).
+- **연결 정보:** 로컬 D1(`apps/web/.wrangler/state`)에 migration 0000–0033을 적용하고, 플랜 연결 정보를 암호화해 설치했다. 토큰은 `.private`·`.env.local`·D1에만 있고 git에는 없다. 원격 D1·배포는 변경하지 않았다.
+- **git:** `migrations/*.zip`(Notion 내보내기 2개)을 사용자 요청으로 추적에서 빼고 `.gitignore`에 넣었다. 파일은 로컬에 남는다. 과거 커밋 이력에는 남아 있으며, 이력 제거는 별도 승인이 필요한 강제 push다.
+- **남은 판단:** OpenAI 셀프 등록 플랜 사용은 "로컬에서 실행하는 개인 프로젝트" 대상이다. 원격 호스팅은 대기 목록 조건이고, 무인 cron 규칙은 확인하지 못했다. 원격 배포 시 0033 적용, 연결 정보 이전, Worker secret이 필요하다(사용자 승인 대상).
+
 ## main 게시 인계 · 2026-10-03 KST
 
 사용자가 “일단 커밋하고 메인에 푸시합니다.”라고 요청했다. 원격을 fetch해 `origin/main`이 `7a5d771221d7398c1d8e88fb5d4ecca8eeb24ea1`이고 후보보다10커밋 뒤에 있음을 확인했다. V2 후보 `25e4d1ae7b6fb4bed4f550df77eee061c3723f75`를 로컬 `main`에 충돌 없이 fast-forward했다. 현재 작업 브랜치는 `main`이며 `codex/v2-completion-local`은 검증 후보 위치에 보존한다.

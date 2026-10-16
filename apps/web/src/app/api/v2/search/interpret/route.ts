@@ -1,7 +1,8 @@
 import { ulid } from "ulidx";
 
 import { V2ModelError } from "@/lib/v2/ai/gateway";
-import { createGeminiRoleGateways, GeminiProviderError } from "@/lib/v2/ai/gemini-role-gateways";
+import { GeminiProviderError } from "@/lib/v2/ai/gemini-role-gateways";
+import { createMainAnalyzerGateway } from "@/lib/v2/ai/main-analyzer-gateway";
 import { requireV2RequestContext, v2ErrorResponse, V2HttpError } from "@/lib/v2/http/request-context";
 import { readJsonObject, requireV2Route } from "@/lib/v2/http/route-helpers";
 import { getV2CloudflareBindings } from "@/lib/v2/infrastructure/cloudflare/runtime-bindings";
@@ -72,9 +73,9 @@ export async function POST(request: Request) {
     if (Object.keys(body).length !== 1 || !Object.hasOwn(body, "question"))
       throw new InterpretHttpError(400, "natural_query_request_invalid", "질문만 보내 주세요.", false);
     const question = parseNaturalQuestion(body.question);
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) throw new InterpretHttpError(503, "gemini_not_configured", `AI 해석이 아직 설정되지 않았습니다. ${KEYWORD_FALLBACK}`, false);
     const db = getV2CloudflareBindings().db;
+    const mainAnalyzer = await createMainAnalyzerGateway(db);
+    if (!mainAnalyzer) throw new InterpretHttpError(503, "gemini_not_configured", `AI 해석이 아직 설정되지 않았습니다. ${KEYWORD_FALLBACK}`, false);
     const catalog = await readNaturalQueryCatalog(db, context.userId);
     const today = seoulToday();
     const prepared = await prepareNaturalQueryRequest({ question, today, catalog });
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
     let draft: unknown;
     try {
       try {
-        draft = (await createGeminiRoleGateways(apiKey).mainAnalyzer.generate<unknown>(prepared.request)).data;
+        draft = (await mainAnalyzer.generate<unknown>(prepared.request)).data;
       } catch (error) {
         if (!(error instanceof V2ModelError)) throw providerFailure(error, null);
         const failedAt = new Date();

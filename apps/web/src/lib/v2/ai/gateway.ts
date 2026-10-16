@@ -72,6 +72,12 @@ export class V2ModelError extends Error {
   }
 }
 
+/** A provider that could not take the request right now (quota or overload), as
+ * opposed to rejecting or mishandling it. Such failures wait instead of using up attempts. */
+export function isProviderCapacityError(error: V2ModelError) {
+  return error.retryable && (error.code === "quota_exhausted" || (error as { category?: unknown }).category === "provider_server");
+}
+
 export interface V2StructuredModelGateway {
   generate<T>(request: V2StructuredModelRequest): Promise<V2StructuredModelResult<T>>;
 }

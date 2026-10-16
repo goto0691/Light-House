@@ -1,6 +1,6 @@
 import { ulid } from "ulidx";
 
-import { V2ModelError, type V2ModelErrorCode, type V2StructuredModelGateway } from "@/lib/v2/ai/gateway";
+import { isProviderCapacityError, V2ModelError, type V2ModelErrorCode, type V2StructuredModelGateway } from "@/lib/v2/ai/gateway";
 import {
   LINK_ANALYSIS_CONTRACT, LINK_ANALYSIS_PROMPT_VERSION, LinkAnalysisValidationError, resolveLinkAnalysis,
 } from "@/lib/v2/ai/link-analysis-v1";
@@ -84,7 +84,7 @@ export async function runNextLinkAnalysisJob(input: {
         return { outcome: "superseded" as const, jobId: job.id, runId };
       }
       const failed = await input.queue.failJob(job, {
-        runId, errorClass: modelError.name, errorCode: modelError.code, retryable: modelError.retryable, retryAfterMs: modelError.retryAfterMs, now: clock(),
+        runId, errorClass: modelError.name, errorCode: modelError.code, retryable: modelError.retryable, retryAfterMs: modelError.retryAfterMs, capacity: isProviderCapacityError(modelError), now: clock(),
       });
       return { outcome: failed.retry ? "retry_wait" as const : "needs_review" as const, jobId: job.id, runId };
     }

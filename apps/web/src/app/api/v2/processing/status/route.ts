@@ -1,3 +1,4 @@
+import { mainAnalyzerConfigured } from "@/lib/v2/ai/main-analyzer-gateway";
 import { requireV2RequestContext, v2ErrorResponse, V2HttpError } from "@/lib/v2/http/request-context";
 import { requireV2Route } from "@/lib/v2/http/route-helpers";
 import { getV2CloudflareBindings } from "@/lib/v2/infrastructure/cloudflare/runtime-bindings";
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
     }
     const page = await new D1ProcessingStatusRepository(getV2CloudflareBindings().db, context.userId).list({
       filter: query.get("filter"), cursor: query.get("cursor"),
-      runtime: { enabled: flags.ai && flags.write, configured: Boolean(process.env.GEMINI_API_KEY?.trim()) },
+      runtime: { enabled: flags.ai && flags.write, configured: mainAnalyzerConfigured() },
     });
     return Response.json(page, { headers });
   } catch (error) {

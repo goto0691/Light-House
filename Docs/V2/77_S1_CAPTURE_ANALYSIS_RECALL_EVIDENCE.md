@@ -66,3 +66,16 @@ S1은 로컬 코드 연결·합성 대역 검증 상태다. 공급자 요청 스
   - 재정렬을 검증 뒤에 두었던 중간 단계에서는 이미지 `needs_review`도 관찰됐다. 순서를 바꾼 뒤 같은 진단 4회에서는 재현되지 않았다.
 - **남은 확인:** 설정 모델 `gemini-3.6-flash`로 같은 스크립트를 한도 초기화 후 1회 실행한다. 무료 하루 20회는 개인 실사용 분석량보다 적을 수 있어, 유료 등급이나 모델 역할 조정은 사용자 결정이다.
 - 관련 기존 회귀: `record-recovery-policy.test.ts` `after_record` 1건은 09-23 S1의 `getRecord()` 반환 직전 재확인 때문에 읽는 도중 변경이 404가 된 기존 회귀였다. API route가 기록이 남아 있으면 409 `record_changed_during_read`를 주도록 고쳤다(21 PASS).
+
+## 2026-10-16 설정 모델 실제 확인과 혼잡 대기 보완
+
+- **설정 모델 `gemini-3.6-flash` 결과(무료 등급):**
+  - S1 `verify-s1-live-synthetic.ts --live`: 4회 모두 HTTP 503 `provider_server`("high demand")였다. 매번 원문 보존·`retry_wait`이었다.
+  - S4 `verify-s4-live-youtube.ts --live`: 1회 503(`video_provider_busy`, 저장 없음).
+  - S5 `verify-s5-live-natural-query.ts --live`: 8개 질문 중 **7 성공**, 1개 503. 날짜(작년·지난달·최근 2주·올해), 분류, `도시 = 부산`, `저자에 한강 포함`이 맞게 해석됐다. 감정 질문("엄마가 화났던 날")은 조건 없이 미반영으로 표시됐다. 필드 기준 정렬("평점 높은 순")은 계약에 없어 미반영으로 표시됐다.
+  - 결론: 이 모델은 무료 등급에서 **큰 구조화 출력(분석 envelope·영상)**이 지속적으로 혼잡 거절된다. 진단 모델 `gemini-3.1-flash-lite`는 9/28에 같은 경로가 대부분 성공했다(503 약 1/4).
+- **결함 보완:**
+  - 분석 작업 키가 본문 revision에 묶여 있어, 4회 실패 뒤 `needs_review`가 되면 기록을 고치기 전까지 다시 분석되지 않았다. 503이 10분만 이어져도 기록이 분석 없이 남았다.
+  - 이제 할당량(429)과 공급자 과부하(5xx `provider_server`)는 **작업 생성 후 72시간 안에서는** 시도 횟수를 소모하지 않고 기다린다(`CAPACITY_WAIT_WINDOW_MS`). 72시간 뒤에는 횟수를 세어 결국 멈춘다. 통신 오류 등 다른 실패는 기존처럼 횟수를 소모한다.
+  - governor의 연속 장애 대기는 2→4→8…분으로 늘어 **최대 1시간에 1회 probe**만 보낸다. 무료 일일 한도를 실패 응답에 쓰지 않기 위해서다.
+  - 시험: `processing-pipeline.test.ts` 22 PASS(신규 3: 72시간 창·비용량 오류 소모·1시간 back-off). 관련 5파일 120 PASS. typecheck·scoped lint exit0.

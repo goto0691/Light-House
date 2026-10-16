@@ -11,7 +11,7 @@ import {
   validateAnalysisEnvelopeV1,
   type AnalysisEnvelopeV1,
 } from "@/lib/v2/ai/analysis-envelope-v1";
-import { V2ModelError, type V2StructuredModelGateway } from "@/lib/v2/ai/gateway";
+import { isProviderCapacityError, V2ModelError, type V2StructuredModelGateway } from "@/lib/v2/ai/gateway";
 import { AnalysisAttachmentError, loadAnalysisAttachmentParts } from "@/lib/v2/ai/analysis-attachments";
 import { resolveV2ModelForRole } from "@/lib/v2/ai/model-routing";
 import type { D1AiRuntimeGovernor } from "@/lib/v2/infrastructure/d1/ai-runtime-governor";
@@ -123,7 +123,7 @@ export async function runNextAnalysisJob(input: { queue: D1ProcessingQueueReposi
       ...(input.observePattern && !completed.stale ? { patternObservation } : {}) };
   } catch (error) {
     const modelError = error instanceof V2ModelError ? error : new V2ModelError("invalid_schema", error instanceof Error ? error.message : "Analysis validation failed.", false);
-    const failed = await input.queue.failJob(job, { runId, errorClass: modelError.name, errorCode: modelError.code, retryable: modelError.retryable, retryAfterMs: modelError.retryAfterMs, reviewMessage: error instanceof AnalysisAttachmentError ? error.message : undefined, now: clock() });
+    const failed = await input.queue.failJob(job, { runId, errorClass: modelError.name, errorCode: modelError.code, retryable: modelError.retryable, retryAfterMs: modelError.retryAfterMs, capacity: isProviderCapacityError(modelError), reviewMessage: error instanceof AnalysisAttachmentError ? error.message : undefined, now: clock() });
     await input.governor?.recordFailure("main_analyzer", permitOwner, modelError.code, clock(), modelError.retryAfterMs);
     return { outcome: failed.superseded ? "superseded" as const : failed.retry ? "retry_wait" as const : "needs_review" as const, jobId: job.id, runId };
   }

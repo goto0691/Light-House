@@ -223,6 +223,7 @@ Light House V2는 사용자가 텍스트·이미지·음성·파일을 분류하
 | 83 | [82_CLOUD_LINUX_COMPLETION_EVIDENCE.md](./82_CLOUD_LINUX_COMPLETION_EVIDENCE.md) | Cloud Linux 재현, 분석/템플릿/정렬/평가 gate 보완과 통합 검증·운영 한계 |
 | 84 | [83_PRIVATE_EVALUATOR_FOUNDATION.md](./83_PRIVATE_EVALUATOR_FOUNDATION.md) | 오프라인 기록 관측의 결정적 비교·20/20 private gate·내용 없는 보고서와 승격 차단 |
 | 85 | [85_WINDOWS_COMPLETION_CANDIDATE.md](./85_WINDOWS_COMPLETION_CANDIDATE.md) | 현재 Windows 통합 후보·사용자 위임 Notion 평가·원격 준비와 Android 확인 경계 |
+| 86 | [86_CHATGPT_PLAN_MAIN_ANALYZER.md](./86_CHATGPT_PLAN_MAIN_ANALYZER.md) | ChatGPT 플랜 우선 주 분석과 Gemini 3.6 Flash 폴백, 연결·암호화 보관·요청 계약·정책 제약과 실제 검증 |
 | 현재 | [CURRENT_WORK_STATE.md](./CURRENT_WORK_STATE.md) | 재개 위치·종료 프로세스·최신 검사 범위·미해결 실패·다음 작업 |
 
 ## 4. 기획 원칙

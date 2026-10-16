@@ -439,6 +439,26 @@ export const v2GroundingResults = sqliteTable(
   ],
 );
 
+/** App-level encrypted AI provider credential (migration 0033). Not exported or backed up. */
+export const v2AiProviderCredentials = sqliteTable(
+  "v2_ai_provider_credentials",
+  {
+    provider: text("provider").primaryKey(),
+    status: text("status").notNull(),
+    ciphertext: text("ciphertext").notNull(),
+    iv: text("iv").notNull(),
+    version: integer("version").notNull(),
+    pausedUntil: text("paused_until"),
+    lastErrorCode: text("last_error_code"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    check("ck_v2_ai_provider_credentials_provider", sql`${table.provider} in ('openai_plan')`),
+    check("ck_v2_ai_provider_credentials_status", sql`${table.status} in ('active','inactive')`),
+    check("ck_v2_ai_provider_credentials_version", sql`${table.version} >= 1`),
+  ],
+);
+
 export const v2AiRuntimeState = sqliteTable(
   "v2_ai_runtime_state",
   {

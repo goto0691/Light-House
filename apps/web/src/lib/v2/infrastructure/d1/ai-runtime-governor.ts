@@ -17,6 +17,8 @@ type RuntimeRow = {
 
 const PROVIDER_COOLDOWN_MS = 30_000;
 const CIRCUIT_COOLDOWN_MS = 2 * 60_000;
+// A sustained outage backs off to one probe per hour so a free-tier daily quota is not spent on failures.
+const MAX_CIRCUIT_COOLDOWN_MS = 60 * 60_000;
 const QUOTA_COOLDOWN_MS = 15 * 60_000;
 // A daily quota resets once per day; never pause longer than a little over one day.
 const MAX_QUOTA_COOLDOWN_MS = 26 * 60 * 60_000;
@@ -100,7 +102,7 @@ export class D1AiRuntimeGovernor {
 
     const failures = row.consecutive_failures + 1;
     const open = failures >= 3;
-    const cooldown = open ? CIRCUIT_COOLDOWN_MS : Math.min(CIRCUIT_COOLDOWN_MS, PROVIDER_COOLDOWN_MS * 2 ** (failures - 1));
+    const cooldown = open ? Math.min(MAX_CIRCUIT_COOLDOWN_MS, CIRCUIT_COOLDOWN_MS * 2 ** (failures - 3)) : Math.min(CIRCUIT_COOLDOWN_MS, PROVIDER_COOLDOWN_MS * 2 ** (failures - 1));
     await this.db.prepare(
       `update v2_ai_runtime_state
        set state=?,consecutive_failures=?,retry_after=?,

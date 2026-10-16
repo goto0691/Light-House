@@ -118,6 +118,9 @@ type JobRow = {
   input_link_snapshot_id?: string | null; input_source_manifest_hash?: string | null; input_source_manifest_version?: string | null;
 };
 
+/** How long a job may wait out quota or provider overload without consuming attempts. */
+export const CAPACITY_WAIT_WINDOW_MS = 72 * 60 * 60_000;
+
 function projectJob(row: JobRow): V2ProcessingJob {
   return { id: row.id, userId: row.user_id, captureId: row.capture_id, objectId: row.object_id, stage: row.stage, status: row.status, attempt: row.attempt, maxAttempts: row.max_attempts, inputRevisionId: row.input_revision_id, inputHash: row.input_hash, leaseOwner: row.lease_owner, leaseExpiresAt: row.lease_expires_at,
     ...(row.stage === "link_analyze" ? { inputLinkSnapshotId: row.input_link_snapshot_id ?? null, inputSourceManifestHash: row.input_source_manifest_hash ?? null, inputSourceManifestVersion: row.input_source_manifest_version ?? null } : {}),
@@ -830,13 +833,18 @@ export class D1ProcessingQueueRepository {
     return { stale };
   }
 
-  async failJob(job: V2ProcessingJob, input: { runId: string; errorClass: string; errorCode: string; retryable: boolean; retryAfterMs?: number | null; reviewMessage?: string; now?: Date }) {
+  async failJob(job: V2ProcessingJob, input: { runId: string; errorClass: string; errorCode: string; retryable: boolean; retryAfterMs?: number | null; capacity?: boolean; reviewMessage?: string; now?: Date }) {
     const now = input.now ?? new Date();
     const nowIso = now.toISOString();
-    // A quota rejection means the provider did not process this input. It
-    // waits for the quota window instead of consuming one of the job's attempts;
-    // otherwise a daily free-tier limit would stop every pending job for good.
-    const quotaWait = input.retryable && input.errorCode === "quota_exhausted";
+    // A quota rejection or provider overload (5xx) means the provider did not
+    // process this input. Within a bounded window it waits instead of consuming
+    // one of the job's attempts; otherwise a free-tier daily limit or a busy
+    // period would leave captures unanalyzed for good (the job key is tied to
+    // the revision, so nothing re-queues it). After the window, attempts count.
+    const capacityError = input.retryable && (input.errorCode === "quota_exhausted" || input.capacity === true);
+    const created = capacityError ? await this.db.prepare("select created_at from v2_processing_jobs where id=? and user_id=? limit 1")
+      .bind(job.id, job.userId).first<{ created_at: string }>() : null;
+    const quotaWait = capacityError && Boolean(created) && now.getTime() - Date.parse(created!.created_at) < CAPACITY_WAIT_WINDOW_MS;
     const exhausted = !quotaWait && job.attempt >= job.maxAttempts;
     const retry = input.retryable && !exhausted;
     const backoffMs = Math.min(15 * 60_000, 30_000 * 2 ** Math.max(0, job.attempt - 1));

@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 import { loadEnvConfig } from "@next/env";
 import sharp from "sharp";
 
-import { createGeminiRoleGateways, GeminiProviderError, type GeminiProviderFailureCategory, type GeminiProviderReason } from "../src/lib/v2/ai/gemini-role-gateways";
+import { GeminiProviderError, type GeminiProviderFailureCategory, type GeminiProviderReason } from "../src/lib/v2/ai/gemini-role-gateways";
+import { openLiveMainAnalyzer } from "./live-main-analyzer";
 import { runNextAnalysisJob } from "../src/lib/v2/ai/processing-runner";
 import type { V2StructuredModelGateway } from "../src/lib/v2/ai/gateway";
 import { prepareCaptureCommit } from "../src/lib/v2/domain/capture-source";
@@ -148,11 +149,11 @@ async function summarize(db: MemoryD1, capture: Capture, label: "text" | "image"
   const presentation = await new D1PresentationRepository(db, USER_ID).project(capture.objectId);
   const review = (await new D1ReviewRepository(db, USER_ID).listOpenRecords()).find((row) => row.recordId === capture.objectId);
   const search = await new D1RetrievalRepository(db, USER_ID).searchPage(queryPlanFromSearchParams(new URLSearchParams({ q: query })));
-  const run = await db.prepare(`select r.status,r.validation_error_code,p.status as proposal_status
+  const run = await db.prepare(`select r.status,r.validation_error_code,r.model_id,p.status as proposal_status
     from v2_processing_jobs j left join v2_processing_runs r on r.job_id=j.id
     left join v2_analysis_proposals p on p.job_id=j.id
     where j.capture_id=? and j.stage='analyze' order by r.created_at desc limit 1`).bind(capture.captureId)
-    .first<{ status: string | null; validation_error_code: string | null; proposal_status: string | null }>();
+    .first<{ status: string | null; validation_error_code: string | null; model_id: string | null; proposal_status: string | null }>();
   const storedFields = await db.prepare(`select count(*) as value from v2_property_values where owner_object_id=? and user_id=?`)
     .bind(capture.objectId, USER_ID).first<{ value: number }>();
   const evidence = await db.prepare(`select count(*) as value from v2_evidence_refs e join v2_property_values p on p.id=e.target_id
@@ -175,7 +176,7 @@ async function summarize(db: MemoryD1, capture: Capture, label: "text" | "image"
     source.kind === "image" && source.rawText === null && source.contentHash.replace(/^sha256:/, "") === originalHash);
   const originalPreserved = label === "text" ? record?.bodyMarkdown === TEXT : imageSourcePreserved;
   return {
-    input: label, outcome, runStatus: run?.status ?? null, validationErrorCode: run?.validation_error_code ?? null,
+    input: label, outcome, runStatus: run?.status ?? null, modelId: run?.model_id ?? null, validationErrorCode: run?.validation_error_code ?? null,
     proposalStatus: run?.proposal_status ?? null, originalPreserved: Boolean(originalPreserved),
     recordReadable: Boolean(record && !record.locked), recordPresentationReady: presentation.contractVersion === "record-presentation-v1",
     storedFieldCount: storedFields?.value ?? 0, fieldEvidenceCount: evidence?.value ?? 0,
@@ -190,11 +191,10 @@ async function summarize(db: MemoryD1, capture: Capture, label: "text" | "image"
 
 async function main() {
   loadEnvConfig(fileURLToPath(new URL("../", import.meta.url)), true);
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) throw new Error("gemini_key_missing");
+  const live = await openLiveMainAnalyzer();
   const db = createLocalDatabase();
   try {
-    const budget = budgetedGateway(createGeminiRoleGateways(apiKey).mainAnalyzer);
+    const budget = budgetedGateway(live.gateway);
     const queue = new D1ProcessingQueueRepository(db);
     const summaries = [];
     const textCapture = await seedText(db);
@@ -209,12 +209,12 @@ async function main() {
       summaries.push(await summarize(db, image.capture, "image", IMAGE_QUERY, imageResult.outcome, image.hash));
     }
     console.log(JSON.stringify({
-      scope: "isolated-node-sqlite-and-memory-r2; direct production analysis runner; actual Gemini main role",
+      scope: "isolated-node-sqlite-and-memory-r2; direct production analysis runner; actual main role (ChatGPT plan first, Gemini fallback)",
       providerCalls: budget.count(), maxProviderCalls, providerFailure: budget.failure(),
       imageCheck: textOnly ? "not_selected" : textResult.outcome === "succeeded" ? "attempted" : "skipped_after_text_failure", results: summaries,
     }, null, 2));
     if (summaries.length !== maxProviderCalls || summaries.some((item) => item.outcome !== "succeeded" || item.proposalStatus !== "validated" || !item.originalPreserved || !item.recordReadable || !item.searchFoundRecord || item.storedFieldCount < 1 || item.fieldEvidenceCount < 1 || item.pendingGroundingCount > 0 || (item.input === "image" && !item.imageOcrHasToken))) process.exitCode = 1;
-  } finally { db.close(); }
+  } finally { db.close(); await live.dispose(); }
 }
 
 void main().catch((error: unknown) => {

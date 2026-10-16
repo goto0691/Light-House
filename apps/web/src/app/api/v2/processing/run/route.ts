@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { createGeminiRoleGateways } from "@/lib/v2/ai/gemini-role-gateways";
+import { createMainAnalyzerGateway } from "@/lib/v2/ai/main-analyzer-gateway";
 import { runNextAnalysisJob } from "@/lib/v2/ai/processing-runner";
 import { runNextGroundingJob } from "@/lib/v2/ai/grounding-runner";
 import { runNextLinkAnalysisJob } from "@/lib/v2/ai/link-processing-runner";
@@ -26,9 +27,11 @@ export async function POST(request: Request) {
     const flags = requireV2Route({ write: true });
     if (!flags.ai) throw new V2HttpError(503, "v2_ai_disabled", "V2 AI processing is not enabled.");
     if (!authorized(request)) throw new V2HttpError(401, "processing_runner_unauthorized", "A valid processing runner secret is required.");
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new V2HttpError(503, "gemini_not_configured", "The Gemini API key is not configured.");
     const db = getV2CloudflareBindings().db;
+    // ChatGPT plan first, Gemini fallback; grounded research stays on Gemini (Google Search tool).
+    const mainAnalyzer = await createMainAnalyzerGateway(db);
+    if (!mainAnalyzer) throw new V2HttpError(503, "ai_not_configured", "No AI provider is configured.");
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
     const queue = new D1ProcessingQueueRepository(db);
     const governor = new D1AiRuntimeGovernor(db);
     const dispatched = await queue.dispatchPending(10);
@@ -37,18 +40,18 @@ export async function POST(request: Request) {
     const patternObservationRetries = await retryAnalysisPatternObservations(db)
       .then((outcomes) => ({ outcome: "completed" as const, outcomes }))
       .catch(() => ({ outcome: "failed" as const, outcomes: [] }));
-    const gateways = createGeminiRoleGateways(apiKey);
+    const groundedResearch = apiKey ? createGeminiRoleGateways(apiKey).groundedResearch : null;
     const workerId = `http-${crypto.randomUUID()}`;
     const analysisOutcomes: Awaited<ReturnType<typeof runNextAnalysisJob>>[] = [];
     const linkAnalysisOutcomes: Awaited<ReturnType<typeof runNextLinkAnalysisJob>>[] = [];
     const links = new D1LinkAnalysisRepository(db);
     async function nextMainJob(link: boolean) {
       if (link) {
-        const outcome = await runNextLinkAnalysisJob({ queue, links, gateway: gateways.mainAnalyzer, governor, workerId });
+        const outcome = await runNextLinkAnalysisJob({ queue, links, gateway: mainAnalyzer!, governor, workerId });
         linkAnalysisOutcomes.push(outcome);
         return outcome;
       }
-      const outcome = await runNextAnalysisJob({ queue, gateway: gateways.mainAnalyzer, governor, workerId, bucket: getV2ArchiveAssetsBucket(),
+      const outcome = await runNextAnalysisJob({ queue, gateway: mainAnalyzer!, governor, workerId, bucket: getV2ArchiveAssetsBucket(),
         observePattern: (job, runId, now) => observeAnalysisPatternWithRetry(db, { job, runId, now }) });
       analysisOutcomes.push(outcome);
       return outcome;
@@ -63,8 +66,8 @@ export async function POST(request: Request) {
       if (outcome.outcome === "idle" || outcome.outcome === "paused") break;
     }
     const groundingOutcomes = [];
-    for (let index = 0; index < 3; index += 1) {
-      const outcome = await runNextGroundingJob({ queue, gateway: gateways.groundedResearch, governor, workerId });
+    for (let index = 0; index < 3 && groundedResearch; index += 1) {
+      const outcome = await runNextGroundingJob({ queue, gateway: groundedResearch, governor, workerId });
       groundingOutcomes.push(outcome);
       if (outcome.outcome === "idle" || outcome.outcome === "paused") break;
     }
