@@ -26,3 +26,6 @@ apps/web/test-results/
 apps/web/playwright-report/
 .private/
 artifacts/v2-migration/
+
+# Private Notion exports kept locally only
+migrations/*.zip
