@@ -9,7 +9,8 @@ import type { D1DatabaseBinding } from "../src/lib/v2/infrastructure/d1/source-c
 
 // Moves the signed-in ChatGPT plan credential into the app's LOCAL D1 (encrypted), so the
 // running app owns token refresh from one place. Removes the tokens from the login file.
-// Requires migration 0033 on the local database: `npx wrangler d1 migrations apply light_house_db --local`.
+// Requires migration 0033 on the app's local database (apps/web/.wrangler/state; plain `--local` from the
+// repo root writes to the root .wrangler instead): `npx wrangler d1 migrations apply light_house_db --local --persist-to apps/web/.wrangler/state`.
 // Usage: npm exec --workspace @light-house/web -- tsx scripts/chatgpt-plan-install.ts --model=<slug>
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const ENV_FILE = fileURLToPath(new URL("../.env.local", import.meta.url));

@@ -30,7 +30,8 @@
   - `apps/web/.env.local`에 `V2_AI_CREDENTIAL_KEY`·`OPENAI_PLAN_MODEL`을 추가한다.
   - refresh token은 갱신마다 바뀌므로 저장 위치는 하나여야 한다. 갱신은 version CAS로 경합을 막는다.
 - 이 테이블은 내보내기·백업 대상이 아니다. 토큰·계정 정보는 로그·화면·git에 남기지 않는다.
-- **로컬 D1:** 앱(next dev, 스크립트)은 `apps/web/.wrangler/state`를 쓴다. 이번에 0000–0033 migration 34개를 적용했다. 이전까지 로컬 D1은 비어 있었다. 저장소 루트 `.wrangler`에도 같은 적용을 했지만 앱은 쓰지 않는다.
+- **로컬 D1:** 앱(next dev, 스크립트)은 `apps/web/.wrangler/state`를 쓴다. 설치 전에 저장소 루트에서 `npx wrangler d1 migrations apply light_house_db --local --persist-to apps/web/.wrangler/state`로 0000–0033(파일 42개)을 적용한다. `--persist-to` 없이 루트에서 실행하면 앱이 쓰지 않는 루트 `.wrangler`에 적용된다.
+  - 연결 정보와 `V2_AI_CREDENTIAL_KEY`는 설치한 체크아웃에만 있다. 다른 폴더나 worktree는 로그인·설치를 따로 해야 한다.
 
 ## 요청 계약(공식 문서 기준)
 

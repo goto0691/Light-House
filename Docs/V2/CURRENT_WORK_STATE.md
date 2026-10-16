@@ -1,5 +1,27 @@
 # 현재 작업 상태 · 재개 진입점
 
+## 이 체크아웃 로컬 정비 · 2026-10-17 KST
+
+`origin/main` `13c1cea`로 fast-forward한 뒤 이 폴더를 새 코드에 맞췄다. Claude Code 세션이 사용자 요청으로 진행했다.
+
+- **발견:** 아래 항목의 "로컬 D1 0000–0033 적용·플랜 연결 설치"는 다른 체크아웃에서 한 작업이다. 이 폴더는 로컬 D1이 비어 있었고, `.env.local`에 `V2_AI_CREDENTIAL_KEY`·`OPENAI_PLAN_MODEL`이 없었으며, `.private/chatgpt-plan/`도 없었다. 이 상태에서는 분석이 플랜 대신 Gemini로 넘어간다.
+- **zip 보존:** pull이 `migrations/*.zip` 2개를 작업 트리에서 지우므로 미리 백업했다가 복원했다. SHA-256이 같고, 이제 git 무시 대상이다.
+- **검증(코드 `13c1cea`):**
+  - typegen·전체 `npm run typecheck` exit0, 변경 TS 22파일 lint exit0, `db:check` exit0.
+  - 변경 모듈을 쓰는 관련 Vitest 34파일 **815/815 PASS, exit0, 629초**(`--maxWorkers=1`). 전체 suite·브라우저·Worker build는 실행하지 않았다.
+- **로컬 D1:** 기존 파일을 백업한 뒤 저장소 루트에서 `npx wrangler d1 migrations apply light_house_db --local --persist-to apps/web/.wrangler/state`로 파일 42개(0000–0033)를 적용했다.
+  - 결과: 테이블 170개, FK 위반 0, 연결 정보 0행. 앱 스크립트와 같은 경로(`getPlatformProxy`, cwd `apps/web`)에서도 42개를 확인했다. 루트 `.wrangler`는 만들지 않았다.
+- **정정:** 86번의 로컬 D1 절차, `chatgpt-plan-install.ts` 주석(루트에서 `--local`만 쓰면 앱이 쓰지 않는 루트 `.wrangler`에 적용됨), 50번 G05 행과 10-17 기록.
+- **플랜 연결(사용자 요청):** 사용자가 브라우저에서 로그인하고 플랜 사용을 승인했다(`planUsageGranted: true`). 이 폴더용 새 앱 등록이다.
+  - `chatgpt-plan-install.ts --model=gpt-6.1-sol` exit0. 로컬 D1에 `openai_plan` 1행이 `active`·암호화 상태로 들어갔다. 로그인 파일의 토큰은 지워졌다.
+  - `apps/web/.env.local`에는 `V2_AI_CREDENTIAL_KEY`·`OPENAI_PLAN_MODEL`만 덧붙였다. 기존 내용은 그대로임을 확인했다.
+- **실제 확인(10-17, 합성 자료만):**
+  - S1 `verify-s1-live-synthetic.ts --live`: 공급자 호출 2회, 글·이미지 모두 `openai-plan:gpt-6.1-sol` 성공, exit0, 46초. 근거 `"별점 4.5/5"`·`"ORBIT RATING 4.5 / 5"`가 원문과 일치했고 검색으로 다시 찾았다.
+  - S5 `verify-s5-live-natural-query.ts --live`: 8/8 `openai-plan:gpt-6.1-sol` 응답, exit0, 118초. 주입형·감정 질문은 조건 없이 처리했다.
+  - S5 품질 메모: "평점 높은 순"은 계약에 속성 정렬이 없어 `dropped`로 표시됐다. "5km 넘게 달린"에는 불필요한 검색어 `달린`이 붙었다. 둘 다 비차단이다.
+- **실행 핸들:** 없음. 시험·감시·로그인 작업은 종료했다.
+- **다음:** 원격 배포 계획(`.private/release-preflight`, 0032 기준)에 0033을 반영한다. 분석 실행 위치를 정한다: A 원격 Gemini만 / B 저장은 Worker, 분석은 PC 로컬 runner(플랜) / C OpenAI 호스팅 대기 목록.
+
 ## ChatGPT 플랜 주 분석 · 2026-10-17 KST
 
 사용자 결정(2026-10-16): 주 분석은 사용자의 ChatGPT 구독(Sign in with ChatGPT 플랜 사용)으로 처리한다. 구독이 끝나거나 쓸 수 없으면 Gemini 3.6 Flash로 넘어간다. Gemini는 무료 등급을 유지한다. 상세·검증은 [86번](./86_CHATGPT_PLAN_MAIN_ANALYZER.md)이다. 이 변경은 Claude Code 세션이 로컬 `00df2cc`로 만들고, `origin/main`(`0c4c0bc`) 위에 옮겨 게시했다.
@@ -9,7 +31,7 @@
   - 설정 Gemini 모델: S1 0/4, S4 0/1(모두 503), S5 7/8.
   - ChatGPT 플랜 경로: S1 글·이미지 성공(근거 원문 일치·검색 회수), S5 8/8.
 - **보완:** 할당량·과부하 실패는 72시간 동안 시도 횟수를 소모하지 않는다. governor는 최대 1시간 간격까지 물러난다([77번 2026-10-16](./77_S1_CAPTURE_ANALYSIS_RECALL_EVIDENCE.md)).
-- **연결 정보:** 로컬 D1(`apps/web/.wrangler/state`)에 migration 0000–0033을 적용하고, 플랜 연결 정보를 암호화해 설치했다. 토큰은 `.private`·`.env.local`·D1에만 있고 git에는 없다. 원격 D1·배포는 변경하지 않았다.
+- **연결 정보:** 작업한 체크아웃의 로컬 D1(`apps/web/.wrangler/state`)에 migration 0000–0033을 적용하고, 플랜 연결 정보를 암호화해 설치했다. 이 폴더에는 없었다(위 10-17 로컬 정비). 토큰은 `.private`·`.env.local`·D1에만 있고 git에는 없다. 원격 D1·배포는 변경하지 않았다.
 - **git:** `migrations/*.zip`(Notion 내보내기 2개)을 사용자 요청으로 추적에서 빼고 `.gitignore`에 넣었다. 파일은 로컬에 남는다. 과거 커밋 이력에는 남아 있으며, 이력 제거는 별도 승인이 필요한 강제 push다.
 - **남은 판단:** OpenAI 셀프 등록 플랜 사용은 "로컬에서 실행하는 개인 프로젝트" 대상이다. 원격 호스팅은 대기 목록 조건이고, 무인 cron 규칙은 확인하지 못했다. 원격 배포 시 0033 적용, 연결 정보 이전, Worker secret이 필요하다(사용자 승인 대상).
 
