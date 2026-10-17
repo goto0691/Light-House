@@ -109,12 +109,14 @@ export async function observeCompletedAnalysisPattern(
   ).bind(job.userId, job.objectId, runId).all<PatternField>();
   const fields = storedFields.results.filter((field) => CANONICAL_KEY.test(field.key) && INPUT_KINDS[field.value_kind]).slice(0, 8);
   if (fields.length < 3) return "skipped";
+  // The record's confirmed main category comes first: reusing a category the record already
+  // has writes no new assignment for this run, and the owner's category is what the guide is for.
   const type = await db.prepare(
     `select t.key from v2_object_type_assignments a
      join v2_type_definitions t on t.id=a.type_definition_id and t.user_id=a.user_id
-     where a.user_id=? and a.object_id=? and a.processing_run_id=? and a.review_status in ('accepted','proposed')
-       and t.applies_to_kind='document' and t.status not in ('archived','merged')
-     order by case a.role when 'primary' then 0 when 'secondary' then 1 else 2 end,t.key limit 1`,
+     where a.user_id=? and a.object_id=? and t.applies_to_kind='document' and t.status not in ('archived','merged')
+       and ((a.role='primary' and a.review_status='accepted') or (a.processing_run_id=? and a.review_status in ('accepted','proposed')))
+     order by case when a.role='primary' and a.review_status='accepted' then 0 when a.role='primary' then 1 when a.role='secondary' then 2 else 3 end,t.key limit 1`,
   ).bind(job.userId, job.objectId, runId).first<{ key: string }>();
   const typeKey = type && CANONICAL_KEY.test(type.key) ? type.key : null;
   const typeRow = typeKey ? await db.prepare(`select label,origin from v2_type_definitions where user_id=? and key=? limit 1`).bind(job.userId, typeKey).first<{ label: string; origin: string }>() : null;

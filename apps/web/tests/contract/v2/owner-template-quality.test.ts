@@ -4,6 +4,7 @@ import type { AnalysisEnvelopeV1 } from "@/lib/v2/ai/analysis-envelope-v1";
 import { FakeV2StructuredModelGateway } from "@/lib/v2/ai/fake-gateway";
 import { runNextAnalysisJob } from "@/lib/v2/ai/processing-runner";
 import { prepareCaptureCommit } from "@/lib/v2/domain/capture-source";
+import { D1ImportedKnowledgeRepository } from "@/lib/v2/infrastructure/d1/imported-knowledge-repository";
 import { D1ProcessingQueueRepository } from "@/lib/v2/infrastructure/d1/processing-queue-repository";
 import { D1SourceFoundationRepository } from "@/lib/v2/infrastructure/d1/source-foundation-repository";
 import { D1TemplateRepository } from "@/lib/v2/infrastructure/d1/template-repository";
@@ -24,11 +25,12 @@ beforeEach(() => {
 });
 afterEach(() => { db.sql.close(); });
 
-async function analyzeOn(day: string, suffix: string) {
+async function analyzeOn(day: string, suffix: string, alreadyFiled = false) {
   const capture = await prepareCaptureCommit({ draftId: crypto.randomUUID(), channel: "web", title: `합성 독서 ${suffix}`,
     bodyMarkdown: `합성 독서 ${suffix}: 저자 갑, 도서관에서, 기분 좋음. PRIVATE_READING_${suffix}`, aiEnabled: true,
     clientTimezone: "Asia/Seoul", privacyLevel: "normal", capturedAt: `${day}T09:00:00.000Z` }, crypto.randomUUID(), `${day}T09:00:01.000Z`);
   await new D1SourceFoundationRepository(db, owner).commitCapture(capture);
+  if (alreadyFiled) await new D1ImportedKnowledgeRepository(db, owner).assignType(capture.objectId, { key: "reading_log", label: "독서 기록" }, now);
   const evidence = [{ source_item_id: capture.sources[0]!.id, start: 0, end: 5 }];
   const envelope: AnalysisEnvelopeV1 = {
     contract_version: "analysis-v1", capture_id: capture.captureId, analyzed_revision_id: capture.revisionId, language: "ko", bundle_summary: "독서",
@@ -45,9 +47,9 @@ async function analyzeOn(day: string, suffix: string) {
   return result.patternObservation;
 }
 
-const threeDays = async () => {
+const threeDays = async (alreadyFiled = false) => {
   const outcomes = [];
-  for (const [day, suffix] of [["2026-09-01", "1"], ["2026-09-02", "2"], ["2026-09-03", "3"]] as const) outcomes.push(await analyzeOn(day, suffix));
+  for (const [day, suffix] of [["2026-09-01", "1"], ["2026-09-02", "2"], ["2026-09-03", "3"]] as const) outcomes.push(await analyzeOn(day, suffix, alreadyFiled));
   return outcomes;
 };
 
@@ -60,6 +62,13 @@ describe("templates found in analysis speak in the owner's words and do not repe
     expect(proposal!.definition.expectedTypeIds).toEqual(["reading_log"]);
     expect(proposal!.definition.sections[0]!.items.map((item) => item.prompt).sort()).toEqual(["기분을 남길까요?", "읽은 곳을 남길까요?", "저자를 남길까요?"]);
     expect(JSON.stringify(proposal!.definition)).not.toMatch(/PRIVATE_READING|저자 갑|도서관/);
+  }, 60_000);
+
+  test("a record already filed under the owner's category keeps that category when the analysis reuses it", async () => {
+    expect(await threeDays(true)).toEqual(["observed", "observed", "generated"]);
+    const proposal = (await new D1TemplateRepository(db, owner).list()).find((item) => item.origin === "ai_derived");
+    expect(proposal).toMatchObject({ name: "독서 기록 안내" });
+    expect(proposal!.definition.expectedTypeIds).toEqual(["reading_log"]);
   }, 60_000);
 
   test("AI-made field names never become template questions", async () => {
