@@ -87,6 +87,23 @@ test("Review drops stale selected content after normal becomes restricted during
   expect(serialized(tree)).not.toContain("PRIVATE REVIEW DETAIL");
 });
 
+test("Review lists only records with judgment calls and points to the routine proposals left on records", async () => {
+  const judgment = { ...restricted, recordId: "judgment", title: "JUDGMENT TITLE", privacyLevel: "normal", currentRevisionId: "r1", openCount: 4, highImpactCount: 1, lowImpactCount: 3 };
+  const routine = { ...restricted, recordId: "routine", title: "ROUTINE TITLE", privacyLevel: "normal", currentRevisionId: "r2", openCount: 2, highImpactCount: 0, lowImpactCount: 2 };
+  harness.list.mockResolvedValue([judgment, routine]);
+  const inbox = serialized(await reviewPage({ searchParams: Promise.resolve({}) }));
+  expect(inbox).toContain("JUDGMENT TITLE");
+  expect(inbox).not.toContain("ROUTINE TITLE");
+  expect(inbox).toContain("1개 확인 필요");
+  expect(inbox).toContain("AI 정리 제안 ");
+  expect(inbox).toContain("/v2/review?all=1");
+
+  const everything = serialized(await reviewPage({ searchParams: Promise.resolve({ all: "1" }) }));
+  expect(everything).toContain("ROUTINE TITLE");
+  expect(everything).toContain("4개 확인 필요");
+  expect(everything).toContain("/v2/review?all=1&record=routine");
+});
+
 test("Review does not attach an old presentation to a newer selected revision", async () => {
   const selected = { ...restricted, recordId: "normal-one", title: "OLD REVIEW TITLE", privacyLevel: "normal", currentRevisionId: "old-revision" };
   harness.list.mockResolvedValueOnce([selected]).mockResolvedValueOnce([{ ...selected, title: "CURRENT REVIEW TITLE", currentRevisionId: "new-revision" }]);

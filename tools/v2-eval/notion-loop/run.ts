@@ -17,6 +17,7 @@ import { D1SourceFoundationRepository } from "@/lib/v2/infrastructure/d1/source-
 import type { D1DatabaseBinding, D1PreparedStatementBinding } from "@/lib/v2/infrastructure/d1/source-commit-repository";
 import { D1TemplateRepository } from "@/lib/v2/infrastructure/d1/template-repository";
 import { queryPlanFromSearchParams } from "@/lib/v2/retrieval/search-params";
+import { reviewImpact } from "@/lib/v2/review/review-impact";
 import { observeAnalysisPatternWithRetry } from "@/lib/v2/templates/analysis-pattern-retry";
 
 import { notionValueMatches, percentile, ratio, scoredProperty, type AiFieldValue } from "./metrics";
@@ -179,6 +180,7 @@ async function measure(db: MemoryD1, exported: NotionExport, records: readonly I
   const fieldTotals = new Map<string, { scored: number; matched: number; keys: Record<string, number> }>();
   const typeStats = new Map<string, { records: number; aiTypes: Record<string, number>; reusedImported: number }>();
   const reviewCounts: number[] = [];
+  const highImpactCounts: number[] = [];
   const reviewKinds: Record<string, number> = {};
   let scored = 0;
   let matched = 0;
@@ -212,10 +214,19 @@ async function measure(db: MemoryD1, exported: NotionExport, records: readonly I
       if (hit) { matched += 1; total.matched += 1; total.keys[hit.key] = (total.keys[hit.key] ?? 0) + 1; }
       propertyResults.push({ property: property.name, matchedKey: hit?.key ?? null });
     }
-    const reviews = (await db.prepare(`select kind,count(*) as n from v2_review_items where object_id=? and user_id=? and status='open' group by kind`).bind(record.objectId, USER).all<{ kind: string; n: number }>()).results;
+    const reviewRows = (await db.prepare(`select kind,payload_json from v2_review_items where object_id=? and user_id=? and status='open'`).bind(record.objectId, USER).all<{ kind: string; payload_json: string }>()).results;
+    const reviews = reviewRows.map((row) => {
+      let payload: Record<string, unknown> = {};
+      try { payload = JSON.parse(row.payload_json) as Record<string, unknown>; } catch { payload = {}; }
+      return { kind: row.kind, code: typeof payload.code === "string" ? payload.code : null, impact: reviewImpact(row.kind, payload) };
+    });
     if (run) {
-      reviewCounts.push(reviews.reduce((sum, row) => sum + row.n, 0));
-      for (const row of reviews) reviewKinds[row.kind] = (reviewKinds[row.kind] ?? 0) + row.n;
+      reviewCounts.push(reviews.length);
+      highImpactCounts.push(reviews.filter((review) => review.impact === "high").length);
+      for (const review of reviews) {
+        const key = `${review.impact}:${review.kind}${review.code ? `/${review.code}` : ""}`;
+        reviewKinds[key] = (reviewKinds[key] ?? 0) + 1;
+      }
     }
     perRecord.push({
       pageId: record.pageId, database: record.database, title: record.title, run, aiTypes, pattern: analysis?.observations.get(record.objectId) ?? null,
@@ -279,7 +290,9 @@ async function measure(db: MemoryD1, exported: NotionExport, records: readonly I
       scored: total.scored, matched: total.matched, accuracy: ratio(total.matched, total.scored), distinctKeys: Object.keys(total.keys).length, keys: total.keys,
     }])) } : null,
     templates: analysis ? { generated: templates.filter((template) => template.status === "generated_draft").length, list: templates } : null,
-    reviews: analysis ? { perRecordP50: percentile(reviewCounts, 0.5), perRecordP90: percentile(reviewCounts, 0.9), byKind: reviewKinds } : null,
+    reviews: analysis ? { perRecordP50: percentile(reviewCounts, 0.5), perRecordP90: percentile(reviewCounts, 0.9),
+      inboxPerRecordP50: percentile(highImpactCounts, 0.5), inboxPerRecordP90: percentile(highImpactCounts, 0.9),
+      inboxTotal: highImpactCounts.reduce((sum, count) => sum + count, 0), recordsWithInboxItems: highImpactCounts.filter((count) => count > 0).length, byKind: reviewKinds } : null,
     entities: analysis ? { aiCreated: aiEntities.length, aiDistinct: distinctEntities.size, duplicationRatio: ratio(aiEntities.length, distinctEntities.size),
       mentionLinks: mentions?.total ?? 0, reusedMentions: mentions?.reused ?? 0, reuseRate: ratio(mentions?.reused ?? 0, mentions?.total ?? 0),
       importedPersons: importedPersons.length, aiPersonsMatchingImported: aiEntities.filter((entity) => entity.kind === "person" && importedNames.has(entity.name.trim())).length } : null,
@@ -301,7 +314,7 @@ function previousSummary(set: string, live: boolean) {
 function headline(summary: Awaited<ReturnType<typeof measure>>["summary"]) {
   return {
     analysisSucceeded: summary.analysis?.succeeded ?? null, fieldAccuracy: summary.fields?.accuracy ?? null, templates: summary.templates?.generated ?? null,
-    reviewsP50: summary.reviews?.perRecordP50 ?? null, entityDuplication: summary.entities?.duplicationRatio ?? null, relationPreservation: summary.relations.preservation,
+    reviewsP50: summary.reviews?.perRecordP50 ?? null, inboxTotal: summary.reviews?.inboxTotal ?? null, entityDuplication: summary.entities?.duplicationRatio ?? null, relationPreservation: summary.relations.preservation,
     groupingAccuracy: summary.grouping.accuracy, titleTop10: summary.search.titleTop10, aiTypeDefinitions: summary.registry?.aiTypeDefinitions ?? null,
   };
 }

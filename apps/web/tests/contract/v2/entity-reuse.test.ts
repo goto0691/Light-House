@@ -100,6 +100,21 @@ describe("AI mentions reuse the one existing entity of the same kind and name", 
     expect(mentionsOf(afterArchive.objectId)[0]!.object_object_id).not.toBe(friend);
   });
 
+  test("only an ambiguous mention (two or more same-name candidates) reaches the inbox", async () => {
+    await analyze([{ kind: "person", name: "단일 후보" }]);
+    const single = await analyze([{ kind: "person", name: "단일 후보" }]);
+    expect(entityReviews(single.objectId)[0]!.payload).toMatchObject({ candidates: 1, reusedExisting: true });
+    for (const id of ["twin-1", "twin-2"]) {
+      db.sql.prepare(`insert into v2_objects (id,user_id,object_kind,lifecycle_status,created_at,updated_at) values (?,'link-owner','entity','active','2026-01-01','2026-01-01')`).run(id);
+      db.sql.prepare(`insert into v2_entity_records (object_id,proposal_temp_id,processing_run_id,entity_kind,canonical_name,resolution_status,created_at) values (?,null,null,'person','동명 E','local_candidate','2026-01-01')`).run(id);
+    }
+    const ambiguous = await analyze([{ kind: "person", name: "동명 E" }]);
+    expect(entityReviews(ambiguous.objectId)[0]!.payload).toMatchObject({ candidates: 2, reusedExisting: false });
+    const rows = await new D1ReviewRepository(db, owner).listOpenRecords();
+    expect(rows.find((row) => row.recordId === single.objectId)).toMatchObject({ highImpactCount: 0, lowImpactCount: 1 });
+    expect(rows.find((row) => row.recordId === ambiguous.objectId)).toMatchObject({ highImpactCount: 1, lowImpactCount: 0 });
+  });
+
   test("rejecting one mention never archives an entity another record still links to", async () => {
     const first = await analyze([{ kind: "work", name: "작품 C" }]);
     const second = await analyze([{ kind: "work", name: "작품 C" }]);

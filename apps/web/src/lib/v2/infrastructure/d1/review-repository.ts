@@ -2,6 +2,7 @@ import { ulid } from "ulidx";
 
 import { legacyProjectionVisibilityPredicate } from "@/lib/v2/infrastructure/d1/legacy-projection-visibility";
 import type { D1DatabaseBinding, D1PreparedStatementBinding } from "@/lib/v2/infrastructure/d1/source-commit-repository";
+import { reviewImpactSql } from "@/lib/v2/review/review-impact";
 
 export type ReviewResolutionAction = "accept" | "reject" | "correct" | "dismiss";
 
@@ -78,8 +79,10 @@ export class D1ReviewRepository {
 
   async listOpenRecords(includeRestricted = false) {
     const legacyVisibility = await legacyProjectionVisibilityPredicate(this.db);
+    const impact = reviewImpactSql("r");
     const rows = await this.db.prepare(
-      `select d.object_id,d.title,d.privacy_level,d.current_revision_id,count(*) as open_count,max(r.created_at) as latest_review_at
+      `select d.object_id,d.title,d.privacy_level,d.current_revision_id,count(*) as open_count,max(r.created_at) as latest_review_at,
+              sum(case when ${impact}='high' then 1 else 0 end) as high_impact_count
        from v2_review_items r
        join v2_documents d on d.object_id=r.object_id
        join v2_objects o on o.id=d.object_id and o.user_id=r.user_id and o.lifecycle_status='active'
@@ -89,13 +92,16 @@ export class D1ReviewRepository {
        where r.user_id=? and r.status='open' and (r.processing_run_id is null or pj.id is not null) and ${legacyVisibility} and (?=1 or d.privacy_level<>'restricted')
        group by d.object_id,d.title,d.privacy_level,d.current_revision_id
        order by latest_review_at desc,d.object_id`,
-    ).bind(this.userId, includeRestricted ? 1 : 0).all<{ object_id: string; title: string; privacy_level: "normal" | "sensitive" | "restricted"; current_revision_id: string; open_count: number; latest_review_at: string }>();
+    ).bind(this.userId, includeRestricted ? 1 : 0).all<{ object_id: string; title: string; privacy_level: "normal" | "sensitive" | "restricted"; current_revision_id: string; open_count: number; latest_review_at: string; high_impact_count: number }>();
     return rows.results.map((row) => ({
       recordId: row.object_id,
       title: row.title || "제목 없는 기록",
       privacyLevel: row.privacy_level,
       currentRevisionId: row.current_revision_id,
       openCount: row.open_count,
+      /** Items that belong in `확인할 내용`; the rest stay on the record (D-118). */
+      highImpactCount: Number(row.high_impact_count),
+      lowImpactCount: row.open_count - Number(row.high_impact_count),
       latestReviewAt: row.latest_review_at,
     }));
   }

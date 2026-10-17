@@ -288,8 +288,10 @@ export function buildKnowledgeCommitStatements(db: D1DatabaseBinding, input: Kno
       db.prepare(
         `insert into v2_review_items (id,user_id,object_id,processing_run_id,kind,status,payload_json,created_at)
          values (?,?,?,?,'analysis_review','open',json_object('code','entity_resolution','entityTempId',?,'entityObjectId',(${resolvedSql}),
-           'relationId',?,'mention',?,'entityKind',?,'reusedExisting',json(case when exists (select 1 from v2_objects where id=? and user_id=?) then 'false' else 'true' end)),?)`,
-      ).bind(ulid(), input.userId, input.objectId, input.runId, entity.temp_id, ...resolvedBindings, relationId, entity.mention, entity.entity_kind, createdId, input.userId, input.now),
+           'relationId',?,'mention',?,'entityKind',?,'reusedExisting',json(case when exists (select 1 from v2_objects where id=? and user_id=?) then 'false' else 'true' end),
+           'candidates',(select count(*) from (${candidates}))-(case when exists (select 1 from v2_objects where id=? and user_id=?) then 1 else 0 end)),?)`,
+      ).bind(ulid(), input.userId, input.objectId, input.runId, entity.temp_id, ...resolvedBindings, relationId, entity.mention, entity.entity_kind, createdId, input.userId,
+        ...candidateBindings, createdId, input.userId, input.now),
     );
     for (const ref of entity.evidence_refs) {
       statements.push(

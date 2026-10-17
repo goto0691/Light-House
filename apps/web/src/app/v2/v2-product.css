@@ -283,6 +283,8 @@
 .v2-review-detail > header h2 { margin-top: 5px; font: 650 30px Georgia, serif; }
 .v2-review-detail > header a { color: #405c4d; font-size: 12px; font-weight: 700; }
 .v2-review-principle { border-radius: 11px; background: #e7eee8; color: #52655a; padding: 11px 13px; font-size: 12px; line-height: 1.5; }
+.v2-review-scope { margin: 0 0 12px; color: #52655a; font-size: 12px; line-height: 1.5; }
+.v2-review-scope a { color: #405c4d; font-weight: 700; }
 .v2-review-pager { display: flex; justify-content: space-between; gap: 12px; margin-top: 22px; }
 .v2-review-pager a { display: inline-flex; align-items: center; gap: 6px; color: #405c4d; font-size: 12px; font-weight: 700; }
 .v2-review-empty { display: grid; justify-items: center; gap: 8px; padding: 80px 24px; color: #68756d; text-align: center; }

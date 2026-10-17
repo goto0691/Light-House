@@ -20,9 +20,16 @@ export default async function V2ReviewPage({ searchParams }: { searchParams: Pro
   const db = getV2CloudflareBindings().db;
   const grant = await getActiveRestrictedGrant(db, { userId: session.userId, sessionId: session.sessionId });
   const repository = new D1ReviewRepository(db, session.userId);
-  const initialRecords = (await repository.listOpenRecords(hasUnexpiredRestrictedGrant(grant)))
-    .filter((record) => record.privacyLevel !== "restricted" || hasUnexpiredRestrictedGrant(grant));
   const query = await searchParams;
+  // `확인할 내용` shows only items that need judgment (D-041/D-118); routine AI proposals stay on each record.
+  const showAll = query.all === "1";
+  type ListedRecord = Awaited<ReturnType<D1ReviewRepository["listOpenRecords"]>>[number];
+  const shownCount = (record: ListedRecord) => showAll ? record.openCount : record.highImpactCount ?? record.openCount;
+  const visible = (rows: readonly ListedRecord[]) => rows
+    .filter((record) => record.privacyLevel !== "restricted" || hasUnexpiredRestrictedGrant(grant))
+    .filter((record) => shownCount(record) > 0);
+  const recordHref = (recordId: string) => `/v2/review?${showAll ? "all=1&" : ""}record=${encodeURIComponent(recordId)}`;
+  const initialRecords = visible(await repository.listOpenRecords(hasUnexpiredRestrictedGrant(grant)));
   const requested = typeof query.record === "string" ? query.record : null;
   const selectedIndex = Math.max(0, initialRecords.findIndex((record) => record.recordId === requested));
   const initialSelected = initialRecords[selectedIndex] ?? null;
@@ -30,8 +37,11 @@ export default async function V2ReviewPage({ searchParams }: { searchParams: Pro
   // Re-read the entire index after projection. Every title and count on the
   // page must come from the current owner/privacy snapshot, including items
   // that were not selected when projection began.
-  const records = (await repository.listOpenRecords(hasUnexpiredRestrictedGrant(grant)))
-    .filter((record) => record.privacyLevel !== "restricted" || hasUnexpiredRestrictedGrant(grant));
+  const listed = await repository.listOpenRecords(hasUnexpiredRestrictedGrant(grant));
+  const records = visible(listed);
+  const lowImpactWaiting = showAll ? 0 : listed
+    .filter((record) => record.privacyLevel !== "restricted" || hasUnexpiredRestrictedGrant(grant))
+    .reduce((sum, record) => sum + (record.lowImpactCount ?? 0), 0);
   let selected: (typeof records)[number] | null = initialSelected
     ? records.find((record) => record.recordId === initialSelected.recordId
       && record.privacyLevel === initialSelected.privacyLevel
@@ -48,17 +58,19 @@ export default async function V2ReviewPage({ searchParams }: { searchParams: Pro
   return (
     <main className="v2-review-page">
       <aside className="v2-review-index">
-        <header><Link href="/v2/library"><ArrowLeft aria-hidden="true" size={16} /> 보관함</Link><p>판단이 필요한 항목만 모았습니다</p><h1>확인할 내용</h1><span>{records.reduce((sum, record) => sum + record.openCount, 0)}개</span></header>
-        {records.length ? <nav aria-label="확인할 기록">{records.map((record) => <Link aria-current={selected?.recordId === record.recordId ? "page" : undefined} href={`/v2/review?record=${encodeURIComponent(record.recordId)}`} key={record.recordId}><Sparkles aria-hidden="true" size={17} /><span><strong>{record.title}</strong><small>{record.privacyLevel === "restricted" ? "재인증된 보호 기록" : `${record.openCount}개 확인 필요`}</small></span><b>{record.openCount}</b></Link>)}</nav>
+        <header><Link href="/v2/library"><ArrowLeft aria-hidden="true" size={16} /> 보관함</Link><p>{showAll ? "기록에 남은 AI 정리 제안까지 모두 보여줍니다" : "판단이 필요한 항목만 모았습니다"}</p><h1>확인할 내용</h1><span>{records.reduce((sum, record) => sum + shownCount(record), 0)}개</span></header>
+        {showAll ? <p className="v2-review-scope"><Link href="/v2/review">판단이 필요한 항목만 보기</Link></p>
+          : lowImpactWaiting ? <p className="v2-review-scope">기록 화면에 AI 정리 제안 {lowImpactWaiting}개가 더 있습니다. <Link href="/v2/review?all=1">모두 보기</Link></p> : null}
+        {records.length ? <nav aria-label="확인할 기록">{records.map((record) => <Link aria-current={selected?.recordId === record.recordId ? "page" : undefined} href={recordHref(record.recordId)} key={record.recordId}><Sparkles aria-hidden="true" size={17} /><span><strong>{record.title}</strong><small>{record.privacyLevel === "restricted" ? "재인증된 보호 기록" : `${shownCount(record)}개 확인 필요`}</small></span><b>{shownCount(record)}</b></Link>)}</nav>
           : <div className="v2-review-empty"><CheckCircle2 aria-hidden="true" size={32} /><h2>지금 확인할 내용이 없습니다.</h2><p>원본은 검토 여부와 관계없이 계속 읽고 찾을 수 있습니다.</p><Link href="/v2/library">보관함으로 돌아가기</Link></div>}
       </aside>
       {selected && presentation ? <section aria-labelledby="selected-review-heading" className="v2-review-detail">
-        <header><div><p>{selected.privacyLevel} · {selected.openCount}개</p><h2 id="selected-review-heading">{selected.title}</h2></div><Link href={`/v2/records/${selected.recordId}`}>기록 전체 열기</Link></header>
+        <header><div><p>{selected.privacyLevel} · {shownCount(selected)}개</p><h2 id="selected-review-heading">{selected.title}</h2></div><Link href={`/v2/records/${selected.recordId}`}>기록 전체 열기</Link></header>
         <p className="v2-review-principle">AI 제안은 원본과 분리되어 있습니다. 확인·수정·거절해도 원문과 이전 값 이력은 남습니다.</p>
         <RecordKnowledge presentationJson={JSON.stringify({ ...presentation, highlights: [], sections: [], connections: [], modules: [] })} sourceRecordId={selected.recordId} />
         <nav aria-label="다른 확인 항목" className="v2-review-pager">
-          {previous ? <Link href={`/v2/review?record=${encodeURIComponent(previous.recordId)}`}><ArrowLeft aria-hidden="true" size={15} /> 이전 기록</Link> : <span />}
-          {next ? <Link href={`/v2/review?record=${encodeURIComponent(next.recordId)}`}>다음 기록 <ArrowRight aria-hidden="true" size={15} /></Link> : null}
+          {previous ? <Link href={recordHref(previous.recordId)}><ArrowLeft aria-hidden="true" size={15} /> 이전 기록</Link> : <span />}
+          {next ? <Link href={recordHref(next.recordId)}>다음 기록 <ArrowRight aria-hidden="true" size={15} /></Link> : null}
         </nav>
       </section> : null}
     </main>
