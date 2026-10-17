@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace @light-house/web",
+    "dev:local": "npm run dev:local --workspace @light-house/web",
     "build": "npm run build --workspace @light-house/web",
     "lint": "npm run lint --workspace @light-house/web && npm run lint:eval && npm run lint:cutover",
     "lint:eval": "eslint --config tools/v2-eval/eslint.config.mjs tools/v2-eval",

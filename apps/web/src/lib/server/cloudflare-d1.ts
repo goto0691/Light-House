@@ -40,7 +40,30 @@ function getD1Token() {
   return process.env.CLOUDFLARE_API_TOKEN?.trim() || getRequiredEnv("DATABASE_AUTH_TOKEN");
 }
 
+type LocalD1 = { prepare(sql: string): { bind(...values: unknown[]): { all<R>(): Promise<{ results?: R[]; meta?: D1Meta }> } } };
+
+/**
+ * Development-only: `LIGHT_HOUSE_D1_MODE=local` sends every query to the local
+ * Wrangler D1 binding instead of the remote database, so a local check (login,
+ * sessions, V1 pages) never reads or writes the production D1. Production
+ * refuses the setting instead of silently falling back to the remote database.
+ */
+function localD1ModeEnabled() {
+  if (process.env.LIGHT_HOUSE_D1_MODE !== "local") return false;
+  if (process.env.NODE_ENV === "production") throw new Error("LIGHT_HOUSE_D1_MODE=local is only for local development.");
+  return true;
+}
+
+async function queryLocalD1<T>(sql: string, params: unknown[]) {
+  const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+  const db = (getCloudflareContext().env as unknown as { DB?: LocalD1 }).DB;
+  if (!db) throw new Error("로컬 D1 binding을 찾을 수 없습니다.");
+  const result = await db.prepare(sql).bind(...params).all<T>();
+  return { meta: result.meta ?? {}, rows: result.results ?? [] };
+}
+
 export async function queryD1<T>(sql: string, params: unknown[] = []) {
+  if (localD1ModeEnabled()) return queryLocalD1<T>(sql, params);
   const response = await fetch(getD1Endpoint(), {
     method: "POST",
     headers: {
