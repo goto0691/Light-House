@@ -109,14 +109,23 @@ export function canonicalRetrievalSql(input: { plan: V2RetrievalQueryPlanV1; use
       where p.user_id=o.user_id and p.owner_object_id=d.object_id and p.review_status='accepted' and p.superseded_at is null and f.key=? ${clause})`);
     bindings.push(...values);
   }
-  for (const filter of plan.entityFilters) {
-    const clauses = ["r.user_id=o.user_id", "r.subject_object_id=d.object_id", "r.review_status='accepted'", "r.superseded_at is null", input.entityVisibility];
-    if (filter.entityKind) { clauses.push("e.entity_kind=?"); bindings.push(filter.entityKind); }
-    if (filter.canonicalName) { clauses.push("instr(lower(e.canonical_name),lower(?))>0"); bindings.push(filter.canonicalName); }
-    if (filter.targetObjectId) { clauses.push("e.object_id=?"); bindings.push(filter.targetObjectId); }
-    conditions.push(`exists(select 1 from v2_relation_edges r join v2_entity_records e on e.object_id=r.object_object_id
+  // Each entity filter becomes its own materialized set of documents, joined in FROM. As a nested
+  // EXISTS, the entity visibility predicate is re-resolved inside every expression that reaches
+  // eligible_documents and exceeds D1's depth-100 expression limit (the Node SQLite fixture allows
+  // deeper trees). The filter CTEs follow search_tokens, so their values follow its one binding.
+  const entityCtes: string[] = [], entityJoins: string[] = [], entityBindings: unknown[] = [];
+  for (const [index, filter] of plan.entityFilters.entries()) {
+    const clauses = ["r.user_id=?", "r.review_status='accepted'", "r.superseded_at is null", input.entityVisibility];
+    entityBindings.push(input.userId);
+    if (filter.entityKind) { clauses.push("e.entity_kind=?"); entityBindings.push(filter.entityKind); }
+    if (filter.canonicalName) { clauses.push("instr(lower(e.canonical_name),lower(?))>0"); entityBindings.push(filter.canonicalName); }
+    if (filter.targetObjectId) { clauses.push("e.object_id=?"); entityBindings.push(filter.targetObjectId); }
+    entityCtes.push(`entity_documents_${index} as materialized (select distinct r.subject_object_id as object_id from v2_relation_edges r
+      join v2_entity_records e on e.object_id=r.object_object_id
       join v2_objects eo on eo.id=e.object_id and eo.user_id=r.user_id and eo.lifecycle_status='active' where ${clauses.join(" and ")})`);
+    entityJoins.push(`join entity_documents_${index} entity_match_${index} on entity_match_${index}.object_id=d.object_id`);
   }
+  bindings.splice(1, 0, ...entityBindings);
   if (plan.dateFilter) {
     const axis = plan.dateFilter.axis === "written_at" ? "d.written_at" : "c.captured_at";
     if (plan.dateFilter.from) { conditions.push(`${axis}>=?`); bindings.push(`${plan.dateFilter.from}T00:00:00.000Z`); }
@@ -125,11 +134,13 @@ export function canonicalRetrievalSql(input: { plan: V2RetrievalQueryPlanV1; use
   const ctes = [`search_tokens as (select json_extract(value,'$.token') as token,json_extract(value,'$.pattern') as pattern,
       json_extract(value,'$.prefix') as prefix,json_extract(value,'$.points') as points,json_extract(value,'$.parts') as parts,
       json_extract(value,'$.anchors') as anchors from json_each(?))`,
+    ...entityCtes,
     `eligible_documents as materialized (select d.*,o.user_id,o.updated_at as object_updated_at,c.captured_at,
       ${schema.links ? "d.current_link_snapshot_id as search_current_snapshot,d.published_link_run_id as search_published_run" : "null as search_current_snapshot,null as search_published_run"}
       from v2_documents d join v2_objects o on o.id=d.object_id
       join v2_capture_bundles c on c.id=d.capture_id and c.user_id=o.user_id
       join v2_document_revisions current on current.id=d.current_revision_id and current.document_object_id=d.object_id
+      ${entityJoins.join(" ")}
       where ${conditions.join(" and ")})`,
     `eligible_sources as materialized (select d.object_id,s.*,l.role as link_role from eligible_documents d
       join v2_document_source_links l on l.document_object_id=d.object_id

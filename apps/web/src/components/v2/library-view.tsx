@@ -7,6 +7,7 @@ import { useRef, useState } from "react";
 
 import type { V2LibraryRecord } from "@/lib/v2/infrastructure/d1/document-authoring-repository";
 import { SemanticIcon } from "@/components/v2/semantic-icon";
+import { documentStatusLabel, privacyLabel } from "@/lib/v2/presentation/record-labels";
 import { V2MobileNavigation } from "@/components/v2/mobile-navigation";
 
 function rowTitle(record: V2LibraryRecord) {
@@ -57,7 +58,7 @@ export function LibraryView({ records, pinnedViews = [], totalCount = records.le
           <div aria-label="모든 기록" className="v2-library-records" role="listbox">
             {records.map((record, index) => (
               <button
-                aria-label={`${rowTitle(record)} · ${record.privacyLevel}`}
+                aria-label={`${rowTitle(record)} · ${privacyLabel(record.privacyLevel)}`}
                 aria-selected={index === selectedIndex}
                 className="v2-library-record"
                 key={record.recordId}
@@ -78,7 +79,7 @@ export function LibraryView({ records, pinnedViews = [], totalCount = records.le
                   {record.locked ? <LockKeyhole aria-hidden="true" size={18} /> : record.privacyLevel === "sensitive" ? <Shield aria-hidden="true" size={18} /> : <FileText aria-hidden="true" size={18} />}
                 </span>
                 <span className="v2-library-record__copy"><strong>{rowTitle(record)}</strong><small>{record.excerpt ?? (record.locked ? "최근 재인증 전에는 내용이 표시되지 않습니다." : "민감 기록의 미리보기는 숨겼습니다.")}</small></span>
-                <span>{record.documentStatus}</span>
+                <span>{documentStatusLabel(record.documentStatus)}</span>
                 <time dateTime={record.updatedAt}>{new Date(record.updatedAt).toLocaleDateString("ko-KR")}</time>
               </button>
             ))}
@@ -93,7 +94,7 @@ export function LibraryView({ records, pinnedViews = [], totalCount = records.le
         <aside aria-label="기록 미리보기" className="v2-library-peek">
           <header><span>미리보기</span><button aria-label="미리보기 닫기" onClick={() => setPeekOpen(false)} type="button">×</button></header>
           <div className="v2-library-peek__body">
-            {selected.locked ? <><LockKeyhole aria-hidden="true" size={27} /><h2>잠긴 기록</h2><p>제목과 내용은 기록 화면에서 재인증한 뒤 서버가 전송합니다.</p></> : <><p>{selected.privacyLevel === "sensitive" ? "민감 기록" : "원본 기록"}</p><h2>{selected.title}</h2><div>{selected.excerpt ?? "미리보기는 숨겨져 있습니다."}</div><dl><div><dt>상태</dt><dd>{selected.documentStatus}</dd></div><div><dt>버전</dt><dd>{selected.currentVersion ?? "잠김"}</dd></div></dl></>}
+            {selected.locked ? <><LockKeyhole aria-hidden="true" size={27} /><h2>잠긴 기록</h2><p>제목과 내용은 기록 화면에서 재인증한 뒤 서버가 전송합니다.</p></> : <><p>{selected.privacyLevel === "sensitive" ? "민감 기록" : "원본 기록"}</p><h2>{selected.title}</h2><div>{selected.excerpt ?? "미리보기는 숨겨져 있습니다."}</div><dl><div><dt>상태</dt><dd>{documentStatusLabel(selected.documentStatus)}</dd></div><div><dt>버전</dt><dd>{selected.currentVersion ?? "잠김"}</dd></div></dl></>}
           </div>
           <Link href={`/v2/records/${selected.recordId}`}>기록 전체 열기</Link>
         </aside>

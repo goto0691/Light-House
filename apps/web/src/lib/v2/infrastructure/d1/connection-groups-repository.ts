@@ -3,6 +3,8 @@ import { legacyProjectionVisibilityPredicate } from "@/lib/v2/infrastructure/d1/
 
 export const CONNECTION_GROUPS_CONTRACT = "connection-groups-v1";
 const DEFAULT_ITEMS_PER_GROUP = 5;
+/** One opened group shows this many; beyond it the page offers search. */
+export const EXPANDED_ITEMS = 100;
 const MAX_EDGES = 5000;
 const UNCLASSIFIED = Object.freeze({ key: "unclassified", label: "분류 전" });
 const ENTITY_KIND_LABELS: Readonly<Record<string, string>> = { person: "사람", work: "작품", place: "장소", organization: "단체", book: "책", game: "게임", platform: "플랫폼" };
@@ -37,7 +39,7 @@ export type ConnectionGroups = Readonly<{
 }>;
 
 type EdgeRow = {
-  review_status: "accepted" | "proposed"; source_class: string; predicate_label: string; direction: "outgoing" | "incoming";
+  relation_id: string; review_status: "accepted" | "proposed"; source_class: string; predicate_label: string; direction: "outgoing" | "incoming";
   other_id: string; object_kind: "document" | "entity" | "event";
   title: string | null; privacy_level: "normal" | "sensitive" | null; doc_date: string | null;
   entity_kind: string | null; canonical_name: string | null; event_type_key: string | null; occurred_at_start: string | null;
@@ -53,7 +55,7 @@ function origin(sourceClass: string): ConnectionOrigin {
 function category(row: EdgeRow) {
   if (row.object_kind === "entity") {
     const kind = row.entity_kind ?? "entity";
-    return { key: `entity:${kind}`, label: ENTITY_KIND_LABELS[kind] ?? kind };
+    return { key: `entity:${kind}`, label: entityKindLabel(kind) };
   }
   if (row.object_kind === "event") return { key: `event:${row.event_type_key ?? "event"}`, label: row.event_type_key ?? "사건" };
   try {
@@ -65,17 +67,34 @@ function category(row: EdgeRow) {
 
 function union<T>(values: readonly T[], value: T): T[] { return values.includes(value) ? [...values] : [...values, value]; }
 
+export const entityKindLabel = (kind: string) => ENTITY_KIND_LABELS[kind] ?? kind;
+
+/** The header of an entity page: an active, visible entity of this owner, or null. */
+export async function readEntitySummary(db: D1DatabaseBinding, userId: string, entityId: string) {
+  const visibility = await legacyProjectionVisibilityPredicate(db, "eo");
+  const row = await db.prepare(
+    `select e.object_id,e.entity_kind,e.canonical_name from v2_entity_records e
+     join v2_objects eo on eo.id=e.object_id and eo.user_id=? and eo.object_kind='entity' and eo.lifecycle_status='active'
+     where e.object_id=? and ${visibility} limit 1`,
+  ).bind(userId, entityId).first<{ object_id: string; entity_kind: string; canonical_name: string }>();
+  return row ? { entityId: row.object_id, kind: row.entity_kind, kindLabel: entityKindLabel(row.entity_kind), name: row.canonical_name } : null;
+}
+
 /**
  * Connections of one record or entity, grouped by the category of the other side
  * (its accepted primary type, or entity kind) instead of one flat list. Both link
  * directions count. Restricted records are never counted or named; sensitive
  * records are counted but closed. AI-proposed links stay outside the groups.
+ * A linked record counts only while its capture and current revision are its own.
+ * `outgoingRelationIds`, when given, is the record page's already fenced set of this
+ * record's own confirmed links (D1PresentationRepository): an outgoing link outside
+ * it is not shown, so both parts of the page agree on one final check.
  */
 export async function readConnectionGroups(
   db: D1DatabaseBinding,
   userId: string,
   objectId: string,
-  options: Readonly<{ itemsPerGroup?: number }> = {},
+  options: Readonly<{ itemsPerGroup?: number; expandedGroup?: string | null; outgoingRelationIds?: ReadonlySet<string> | null }> = {},
 ): Promise<ConnectionGroups | null> {
   const [subjectVisibility, targetVisibility] = await Promise.all([
     legacyProjectionVisibilityPredicate(db, "subject"), legacyProjectionVisibilityPredicate(db, "target"),
@@ -88,14 +107,14 @@ export async function readConnectionGroups(
 
   const rows = await db.prepare(
     `with edges as (
-       select r.review_status,r.source_class,p.label as predicate_label,
+       select r.id as relation_id,r.review_status,r.source_class,p.label as predicate_label,
               case when r.subject_object_id=?1 then r.object_object_id else r.subject_object_id end as other_id,
               case when r.subject_object_id=?1 then 'outgoing' else 'incoming' end as direction
        from v2_relation_edges r join v2_predicate_definitions p on p.id=r.predicate_definition_id and p.user_id=r.user_id
        where r.user_id=?2 and (r.subject_object_id=?1 or r.object_object_id=?1) and r.subject_object_id<>r.object_object_id
          and r.superseded_at is null and r.review_status in ('accepted','proposed')
      )
-     select e.review_status,e.source_class,e.predicate_label,e.direction,target.id as other_id,target.object_kind,
+     select e.relation_id,e.review_status,e.source_class,e.predicate_label,e.direction,target.id as other_id,target.object_kind,
             doc.title,doc.privacy_level,coalesce(doc.written_at,cap.captured_at) as doc_date,
             ent.entity_kind,ent.canonical_name,ev.event_type_key,ev.occurred_at_start,
             (select json_object('key',t.key,'label',t.label) from v2_object_type_assignments a
@@ -109,7 +128,9 @@ export async function readConnectionGroups(
      left join v2_entity_records ent on ent.object_id=target.id
      left join v2_event_records ev on ev.object_id=target.id
      where ${targetVisibility}
-       and (target.object_kind<>'document' or doc.privacy_level in ('normal','sensitive'))
+       and (target.object_kind<>'document' or (doc.privacy_level in ('normal','sensitive')
+         and exists (select 1 from v2_document_revisions revision where revision.id=doc.current_revision_id and revision.document_object_id=target.id)
+         and cap.id is not null))
      limit ?3`,
   ).bind(objectId, userId, MAX_EDGES).all<EdgeRow>();
 
@@ -117,6 +138,7 @@ export async function readConnectionGroups(
   const groups = new Map<string, { label: string; relationLabels: string[]; items: Map<string, ConnectionGroupItem>; sensitive: Set<string> }>();
   for (const row of rows.results) {
     if (row.review_status !== "accepted") { pending.add(row.other_id); continue; }
+    if (options.outgoingRelationIds && row.direction === "outgoing" && !options.outgoingRelationIds.has(row.relation_id)) continue;
     const { key, label } = category(row);
     const group = groups.get(key) ?? { label, relationLabels: [], items: new Map(), sensitive: new Set<string>() };
     groups.set(key, group);
@@ -141,7 +163,7 @@ export async function readConnectionGroups(
     const items = [...group.items.values()].sort((left, right) => (right.date ?? "").localeCompare(left.date ?? "") || left.label.localeCompare(right.label, "ko"));
     return {
       groupKey, label: group.label, count: items.length + group.sensitive.size, relationLabels: group.relationLabels,
-      items: items.slice(0, limit), closedSensitiveCount: group.sensitive.size,
+      items: items.slice(0, groupKey === options.expandedGroup ? EXPANDED_ITEMS : limit), closedSensitiveCount: group.sensitive.size,
     } satisfies ConnectionGroup;
   }).sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "ko"));
   return {

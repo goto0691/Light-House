@@ -3,6 +3,7 @@ import {
   type ProcessingFilter, type ProcessingRuntime, type ProcessingStageSummary, type ProcessingStatus, type ProcessingStatusPage,
 } from "@/lib/v2/domain/processing-status";
 import { legacyProjectionVisibilityPredicate } from "@/lib/v2/infrastructure/d1/legacy-projection-visibility";
+import { reviewImpactSql } from "@/lib/v2/review/review-impact";
 import type { D1DatabaseBinding } from "@/lib/v2/infrastructure/d1/source-commit-repository";
 
 type Row = { record_id: string; title: string; privacy_level: "normal" | "sensitive" | "restricted"; saved_at: string;
@@ -84,7 +85,7 @@ export class D1ProcessingStatusRepository {
           (exists(select 1 from latest_jobs j where j.object_id=s.record_id and j.run_status='partial')
             or exists(select 1 from published p where p.record_id=s.record_id and p.status='partial')) as partial,
           case when s.privacy_level='restricted' then 0 else
-            exists(select 1 from v2_review_items ri where ri.object_id=s.record_id and ri.user_id=s.user_id and ri.status='open'
+            exists(select 1 from v2_review_items ri where ri.object_id=s.record_id and ri.user_id=s.user_id and ri.status='open' and ${reviewImpactSql("ri")}='high'
               and (ri.processing_run_id is null or exists(select 1 from v2_processing_runs rr join v2_processing_jobs rj on rj.id=rr.job_id
                 and rj.user_id=rr.user_id and rj.object_id=ri.object_id where rr.id=ri.processing_run_id and rr.user_id=ri.user_id)))
             or exists(select 1 from v2_link_fragments f join published p on p.run_id=f.processing_run_id and p.record_id=f.document_object_id

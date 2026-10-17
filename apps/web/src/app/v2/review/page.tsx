@@ -9,6 +9,7 @@ import { getV2ServerFeatureFlags } from "@/lib/v2/config/server-feature-flags";
 import { getV2CloudflareBindings } from "@/lib/v2/infrastructure/cloudflare/runtime-bindings";
 import { D1PresentationRepository } from "@/lib/v2/infrastructure/d1/presentation-repository";
 import { D1ReviewRepository } from "@/lib/v2/infrastructure/d1/review-repository";
+import { privacyLabel } from "@/lib/v2/presentation/record-labels";
 import "../v2-product.css";
 
 export const metadata = { title: "확인할 내용 · Light House" };
@@ -65,7 +66,7 @@ export default async function V2ReviewPage({ searchParams }: { searchParams: Pro
           : <div className="v2-review-empty"><CheckCircle2 aria-hidden="true" size={32} /><h2>지금 확인할 내용이 없습니다.</h2><p>원본은 검토 여부와 관계없이 계속 읽고 찾을 수 있습니다.</p><Link href="/v2/library">보관함으로 돌아가기</Link></div>}
       </aside>
       {selected && presentation ? <section aria-labelledby="selected-review-heading" className="v2-review-detail">
-        <header><div><p>{selected.privacyLevel} · {shownCount(selected)}개</p><h2 id="selected-review-heading">{selected.title}</h2></div><Link href={`/v2/records/${selected.recordId}`}>기록 전체 열기</Link></header>
+        <header><div><p>{privacyLabel(selected.privacyLevel)} · {shownCount(selected)}개</p><h2 id="selected-review-heading">{selected.title}</h2></div><Link href={`/v2/records/${selected.recordId}`}>기록 전체 열기</Link></header>
         <p className="v2-review-principle">AI 제안은 원본과 분리되어 있습니다. 확인·수정·거절해도 원문과 이전 값 이력은 남습니다.</p>
         <RecordKnowledge presentationJson={JSON.stringify({ ...presentation, highlights: [], sections: [], connections: [], modules: [] })} sourceRecordId={selected.recordId} />
         <nav aria-label="다른 확인 항목" className="v2-review-pager">

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
 import { prepareCaptureCommit } from "@/lib/v2/domain/capture-source";
-import { readConnectionGroups } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
+import { readConnectionGroups, readEntitySummary } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
 import { D1ImportedKnowledgeRepository, ImportedKnowledgeError } from "@/lib/v2/infrastructure/d1/imported-knowledge-repository";
 import { D1SourceFoundationRepository } from "@/lib/v2/infrastructure/d1/source-foundation-repository";
 import { LinkSqlite } from "../../support/link-sqlite";
@@ -112,11 +112,41 @@ describe("imported owner structure and grouped connections", () => {
     expect(groups.summary.find((group) => group.groupKey === "type:notion.video_log")!.count).toBe(2);
   });
 
+  test("an entity page reads only the owner's active entity and can open one whole group", async () => {
+    const { hub } = await linkedHub();
+    const person = await imported.ensureEntity("person", "사람 B", now);
+    await expect(readEntitySummary(db, owner, person)).resolves.toEqual({ entityId: person, kind: "person", kindLabel: "사람", name: "사람 B" });
+    await expect(readEntitySummary(db, "other-owner", person)).resolves.toBeNull();
+    await expect(readEntitySummary(db, owner, hub.objectId)).resolves.toBeNull();
+    db.sql.prepare("update v2_objects set lifecycle_status='archived' where id=?").run(person);
+    await expect(readEntitySummary(db, owner, person)).resolves.toBeNull();
+
+    const collapsed = (await readConnectionGroups(db, owner, hub.objectId, { itemsPerGroup: 1 }))!;
+    expect(collapsed.groups.find((group) => group.groupKey === "type:notion.video_log")!.items).toHaveLength(1);
+    const opened = (await readConnectionGroups(db, owner, hub.objectId, { itemsPerGroup: 1, expandedGroup: "type:notion.video_log" }))!;
+    expect(opened.groups.find((group) => group.groupKey === "type:notion.video_log")!.items).toHaveLength(3);
+    expect(opened.groups.find((group) => group.groupKey === "type:notion.game_log")!.items).toHaveLength(1);
+  });
+
   test("rejects malformed keys and objects that are not the owner's", async () => {
     const mine = await record("내 기록", "2026-01-02");
     const foreign = await record("남의 기록", "2026-01-03", "normal", "other-owner");
     await expect(imported.assignType(mine.objectId, { key: "영상 로그", label: "영상 로그" }, now)).rejects.toBeInstanceOf(ImportedKnowledgeError);
     await expect(imported.assignType(foreign.objectId, { key: "notion.video_log", label: "영상 로그" }, now)).rejects.toMatchObject({ code: "imported_object_missing" });
     await expect(imported.addRelation({ subjectObjectId: mine.objectId, objectObjectId: foreign.objectId, predicate: contentLog, now })).rejects.toMatchObject({ code: "imported_object_missing" });
+  });
+  test("a linked record shows only while its capture and current revision are its own, and a fenced set limits outgoing links", async () => {
+    const { hub, videos, loose } = await linkedHub();
+    const labels = async (options = {}) => (await readConnectionGroups(db, owner, hub.objectId, options))!.groups.flatMap((group) => group.items.map((item) => item.label));
+    expect(await labels()).toEqual(expect.arrayContaining([`감상 2026-03-01`, "분류 없는 메모"]));
+    db.sql.prepare("update v2_capture_bundles set user_id='other-owner' where id=?").run(videos[0]!.captureId);
+    db.sql.prepare("update v2_documents set current_revision_id=? where object_id=?").run(videos[2]!.revisionId, videos[1]!.objectId);
+    expect(await labels()).not.toEqual(expect.arrayContaining([`감상 2026-03-01`]));
+    expect(await labels()).not.toContain(`감상 2026-05-01`);
+    expect(await labels()).toContain(`감상 2026-04-01`);
+    // The record page passes the outgoing links its final fence kept; an empty set drops the hub's own link to the loose note.
+    expect(await labels({ outgoingRelationIds: new Set<string>() })).not.toContain("분류 없는 메모");
+    expect(await labels({ outgoingRelationIds: new Set<string>() })).toContain(`감상 2026-04-01`);
+    void loose;
   });
 });

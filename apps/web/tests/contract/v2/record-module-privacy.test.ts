@@ -19,7 +19,9 @@ vi.mock("@/components/v2/record-source-materials", () => ({ RecordSourceMaterial
 vi.mock("@/components/v2/record-search-location", () => ({ RecordSearchLocation: () => null }));
 
 import recordPage from "@/app/v2/records/[recordId]/page";
+import { ConnectionGroupsPanel } from "@/components/v2/connection-groups-panel";
 import { RecordKnowledge } from "@/components/v2/record-knowledge";
+import type { ConnectionGroupItem, ConnectionGroups } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
 import { prepareCaptureCommit, type CapturePrivacyLevel, type PreparedCaptureCommit } from "@/lib/v2/domain/capture-source";
 import { D1PresentationRepository } from "@/lib/v2/infrastructure/d1/presentation-repository";
 import { D1SourceFoundationRepository } from "@/lib/v2/infrastructure/d1/source-foundation-repository";
@@ -87,6 +89,13 @@ function knowledge(node: unknown): RecordKnowledgePresentation[] {
     if (node.props.presentation) return [node.props.presentation];
   }
   return knowledge(node.props.children);
+}
+/** The grouped "이 기록과 이어진 것" panel that replaced the flat connection list (D-116). */
+function panelItems(node: unknown): ConnectionGroupItem[] {
+  if (Array.isArray(node)) return node.flatMap(panelItems);
+  if (!React.isValidElement<{ children?: unknown; groups?: ConnectionGroups }>(node)) return [];
+  if (node.type === ConnectionGroupsPanel && node.props.groups) return node.props.groups.groups.flatMap((group) => [...group.items]);
+  return panelItems(node.props.children);
 }
 function serialized(node: unknown) { return JSON.stringify(node, (key, value) => key === "type" || key === "_owner" ? undefined : value); }
 function assertEmpty(presentation: RecordKnowledgePresentation) {
@@ -247,6 +256,7 @@ test.each(["retarget", "target_label", "predicate_key", "predicate_label", "sour
     const tree = await render(source.objectId);
     expect(fired).toBe(true);
     expect(knowledge(tree).flatMap((item) => item.connections)).toEqual([]);
+    expect(panelItems(tree).map((item) => item.label)).not.toContain("OLD TARGET SENTINEL");
     expect(serialized(tree)).not.toContain("OLD TARGET SENTINEL");
     expect(knowledge(tree).flatMap((item) => item.modules)).toHaveLength(1);
   },
@@ -288,10 +298,10 @@ test("an otherwise public connection cannot quote a third restricted document's 
   // an import; target visibility alone is not authority over this source.
   db.sql.prepare("update v2_evidence_refs set source_item_id=?,locator_json=? where target_kind='relation' and target_id=?")
     .run(hidden.sources[0].id, JSON.stringify({ start: 0, end: 100 }), relationId);
-  const tree = await render(source.objectId), connections = knowledge(tree).flatMap((item) => item.connections);
-  expect(connections.map((item) => item.targetLabel)).toContain("VISIBLE TARGET");
-  expect(serialized(connections)).not.toContain("RESTRICTED EVIDENCE SENTINEL");
-  expect(serialized(connections)).not.toContain(hidden.sources[0].id);
+  const tree = await render(source.objectId);
+  expect(panelItems(tree).map((item) => item.label)).toContain("VISIBLE TARGET");
+  expect(serialized(tree)).not.toContain("RESTRICTED EVIDENCE SENTINEL");
+  expect(serialized(tree)).not.toContain(hidden.sources[0].id);
 });
 
 function allFields(presentation: RecordKnowledgePresentation) {

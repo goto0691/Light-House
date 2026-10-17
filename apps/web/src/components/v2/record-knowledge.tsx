@@ -8,6 +8,7 @@ import type { PresentedField, PresentedReviewItem, RecordKnowledgePresentation }
 import { SemanticIcon } from "@/components/v2/semantic-icon";
 import { RecordContextModules } from "@/components/v2/record-context-modules";
 import { fieldInputValue, parseFieldCorrection, ratingDisplayValue } from "@/lib/v2/presentation/field-input";
+import { reviewImpact } from "@/lib/v2/review/review-impact";
 
 function valueText(field: PresentedField) {
   if (field.value === null || field.value === undefined) return "값 없음";
@@ -139,6 +140,9 @@ export function RecordKnowledge(props: ({ presentation: RecordKnowledgePresentat
   const presentation = "presentationJson" in props ? JSON.parse(props.presentationJson) as RecordKnowledgePresentation : props.presentation;
   const sourceRecordId = props.sourceRecordId;
   const ModuleField = ({ field }: { field: PresentedField }) => <FieldValue field={field} sourceRecordId={sourceRecordId} />;
+  // Judgment calls stay open; routine AI proposals fold away (D-118).
+  const judgment = presentation.reviewItems.filter((item) => reviewImpact(item.kind, item.payload) === "high");
+  const routine = presentation.reviewItems.filter((item) => reviewImpact(item.kind, item.payload) === "low");
   return (
     <>
       {presentation.highlights.length ? <section aria-label="주요 정보" className="v2-highlight-strip">{presentation.highlights.map((field) => <FieldValue compact field={field} key={field.propertyId} />)}</section> : null}
@@ -148,7 +152,8 @@ export function RecordKnowledge(props: ({ presentation: RecordKnowledgePresentat
       </section>)}
       <RecordContextModules modules={presentation.modules} Field={ModuleField} />
       {presentation.connections.length ? <section aria-labelledby="connections-heading" className="v2-connections"><h2 id="connections-heading">연결</h2><ul>{presentation.connections.map((connection) => <li key={connection.relationId}><span><small>{connection.predicateLabel}</small><strong>{connection.targetLabel}</strong><em>{connection.sourceLabel}</em></span>{connection.evidence[0]?.sourceItemId ? <a href={sourceHref(connection.evidence[0].sourceItemId, sourceRecordId)}>근거 보기</a> : null}</li>)}</ul></section> : null}
-      {presentation.reviewItems.length ? <section aria-labelledby="review-heading" className="v2-review-section"><header><div><p>AI가 원본과 분리해 두었습니다</p><h2 id="review-heading">확인할 내용 {presentation.reviewItems.length}개</h2></div><ChevronRight aria-hidden="true" size={18} /></header><div>{presentation.reviewItems.map((item) => <ReviewCard item={item} key={item.reviewId} sourceRecordId={sourceRecordId} />)}</div></section> : null}
+      {judgment.length ? <section aria-labelledby="review-heading" className="v2-review-section"><header><div><p>AI가 원본과 분리해 두었습니다</p><h2 id="review-heading">확인할 내용 {judgment.length}개</h2></div><ChevronRight aria-hidden="true" size={18} /></header><div>{judgment.map((item) => <ReviewCard item={item} key={item.reviewId} sourceRecordId={sourceRecordId} />)}</div></section> : null}
+      {routine.length ? <details className="v2-review-section v2-review-section--routine"><summary><span><small>필요할 때만 확인하세요</small><strong>AI 정리 제안 {routine.length}개</strong></span><ChevronRight aria-hidden="true" size={18} /></summary><div>{routine.map((item) => <ReviewCard item={item} key={item.reviewId} sourceRecordId={sourceRecordId} />)}</div></details> : null}
     </>
   );
 }

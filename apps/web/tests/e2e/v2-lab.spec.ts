@@ -245,7 +245,9 @@ test("Adaptive record remains horizontally contained on mobile", async ({ page }
     expect.objectContaining({ scrollWidth: expect.any(Number), clientWidth: expect.any(Number) }),
   );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
-  await expect(page.getByRole("heading", { name: /확인할 내용 2개/ })).toBeVisible();
+  // One judgment call stays open; the routine type proposal folds away (D-118).
+  await expect(page.getByRole("heading", { name: /확인할 내용 1개/ })).toBeVisible();
+  await expect(page.getByText("AI 정리 제안 1개")).toBeVisible();
 });
 
 test("Search explains inclusion, hides sensitive snippets, and keeps saved views opt-in", async ({ page }) => {
