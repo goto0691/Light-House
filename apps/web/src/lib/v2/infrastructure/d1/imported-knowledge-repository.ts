@@ -15,6 +15,9 @@ export class ImportedKnowledgeError extends Error {
 
 export type ImportedDefinition = Readonly<{ key: string; label: string; definition?: string }>;
 export type ImportedRelationProvenance = Readonly<{ sourceItemId: string; property: string }>;
+export type ImportedFieldDataType = "short_text" | "long_text" | "decimal" | "boolean" | "date";
+export type ImportedField = Readonly<{ key: string; label: string; dataType: ImportedFieldDataType }>;
+export type ImportedValue = Readonly<{ kind: "text"; text: string } | { kind: "number"; number: number } | { kind: "boolean"; boolean: boolean } | { kind: "date"; date: string }>;
 
 function key(value: string) {
   if (!CANONICAL_KEY.test(value)) throw new ImportedKnowledgeError("imported_key_invalid", "Imported keys must be canonical lowercase registry keys.");
@@ -77,13 +80,64 @@ export class D1ImportedKnowledgeRepository {
     ]);
   }
 
+  /**
+   * Store one value the owner already wrote (a Notion property) as an accepted field.
+   * An existing current value is never overwritten: the owner may have corrected it.
+   * A same-key AI field keeps its data type; only its generated label gives way to the owner's.
+   */
+  async setValue(documentId: string, field: ImportedField, value: ImportedValue, provenance: ImportedRelationProvenance | null, now: string): Promise<"created" | "exists" | "kept_existing" | "type_conflict"> {
+    const fieldKey = key(field.key);
+    const fieldLabel = label(field.label);
+    await this.activeObject(documentId, "document");
+    const columns = {
+      text: value.kind === "text" ? value.text : null,
+      number: value.kind === "number" ? value.number : null,
+      boolean: value.kind === "boolean" ? (value.boolean ? 1 : 0) : null,
+      date: value.kind === "date" ? value.date : null,
+      json: JSON.stringify(value.kind === "text" ? value.text : value.kind === "number" ? value.number : value.kind === "boolean" ? value.boolean : value.date),
+    };
+    await this.db.batch([
+      this.db.prepare(
+        `insert or ignore into v2_field_definitions (id,user_id,key,label,definition,data_type,status,origin,schema_version,usage_count,created_at,updated_at)
+         values (?,?,?,?,?,?,'active','imported',1,0,?,?)`,
+      ).bind(ulid(), this.userId, fieldKey, fieldLabel, `Owner field: ${fieldLabel}`, field.dataType, now, now),
+      this.db.prepare(`update v2_field_definitions set label=?,updated_at=? where user_id=? and key=? and origin='ai_proposed'`).bind(fieldLabel, now, this.userId, fieldKey),
+    ]);
+    const definition = await this.db.prepare(`select id,data_type from v2_field_definitions where user_id=? and key=? limit 1`).bind(this.userId, fieldKey).first<{ id: string; data_type: string }>();
+    if (!definition || definition.data_type !== field.dataType) return "type_conflict";
+    const current = await this.db.prepare(
+      `select value_json from v2_property_values where user_id=? and owner_object_id=? and field_definition_id=? and review_status='accepted' and superseded_at is null limit 1`,
+    ).bind(this.userId, documentId, definition.id).first<{ value_json: string }>();
+    if (current) return current.value_json === columns.json ? "exists" : "kept_existing";
+    const propertyId = ulid();
+    const statements = [
+      this.db.prepare(
+        `insert into v2_property_values
+         (id,user_id,owner_object_id,field_definition_id,proposal_temp_id,value_kind,value_text,value_number,value_boolean,value_date,value_json,source_class,claim_risk,review_status,locked_by_user,processing_run_id,created_at)
+         values (?,?,?,?,null,?,?,?,?,?,?,'imported','low','accepted',0,null,?)`,
+      ).bind(propertyId, this.userId, documentId, definition.id, value.kind, columns.text, columns.number, columns.boolean, columns.date, columns.json, now),
+      this.db.prepare(
+        `update v2_field_definitions set usage_count=(select count(distinct p.owner_object_id) from v2_property_values p where p.field_definition_id=v2_field_definitions.id and p.user_id=v2_field_definitions.user_id and p.review_status not in ('rejected','superseded')),
+           updated_at=? where id=? and user_id=?`,
+      ).bind(now, definition.id, this.userId),
+    ];
+    if (provenance) {
+      statements.push(this.db.prepare(
+        `insert or ignore into v2_evidence_refs (id,user_id,target_kind,target_id,source_item_id,locator_kind,locator_json,created_at)
+         select ?,?,'property_value',?,s.id,'form_field',?,? from v2_source_items s where s.id=? and s.user_id=?`,
+      ).bind(ulid(), this.userId, propertyId, JSON.stringify({ property: label(provenance.property) }), now, provenance.sourceItemId, this.userId));
+    }
+    await this.db.batch(statements);
+    return "created";
+  }
+
   /** Reuse an active entity with the same kind and exact name, or create one. */
   async ensureEntity(kind: string, name: string, now: string): Promise<string> {
     const entityKind = key(kind);
     const canonicalName = label(name);
     const existing = await this.db.prepare(
       `select e.object_id from v2_entity_records e join v2_objects o on o.id=e.object_id and o.user_id=? and o.lifecycle_status='active'
-       where e.entity_kind=? and e.canonical_name=? order by e.created_at,e.object_id limit 1`,
+       where e.entity_kind=? and lower(replace(trim(e.canonical_name),' ',''))=lower(replace(trim(?),' ','')) order by e.created_at,e.object_id limit 1`,
     ).bind(this.userId, entityKind, canonicalName).first<{ object_id: string }>();
     if (existing) return existing.object_id;
     const objectId = ulid();

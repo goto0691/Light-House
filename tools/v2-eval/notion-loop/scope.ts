@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { NOTION_DATABASES, NOTION_PERSON_DATABASES, notionLinkPredicate } from "@/lib/v2/import/notion-mapping";
+
 import { analysisMarkdown, notionDateToIso, type NotionExport, type NotionPage } from "./notion-export";
 
 /**
@@ -16,28 +18,12 @@ export const APPROVED_SCOPE = Object.freeze({
   smoke: { "영상 로그": 5, "컨텐츠 로그": 2, "게임 로그": 4, "1 지식 창고": 4 } as Readonly<Record<string, number>>,
 });
 
-/** Notion databases become the owner's imported types (stable keys, original labels). */
-export const DATABASE_TYPES: Readonly<Record<string, Readonly<{ key: string; label: string }>>> = {
-  "영상 로그": { key: "notion.video_log", label: "영상 로그" },
-  "컨텐츠 로그": { key: "notion.content_log", label: "컨텐츠 로그" },
-  "게임 로그": { key: "notion.game_log", label: "게임 로그" },
-  "1 지식 창고": { key: "notion.knowledge", label: "지식 창고" },
-  "묵상": { key: "notion.meditation", label: "묵상" },
-};
-/** Pages of these databases are people: they become person entities by name only. */
-export const PERSON_DATABASES = new Set(["3 네트워크"]);
-
-const PROPERTY_SLUGS: Readonly<Record<string, string>> = {
-  "컨텐츠 로그": "content_log", "게임 로그": "game_log", "영상 로그": "video_log", "도서 로그": "book_log",
-  "3. 네트워크": "network", "관련인물": "related_person", "관련 인물": "related_person", "사람": "person",
-  "라이프 로그": "life_log", "2. 프로젝트": "project", "1. 지식 창고": "knowledge", "묵상 로그": "meditation",
-  "묵상": "meditation", "일기": "diary", "운동 로그": "workout", "배경지식": "background",
-};
-
-export function relationPredicate(property: string) {
-  const slug = PROPERTY_SLUGS[property] ?? `p${createHash("sha256").update(property).digest("hex").slice(0, 8)}`;
-  return { key: `notion.link.${slug}`, label: property };
-}
+/** The product importer's mapping: databases are the owner's types, relation names are link labels. */
+export const DATABASE_TYPES: Readonly<Record<string, Readonly<{ key: string; label: string }>>> = Object.fromEntries(
+  Object.entries(NOTION_DATABASES).map(([name, mapping]) => [name, mapping.type]),
+);
+export const PERSON_DATABASES = NOTION_PERSON_DATABASES;
+export const relationPredicate = notionLinkPredicate;
 
 export type ScopeEntry = Readonly<{ pageId: string; database: string }>;
 export type NotionLoopScope = Readonly<{

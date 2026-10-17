@@ -60,7 +60,7 @@ describe("imported owner structure and grouped connections", () => {
     const video = groups.groups.find((group) => group.groupKey === "type:notion.video_log")!;
     // Newest first, with the source property kept as the relation label.
     expect(video.items.map((item) => item.objectId)).toEqual([videos[1]!.objectId, videos[2]!.objectId, videos[0]!.objectId]);
-    expect(video.items[0]).toMatchObject({ relationLabels: ["컨텐츠 로그"], directions: ["incoming"], origins: ["imported"], date: "2026-05-01T12:00:00.000Z" });
+    expect(video.items[0]).toMatchObject({ relationLabels: ["컨텐츠 로그"], directions: ["incoming"], origins: ["user"], date: "2026-05-01T12:00:00.000Z" });
     expect(groups.groups.find((group) => group.groupKey === "type:unclassified")!.items[0]).toMatchObject({ objectId: loose.objectId, directions: ["outgoing"] });
   });
 

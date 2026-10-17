@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:local": "node scripts/dev-local.mjs",
+    "import:notion": "tsx scripts/import-notion.ts",
     "build": "next build --webpack",
     "build:worker": "node scripts/build-worker-safe.mjs",
     "recover:worker-build": "node scripts/build-worker-safe.mjs --recover-stale-lock",

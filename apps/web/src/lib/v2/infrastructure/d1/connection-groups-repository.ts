@@ -7,7 +7,8 @@ const MAX_EDGES = 5000;
 const UNCLASSIFIED = Object.freeze({ key: "unclassified", label: "분류 전" });
 const ENTITY_KIND_LABELS: Readonly<Record<string, string>> = { person: "사람", work: "작품", place: "장소", organization: "단체", book: "책", game: "게임", platform: "플랫폼" };
 
-export type ConnectionOrigin = "imported" | "user" | "ai" | "external";
+/** Imported owner links read as the owner's own (D-119); only AI and external links are marked. */
+export type ConnectionOrigin = "user" | "ai" | "external";
 export type ConnectionGroupItem = Readonly<{
   objectId: string;
   objectKind: "document" | "entity" | "event";
@@ -44,8 +45,7 @@ type EdgeRow = {
 };
 
 function origin(sourceClass: string): ConnectionOrigin {
-  if (sourceClass === "imported") return "imported";
-  if (sourceClass === "user_explicit") return "user";
+  if (sourceClass === "imported" || sourceClass === "user_explicit") return "user";
   if (sourceClass === "external_grounded") return "external";
   return "ai";
 }

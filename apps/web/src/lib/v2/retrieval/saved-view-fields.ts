@@ -39,8 +39,9 @@ export type SavedViewFieldRow = Readonly<{ fieldKey: string; label: string; valu
 const sourceLabels: Readonly<Record<string, string>> = Object.freeze({
   user_locked: "사용자 잠금", user_explicit: "직접 입력", user_context: "내 글에서 확인", image_ocr: "이미지 OCR",
   transcript_extract: "녹취에서 추출", exif: "파일 메타데이터", external_grounded: "외부 출처", calculated: "계산한 값",
-  ai_inferred: "AI 추론", imported: "가져온 값", metadata: "기록 메타데이터",
-  type_user: "사용자가 분류", type_ai: "AI 분류", type_import: "가져온 분류",
+  // Imported owner data reads as the owner's own entry (D-119).
+  ai_inferred: "AI 추론", imported: "직접 입력", metadata: "기록 메타데이터",
+  type_user: "사용자가 분류", type_ai: "AI 분류", type_import: "사용자가 분류",
 });
 
 export function materializeSavedViewFieldValue(row: SavedViewFieldValueRow): V2SavedViewFieldValue | null {

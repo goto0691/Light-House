@@ -25,7 +25,8 @@ function sourceLabel(sourceClass: string) {
   if (sourceClass === "image_ocr") return "이미지에서 읽음";
   if (sourceClass === "transcript_extract") return "녹취에서 추출";
   if (sourceClass === "calculated") return "계산됨";
-  if (sourceClass === "imported") return "가져온 값";
+  // Owner data brought from another tool reads as the owner's own entry (D-119); provenance stays stored.
+  if (sourceClass === "imported") return "원문에서 명시함";
   return "AI 해석";
 }
 
