@@ -1,5 +1,6 @@
 import { ulid } from "ulidx";
 
+import { entityByNameSql } from "@/lib/v2/infrastructure/d1/entity-curation-repository";
 import type { D1DatabaseBinding } from "@/lib/v2/infrastructure/d1/source-commit-repository";
 import { suggestSemanticIconForType } from "@/lib/v2/presentation/semantic-icons";
 
@@ -133,14 +134,14 @@ export class D1ImportedKnowledgeRepository {
     return "created";
   }
 
-  /** Reuse an active entity with the same kind and exact name, or create one. */
+  /** Reuse an active entity with the same kind and name (or that name as an alternate name), or create one. */
   async ensureEntity(kind: string, name: string, now: string): Promise<string> {
     const entityKind = key(kind);
     const canonicalName = label(name);
     const existing = await this.db.prepare(
-      `select e.object_id from v2_entity_records e join v2_objects o on o.id=e.object_id and o.user_id=? and o.lifecycle_status='active'
-       where e.entity_kind=? and lower(replace(trim(e.canonical_name),' ',''))=lower(replace(trim(?),' ','')) order by e.created_at,e.object_id limit 1`,
-    ).bind(this.userId, entityKind, canonicalName).first<{ object_id: string }>();
+      `select eo.id as object_id ${entityByNameSql("?")} and named.user_id=? and e.entity_kind=?
+       order by named.canonical_object_id is not null,e.created_at,e.object_id limit 1`,
+    ).bind(canonicalName, this.userId, entityKind).first<{ object_id: string }>();
     if (existing) return existing.object_id;
     const objectId = ulid();
     await this.db.batch([

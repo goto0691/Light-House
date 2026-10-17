@@ -5,6 +5,7 @@ import { FakeV2StructuredModelGateway } from "@/lib/v2/ai/fake-gateway";
 import { runNextAnalysisJob } from "@/lib/v2/ai/processing-runner";
 import { prepareCaptureCommit } from "@/lib/v2/domain/capture-source";
 import { readConnectionGroups } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
+import { D1EntityCurationRepository } from "@/lib/v2/infrastructure/d1/entity-curation-repository";
 import { D1ImportedKnowledgeRepository } from "@/lib/v2/infrastructure/d1/imported-knowledge-repository";
 import { D1ProcessingQueueRepository } from "@/lib/v2/infrastructure/d1/processing-queue-repository";
 import { D1ReviewRepository } from "@/lib/v2/infrastructure/d1/review-repository";
@@ -133,5 +134,18 @@ describe("AI mentions reuse the one existing entity of the same kind and name", 
     await reviews.resolve(entityReviews(kept.objectId)[0]!.id, { action: "reject" });
     expect(entities("작품 D")[0]!.lifecycle_status).toBe("active");
     expect(mentionsOf(reuser.objectId)[0]!.review_status).toBe("proposed");
+  });
+  test("a mention of a name the owner merged or renamed away links to the surviving entity", async () => {
+    const imported = new D1ImportedKnowledgeRepository(db, owner);
+    const english = await imported.ensureEntity("organization", "Warner Bros.", "2026-10-18T00:00:00.000Z");
+    const korean = await imported.ensureEntity("organization", "워너 브라더스", "2026-10-18T00:00:00.000Z");
+    const curation = new D1EntityCurationRepository(db, owner);
+    await curation.merge(english, korean, "2026-10-18T00:01:00.000Z");
+    const merged = await analyze([{ kind: "organization", name: "Warner Bros." }]);
+    expect(mentionsOf(merged.objectId)).toEqual([expect.objectContaining({ object_object_id: korean })]);
+    await curation.rename(korean, "워너브러더스", "2026-10-18T00:02:00.000Z");
+    const renamed = await analyze([{ kind: "organization", name: "워너 브라더스" }]);
+    expect(mentionsOf(renamed.objectId)).toEqual([expect.objectContaining({ object_object_id: korean })]);
+    expect(db.sql.prepare("select count(*) as n from v2_objects where object_kind='entity' and lifecycle_status='active'").get()).toEqual({ n: 1 });
   });
 });

@@ -133,14 +133,16 @@ export function canonicalRetrievalSql(input: { plan: V2RetrievalQueryPlanV1; use
       where p.user_id=${owner} and p.review_status='accepted' and p.superseded_at is null and f.key=? ${clause}`, values);
   }
   for (const [index, filter] of plan.entityFilters.entries()) {
+    // An entity matches by its name or an alternate name, and a merged entity's old id finds the survivor.
     const clauses = [`r.user_id=${owner}`, "r.review_status='accepted'", "r.superseded_at is null", input.entityVisibility];
     const values: unknown[] = [];
     if (filter.entityKind) { clauses.push("e.entity_kind=?"); values.push(filter.entityKind); }
     if (filter.canonicalName) { clauses.push("instr(lower(e.canonical_name),lower(?))>0"); values.push(filter.canonicalName); }
-    if (filter.targetObjectId) { clauses.push("e.object_id=?"); values.push(filter.targetObjectId); }
+    if (filter.targetObjectId) { clauses.push("named.id=?"); values.push(filter.targetObjectId); }
     documentSet(`entity_documents_${index}`, `select distinct r.subject_object_id as object_id from v2_relation_edges r
-      join v2_entity_records e on e.object_id=r.object_object_id
-      join v2_objects eo on eo.id=e.object_id and eo.user_id=r.user_id and eo.lifecycle_status='active' where ${clauses.join(" and ")}`, values);
+      join v2_objects eo on eo.id=r.object_object_id and eo.user_id=r.user_id and eo.object_kind='entity' and eo.lifecycle_status='active'
+      join v2_objects named on (named.id=eo.id or named.canonical_object_id=eo.id) and named.user_id=eo.user_id and named.object_kind='entity'
+      join v2_entity_records e on e.object_id=named.id where ${clauses.join(" and ")}`, values);
   }
   for (let level = 0; filterSets.length > 1; level += 1) {
     const groups: string[] = [];

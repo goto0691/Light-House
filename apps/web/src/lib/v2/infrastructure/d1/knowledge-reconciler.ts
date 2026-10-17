@@ -270,10 +270,13 @@ export function buildKnowledgeCommitStatements(db: D1DatabaseBinding, input: Kno
   }
 
   // Local candidate search (06 §2): a mention links to the one existing active entity
-  // of the same kind and name. No candidate or several candidates create a new entity;
-  // existing entities are never merged. The link stays proposed for the user's review.
-  const candidates = `select eo.id from v2_entity_records e join v2_objects eo on eo.id=e.object_id
-    where eo.user_id=? and eo.object_kind='entity' and eo.lifecycle_status='active' and e.entity_kind=?
+  // of the same kind and name, or with that name as an alternate name the owner kept by
+  // renaming or merging. No candidate or several candidates create a new entity; existing
+  // entities are never merged automatically. The link stays proposed for the user's review.
+  const candidates = `select distinct eo.id from v2_entity_records e
+    join v2_objects named on named.id=e.object_id and named.object_kind='entity' and (named.lifecycle_status='active' or named.canonical_object_id is not null)
+    join v2_objects eo on eo.id=coalesce(named.canonical_object_id,named.id) and eo.user_id=named.user_id and eo.object_kind='entity' and eo.lifecycle_status='active'
+    where eo.user_id=? and e.entity_kind=?
       and ${ENTITY_NAME_SQL("e.canonical_name")}=${ENTITY_NAME_SQL("?")} and ${input.entityVisibility ?? "1=1"}`;
   for (const entity of distinctEntityProposals(input.envelope.entity_proposals)) {
     const createdId = ulid();
