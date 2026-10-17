@@ -107,7 +107,7 @@ Light House V2는 사용자가 텍스트·이미지·음성·파일을 분류하
 | D-086 | export는 읽기용 portable과 무손실 migration을 분리하고, password encryption이 없는 ZIP의 제한을 생성·다운로드·복원 UI에서 지속적으로 알린다. |
 | D-087 | private backup은 검증된 full/incremental chain과 content-addressed blob을 사용한다. daily 30·weekly 12·monthly 12·pin/manual 및 chain ancestor를 보존하고 unreferenced blob은 7일 grace 뒤에만 삭제한다. |
 | D-088 | ZIP과 선택 backup은 같은 verify·dry-run·명시 승인·additive import·batch rollback 엔진을 사용한다. 기존 row 자동 overwrite와 의미 중복 자동 merge는 하지 않는다. |
-| D-089 | 2026-08-28 live inventory의 migration 대상 source table 56개와 현재 in-code registry의 56개 versioned adapter가 56/56으로 일치한다. 모든 row를 immutable envelope로 보존하되 글·명확한 typed value만 deterministic projection하고 운영/UI/관계 raw archive는 restricted export에서만 내보낸다. 인증 table과 파생 FTS table은 migration source에서 제외한다. |
+| D-089 | 2026-08-28 live inventory의 migration 대상 source table 56개와 현재 in-code registry의 56개 versioned adapter가 56/56으로 일치한다. 모든 row를 immutable envelope로 보존하되 글·명확한 typed value만 deterministic projection하고 운영/UI/관계 raw archive는 restricted export에서만 내보낸다. 인증 table과 파생 FTS table은 migration source에서 제외한다. 관계 raw archive 부분은 D-115가 대체한다. |
 | D-090 | legacy migration은 AI 없이 수행한다. 실행 전에 legacy write를 잠그고, 모든 비어 있지 않은 table의 source-only와 현재 schema/row/projection hash 대조를 완료한 뒤 같은 dry-run의 knowledge pass를 연다. |
 | D-091 | private cutover는 `capture_default` → `library_default` → `closure` 세 단계의 fail-closed evidence gate로 진행한다. 도구는 플래그를 직접 변경하지 않고 모든 gate가 통과했을 때만 추천 환경변수를 출력한다. |
 | D-092 | V1 archive mutation은 `FLAG_V2_LEGACY_READONLY`가 켜지면 명시적 route allowlist 기반 API network boundary에서 409로 거부한다. 인증 session·계정 설정·export·notification·preview는 archive mutation이 아니므로 유지하고 V2 API는 같은 guard에서 제외한다. |
@@ -133,6 +133,8 @@ Light House V2는 사용자가 텍스트·이미지·음성·파일을 분류하
 | D-112 | 원문 확보·AI 분석·첨부 보관을 별도 상태로 표시한다. 목적 변경은 원문 재수집을 강제하지 않으며 옛 인용·조립본·사용자 메모는 당시 snapshot 근거를 유지한다. |
 | D-113 | 첫 실제 경로는 기존 source metadata의 versioned namespace로 수동 원문을 보존한다. 이어 수집이 없는 단계에서 snapshot/fragment 전체 구현을 주장하지 않으며, 후속 job/CAS·이동성 계약과 함께 확장한다. |
 | D-114 | 수동 링크의 외부 저자·확보 범위를 이해하는 전용 loader 전에는 해당 기록의 AI 분석을 비활성화한다. 링크만 저장한 상태를 외부 원문·이미지·영상 분석 완료로 표시하지 않는다. |
+| D-115 | (2026-10-17 사용자 결정, D-089의 관계 부분 대체) 노션·V1에서 사용자가 만든 DB 분류와 연결은 원본 보관에 그치지 않고 V2의 가져온 분류(`origin=imported`, `active`, 배정 `import`·`accepted`)와 가져온 연결(`source_class=imported`, `accepted`, 노션 속성 이름은 `form_field` 근거)로 투영한다. 사람 DB 페이지는 이름만 가진 사람 개체가 된다. 연결 값은 AI 입력에 넣지 않는다. 사용자 거절·잠금은 다시 덮어쓰지 않는다. |
+| D-116 | (2026-10-17 사용자 결정) 연결은 평면 목록이 아니라 상대 쪽 카테고리별 묶음으로 보여준다. 카테고리는 상대 기록의 확정 대표 분류 또는 개체 종류이며, 확정 분류가 없으면 `분류 전`이다. 양방향 연결을 함께 세고, 묶음별 개수 요약·최근 N건·전체 보기를 제공한다. restricted는 세지도 않고, sensitive는 개수만 보이며, AI 추정 연결은 확정 묶음과 섞지 않는다. 서버 read model은 `connection-groups-v1`이다. |
 
 ## 3. 문서 지도
 
