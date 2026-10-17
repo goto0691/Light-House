@@ -4,6 +4,7 @@ import type { D1DatabaseBinding } from "@/lib/v2/infrastructure/d1/source-commit
 import { D1TemplateRepository } from "@/lib/v2/infrastructure/d1/template-repository";
 import { SYSTEM_TEMPLATE_SEEDS } from "@/lib/v2/templates/system-template-seeds";
 import type { TemplateDefinitionV1, TemplateInputKind } from "@/lib/v2/templates/template-definition-v1";
+import { neutralFieldPrompt, OWNER_LABEL_ORIGINS } from "@/lib/v2/templates/template-prompts";
 
 type PatternField = Readonly<{ key: string; value_kind: string }>;
 export type AnalysisPatternObservationOutcome = "skipped" | "observed" | "generated";
@@ -42,12 +43,16 @@ function fieldKeys(definition: TemplateDefinitionV1) {
     .map((item) => `${item.binding!.fieldKey}:${item.inputKind === "measurement" ? "number" : item.inputKind}`).sort();
 }
 
-function candidateDefinition(typeKey: string | null, fields: readonly PatternField[]): TemplateDefinitionV1 {
+/** Names the owner wrote (imported/user/system definitions); AI-generated labels never enter a template. */
+type OwnerNames = Readonly<{ typeName: string | null; fieldNames: ReadonlyMap<string, string> }>;
+
+function candidateDefinition(typeKey: string | null, fields: readonly PatternField[], names: OwnerNames = { typeName: null, fieldNames: new Map() }): TemplateDefinitionV1 {
+  const safeType = typeKey && SAFE_TYPE_NAMES[typeKey] ? SAFE_TYPE_NAMES[typeKey] : null;
   return {
     contractVersion: 1,
-    name: typeKey && SAFE_TYPE_NAMES[typeKey] ? SAFE_TYPE_NAMES[typeKey] : "반복 기록 안내",
+    name: safeType ?? (names.typeName ? `${names.typeName} 안내` : "반복 기록 안내"),
     description: "서로 다른 날짜의 기록에서 반복된 입력 구조입니다. 필요한 항목만 사용하세요.",
-    expectedTypeIds: typeKey && SAFE_TYPE_NAMES[typeKey] ? [typeKey] : [],
+    expectedTypeIds: typeKey && (safeType || names.typeName) ? [typeKey] : [],
     objectRoles: [{ role: "primary_document", optional: false }],
     sections: [{
       key: "repeated_fields",
@@ -55,7 +60,7 @@ function candidateDefinition(typeKey: string | null, fields: readonly PatternFie
       items: fields.map((field, index) => ({
         key: field.key,
         kind: "field" as const,
-        prompt: SAFE_PROMPTS[field.key] ?? `반복 항목 ${index + 1}을 기록할까요?`,
+        prompt: SAFE_PROMPTS[field.key] ?? (names.fieldNames.has(field.key) ? neutralFieldPrompt(names.fieldNames.get(field.key)!) : `반복 항목 ${index + 1}을 기록할까요?`),
         prominence: index < 3 ? "core" as const : "suggested" as const,
         binding: { ownerRole: "primary_document" as const, fieldKey: field.key },
         inputKind: INPUT_KINDS[field.value_kind],
@@ -112,7 +117,15 @@ export async function observeCompletedAnalysisPattern(
      order by case a.role when 'primary' then 0 when 'secondary' then 1 else 2 end,t.key limit 1`,
   ).bind(job.userId, job.objectId, runId).first<{ key: string }>();
   const typeKey = type && CANONICAL_KEY.test(type.key) ? type.key : null;
-  const definition = candidateDefinition(typeKey, fields);
+  const typeRow = typeKey ? await db.prepare(`select label,origin from v2_type_definitions where user_id=? and key=? limit 1`).bind(job.userId, typeKey).first<{ label: string; origin: string }>() : null;
+  const labelRows = await db.prepare(
+    `select key,label,origin from v2_field_definitions where user_id=? and key in (${fields.map(() => "?").join(",")})`,
+  ).bind(job.userId, ...fields.map((field) => field.key)).all<{ key: string; label: string; origin: string }>();
+  const names: OwnerNames = {
+    typeName: typeRow && OWNER_LABEL_ORIGINS.has(typeRow.origin) ? typeRow.label : null,
+    fieldNames: new Map(labelRows.results.filter((row) => OWNER_LABEL_ORIGINS.has(row.origin)).map((row) => [row.key, row.label])),
+  };
+  const definition = candidateDefinition(typeKey, fields, names);
   const structure = fieldKeys(definition);
   if (typeKey && SYSTEM_TEMPLATE_SEEDS.some((seed) => seed.definition.expectedTypeIds.includes(typeKey)
     && fields.every((field) => fieldKeys(seed.definition).includes(`${field.key}:${INPUT_KINDS[field.value_kind]}`)))) return "skipped";
@@ -121,8 +134,21 @@ export async function observeCompletedAnalysisPattern(
   const existing = await repository.list({ captureEligibleOnly: true });
   if (existing.some((template) => fieldKeys(template.definition).join("|") === structure.join("|")
     && (typeKey ? template.definition.expectedTypeIds.includes(typeKey) : template.definition.expectedTypeIds.length === 0))) return "skipped";
+  // A pattern another template already covers (same or broader fields, or one field more) makes no new
+  // template, including against templates the owner dismissed or archived. This pattern's own draft is
+  // not "another" template: its later observations still count toward it.
+  const signature = await patternSignature(typeKey, fields);
+  const mine = new Set(fields.map((field) => field.key));
+  const covered = (await repository.list({ includeArchived: true })).some((template) => {
+    if (template.patternSignature === signature) return false;
+    const expected = template.definition.expectedTypeIds;
+    if (expected.length && !(typeKey && expected.includes(typeKey))) return false;
+    const theirs = new Set(fieldKeys(template.definition).map((entry) => entry.split(":")[0]!));
+    return [...mine].every((key) => theirs.has(key)) || ([...theirs].every((key) => mine.has(key)) && mine.size - theirs.size <= 1);
+  });
+  if (covered) return "skipped";
   const result = await repository.observePattern({
-    patternSignature: await patternSignature(typeKey, fields),
+    patternSignature: signature,
     sourceDocumentId: job.objectId,
     sourceRevisionId: job.inputRevisionId,
     observedDate,

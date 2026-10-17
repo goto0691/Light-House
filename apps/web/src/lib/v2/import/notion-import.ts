@@ -4,12 +4,13 @@ import { NOTION_DATABASES, NOTION_PERSON_DATABASES, notionEntityPredicate, notio
 import { D1ImportedKnowledgeRepository } from "@/lib/v2/infrastructure/d1/imported-knowledge-repository";
 import type { D1DatabaseBinding } from "@/lib/v2/infrastructure/d1/source-commit-repository";
 import { D1SourceFoundationRepository } from "@/lib/v2/infrastructure/d1/source-foundation-repository";
+import { createOwnerStructureTemplates } from "@/lib/v2/templates/owner-structure-templates";
 
 export type NotionImportStats = {
   pages: number; created: number; replayed: number;
   values: number; valuesKept: number; typeConflicts: number;
   entityLinks: number; pageLinks: number; personLinks: number; mirroredLinks: number; unresolvedLinks: number;
-  byDatabase: Record<string, number>;
+  byDatabase: Record<string, number>; dated: number; templates: string[];
 };
 
 type Imported = Readonly<{ page: NotionPage; database: string; objectId: string; sourceItemId: string }>;
@@ -25,13 +26,14 @@ export function notionCapturedAt(page: NotionPage, fallback: string) {
  * one record per page with the page's text, the database as its type, short
  * properties as fields, named people/companies/platforms as connected entities,
  * and relation properties as links between records. Nothing is sent to an AI
- * provider (AI analysis is off for these records). Re-running is idempotent.
+ * provider (AI analysis is off for these records). Each database then gets one
+ * input guide draft from the fields the owner filled most. Re-running is idempotent.
  */
 export async function importNotionExport(db: D1DatabaseBinding, userId: string, exported: NotionExport, options: Readonly<{ now: string; databases?: readonly string[] }>) {
   const allowed = new Set((options.databases ?? Object.keys(NOTION_DATABASES)).filter((name) => name in NOTION_DATABASES));
   const captures = new D1SourceFoundationRepository(db, userId);
   const knowledge = new D1ImportedKnowledgeRepository(db, userId);
-  const stats: NotionImportStats = { pages: 0, created: 0, replayed: 0, values: 0, valuesKept: 0, typeConflicts: 0, entityLinks: 0, pageLinks: 0, personLinks: 0, mirroredLinks: 0, unresolvedLinks: 0, byDatabase: {} };
+  const stats: NotionImportStats = { pages: 0, created: 0, replayed: 0, values: 0, valuesKept: 0, typeConflicts: 0, entityLinks: 0, pageLinks: 0, personLinks: 0, mirroredLinks: 0, unresolvedLinks: 0, byDatabase: {}, dated: 0, templates: [] };
   const imported = new Map<string, Imported>();
   const pages = [...exported.pages.values()].filter((page) => page.database && allowed.has(page.database))
     .sort((left, right) => left.database!.localeCompare(right.database!) || left.pageId.localeCompare(right.pageId));
@@ -95,5 +97,25 @@ export async function importNotionExport(db: D1DatabaseBinding, userId: string, 
       }
     }
   }
+  Object.assign(stats, await finishNotionImport(db, userId, options.now));
   return stats;
+}
+
+/**
+ * After an import: each record the owner has not touched since takes its own date
+ * (Notion 날짜/생성 일시) as its written and last-changed date, so the library reads
+ * as the owner kept it over time rather than as one batch; the capture keeps the
+ * real save time. Then each category gets its input guide draft. Idempotent.
+ */
+export async function finishNotionImport(db: D1DatabaseBinding, userId: string, now: string) {
+  const untouched = `select d.object_id from v2_documents d join v2_capture_bundles c on c.id=d.capture_id
+    where c.user_id=? and c.draft_id like 'notion:%' and d.current_version=1 and d.written_at is null`;
+  const own = `(select c.captured_at from v2_documents d join v2_capture_bundles c on c.id=d.capture_id where d.object_id=v2_objects.id)`;
+  const pending = await db.prepare(`select count(*) as n from (${untouched})`).bind(userId).first<{ n: number }>();
+  await db.batch([
+    db.prepare(`update v2_objects set created_at=min(created_at,${own}),updated_at=${own} where user_id=? and id in (${untouched})`).bind(userId, userId),
+    db.prepare(`update v2_documents set written_at=(select c.captured_at from v2_capture_bundles c where c.id=v2_documents.capture_id)
+      where object_id in (${untouched})`).bind(userId),
+  ]);
+  return { dated: Number(pending?.n ?? 0), templates: await createOwnerStructureTemplates(db, userId, { now }) };
 }

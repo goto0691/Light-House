@@ -5,6 +5,7 @@ import { readNotionExport } from "@/lib/v2/import/notion-export";
 import { importNotionExport } from "@/lib/v2/import/notion-import";
 import { readConnectionGroups } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
 import { D1PresentationRepository } from "@/lib/v2/infrastructure/d1/presentation-repository";
+import { D1TemplateRepository } from "@/lib/v2/infrastructure/d1/template-repository";
 import { LinkSqlite } from "../../support/link-sqlite";
 
 const owner = "link-owner";
@@ -46,6 +47,10 @@ describe("Notion import brings the owner's records in as the owner's own", () =>
 
     const record = recordBy("감상 A")!;
     expect(record.captured_at).toBe("2025-09-08T12:00:00.000Z");
+    // The record reads as written on its own date, not on the import day; the capture keeps the real save time.
+    expect(db.sql.prepare(`select o.created_at,o.updated_at,d.written_at,c.committed_at from v2_objects o join v2_documents d on d.object_id=o.id join v2_capture_bundles c on c.id=d.capture_id where o.id=?`).get(record.object_id))
+      .toEqual({ created_at: "2025-09-08T12:00:00.000Z", updated_at: "2025-09-08T12:00:00.000Z", written_at: "2025-09-08T12:00:00.000Z", committed_at: now });
+    expect(stats.dated).toBe(3);
     expect(record.body_markdown).toContain("감독/크리에이터: 감독 갑");
     for (const hidden of ["친구 병", "네트워크", "컨텐츠 로그", ".md"]) expect(record.body_markdown).not.toContain(hidden);
     expect(recordBy("감상 B")!.body_markdown).toContain("짧은 감상 메모.");
@@ -73,6 +78,32 @@ describe("Notion import brings the owner's records in as the owner's own", () =>
     expect(JSON.stringify(db.sql.prepare(`select * from v2_entity_records`).all())).not.toContain("비공개 주소");
   });
 
+  test("each category gets one draft input guide from the fields the owner filled most, in the owner's own words", async () => {
+    const exported = await syntheticExport();
+    expect((await importNotionExport(db, owner, exported, { now })).templates).toEqual(["content_log", "video_log"]);
+    const templates = await new D1TemplateRepository(db, owner).list();
+    const video = templates.find((template) => template.definition.expectedTypeIds.includes("video_log"))!;
+    expect(video).toMatchObject({ name: "영상 로그", origin: "imported", status: "generated_draft", usageCount: 0 });
+    expect(await new D1TemplateRepository(db, owner).list({ captureEligibleOnly: true })).toHaveLength(0);
+    const items = video.definition.sections.flatMap((section) => section.items);
+    expect(items.slice(0, 3).map((item) => item.prompt)).toEqual(expect.arrayContaining(["날짜를 남길까요?", "플랫폼을 남길까요?"]));
+    expect(items.every((item) => item.binding?.fieldKey && !("defaultValue" in item))).toBe(true);
+    expect(JSON.stringify(video.definition)).not.toMatch(/Netflix|감독 갑|감상 A|notion|노션|가져온/i);
+    expect((await importNotionExport(db, owner, exported, { now })).templates).toEqual([]);
+    expect(await new D1TemplateRepository(db, owner).list()).toHaveLength(templates.length);
+  });
+
+  test("an automatic creation time is the record's date, never an input guide question", async () => {
+    const zip = new JSZip();
+    zip.file(`1 지식 창고 ${id(7)}_all.csv`, "﻿이름,상태,생성 일시,카테고리\n\"메모 A\",,,\n");
+    zip.file(`메모 A ${id(700)}.md`, "# 메모 A\n\n상태: 정리 중\n생성 일시: 2025년 1월 2일 오후 3:04\n카테고리: 개발\n\n본문.\n");
+    const stats = await importNotionExport(db, owner, await readNotionExport(await zip.generateAsync({ type: "nodebuffer" })), { now });
+    expect(stats.templates).toEqual(["knowledge_note"]);
+    expect(recordBy("메모 A")!.captured_at).toBe("2025-01-02T06:04:00.000Z");
+    const items = (await new D1TemplateRepository(db, owner).list())[0]!.definition.sections.flatMap((section) => section.items);
+    expect(items.map((item) => item.prompt).sort()).toEqual(["정리 상태를 남길까요?", "카테고리를 남길까요?"]);
+  });
+
   test("re-running changes nothing and never overwrites a value the owner corrected", async () => {
     const exported = await syntheticExport();
     await importNotionExport(db, owner, exported, { now });
@@ -83,7 +114,7 @@ describe("Notion import brings the owner's records in as the owner's own", () =>
     const counts = () => db.sql.prepare(`select (select count(*) from v2_documents) d,(select count(*) from v2_property_values where review_status='accepted') p,(select count(*) from v2_relation_edges) r,(select count(*) from v2_entity_records) e`).get();
     const before = counts();
     const again = await importNotionExport(db, owner, exported, { now });
-    expect(again).toMatchObject({ created: 0, replayed: 3, values: 0, valuesKept: 1, pageLinks: 0, personLinks: 0, entityLinks: 0 });
+    expect(again).toMatchObject({ created: 0, replayed: 3, values: 0, valuesKept: 1, pageLinks: 0, personLinks: 0, entityLinks: 0, dated: 0 });
     expect(counts()).toEqual(before);
     expect(db.sql.prepare(`select value_text from v2_property_values where id='corrected'`).get()).toEqual({ value_text: "다시 보는 중" });
   });
