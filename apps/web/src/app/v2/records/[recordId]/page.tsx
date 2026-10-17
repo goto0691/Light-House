@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ConnectionGroupsPanel } from "@/components/v2/connection-groups-panel";
+import { RecordAnalysisRequest } from "@/components/v2/record-analysis-request";
 import { RecordLifecycleActions } from "@/components/v2/record-lifecycle-actions";
 import { RecordKnowledge, RecordTypeBadge } from "@/components/v2/record-knowledge";
 import { RecordSourceMaterials } from "@/components/v2/record-source-materials";
@@ -82,6 +83,7 @@ export default async function V2RecordPage({ params, searchParams }: PageProps<"
             <header className="v2-record-heading"><RecordTypeBadge presentation={{ displayType: presentation.displayType }} />{record.undated ? null : <p>{formatRecordDate(record.writtenAt ?? record.capturedAt, Boolean(record.writtenAt) && record.writtenDayOnly)}</p>}<h1>{record.title}</h1><span className="v2-record-privacy">{privacyLabel(record.privacyLevel)}</span></header>
             <RecordSearchLocation ownerId={session.userId} recordId={record.recordId} location={searchLocation} invalid={invalidSearchLocation} />
             <pre className="v2-record-markdown">{record.bodyMarkdown}</pre>
+            {flags.ai && flags.write && !record.aiEnabled && record.privacyLevel === "normal" ? <RecordAnalysisRequest recordId={record.recordId} /> : null}
             <RecordKnowledge presentationJson={JSON.stringify(connections ? { ...presentation, connections: [] } : presentation)} />
             {connections ? <ConnectionGroupsPanel basePath={`/v2/records/${encodeURIComponent(record.recordId)}`} expandedGroup={expandedGroup} groups={connections} heading="이 기록과 이어진 것" /> : null}
             {showLinks && links ? <RecordLinkAnalysis key={`${session.userId}:${record.recordId}`} initial={links} recordId={record.recordId} recoveryIdentity={{ ownerId: session.userId, ...recoveryPolicy }} /> : null}

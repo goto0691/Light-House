@@ -6,6 +6,9 @@ import { neutralFieldPrompt } from "@/lib/v2/templates/template-prompts";
 const INPUT_KINDS: Readonly<Record<string, TemplateInputKind>> = { date: "date", boolean: "boolean", decimal: "number", integer: "number", long_text: "long_text", rating: "rating", ordered_list: "chips" };
 const SIGNATURE = (typeKey: string) => `owner-structure:${typeKey}`;
 const MAX_ITEMS = 12;
+/** What the owner would see change: the name and each question's field, prompt and input. */
+const shape = (definition: TemplateDefinitionV1 | null) => definition ? JSON.stringify([definition.name, definition.sections.flatMap((section) => section.items)
+  .map((item) => [item.binding?.fieldKey ?? null, item.prompt, item.inputKind ?? null, item.cardinality ?? "one"])]) : "";
 // Set by the old tool on its own (Notion 생성 일시); a new record already keeps its own time.
 const AUTOMATIC_FIELDS = new Set(["created_on"]);
 
@@ -14,7 +17,9 @@ const AUTOMATIC_FIELDS = new Set(["created_on"]);
  * the fields the owner filled in on at least `minShare` of its records, under the
  * owner's own names. Like every generated template it starts as a draft and is
  * used only after the owner tries or keeps it (D-021/D-024). A category that
- * already has one, even dismissed, is left alone.
+ * already has one the owner tried, kept or dismissed is left alone; a draft the
+ * owner never touched is rebuilt when the fields change (for example a field
+ * that became a list).
  */
 export async function createOwnerStructureTemplates(db: D1DatabaseBinding, userId: string, options: Readonly<{ now: string; minShare?: number }>) {
   const minShare = options.minShare ?? 0.3;
@@ -28,8 +33,14 @@ export async function createOwnerStructureTemplates(db: D1DatabaseBinding, userI
   const created: string[] = [];
   for (const type of types) {
     if (!type.records) continue;
-    const existing = await db.prepare(`select 1 as present from v2_capture_templates where user_id=? and pattern_signature=? limit 1`).bind(userId, SIGNATURE(type.key)).first();
-    if (existing) continue;
+    const existing = await db.prepare(
+      `select t.id,t.status,t.usage_count,t.pinned,v.definition_json,
+         exists (select 1 from v2_capture_template_sessions s join v2_capture_template_versions sv on sv.id=s.template_version_id where sv.template_id=t.id) as used
+       from v2_capture_templates t left join v2_capture_template_versions v on v.id=t.current_version_id
+       where t.user_id=? and t.pattern_signature=? limit 1`,
+    ).bind(userId, SIGNATURE(type.key)).first<{ id: string; status: string; usage_count: number; pinned: number; definition_json: string | null; used: number }>();
+    const untouched = existing && existing.status === "generated_draft" && !existing.usage_count && !existing.pinned && !existing.used;
+    if (existing && !untouched) continue;
     const fields = (await db.prepare(
       `select f.key,f.label,f.data_type,count(distinct p.owner_object_id) as records from v2_property_values p
        join v2_field_definitions f on f.id=p.field_definition_id and f.user_id=p.user_id
@@ -57,6 +68,10 @@ export async function createOwnerStructureTemplates(db: D1DatabaseBinding, userI
         })),
       }],
     };
+    if (existing) {
+      if (shape(existing.definition_json ? JSON.parse(existing.definition_json) as TemplateDefinitionV1 : null) === shape(definition)) continue;
+      await db.prepare(`delete from v2_capture_templates where id=? and user_id=? and status='generated_draft' and usage_count=0 and pinned=0`).bind(existing.id, userId).run();
+    }
     await templates.createDraft({ definition, origin: "imported", generated: true, patternSignature: SIGNATURE(type.key) }, options.now);
     created.push(type.key);
   }

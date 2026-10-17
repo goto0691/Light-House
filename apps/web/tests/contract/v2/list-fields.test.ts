@@ -5,6 +5,7 @@ import { FakeV2StructuredModelGateway } from "@/lib/v2/ai/fake-gateway";
 import { runNextAnalysisJob } from "@/lib/v2/ai/processing-runner";
 import { prepareCaptureCommit } from "@/lib/v2/domain/capture-source";
 import { finishNotionImport } from "@/lib/v2/import/notion-import";
+import { D1TemplateRepository } from "@/lib/v2/infrastructure/d1/template-repository";
 import { D1ImportedKnowledgeRepository } from "@/lib/v2/infrastructure/d1/imported-knowledge-repository";
 import { D1ProcessingQueueRepository } from "@/lib/v2/infrastructure/d1/processing-queue-repository";
 import { D1RetrievalRepository } from "@/lib/v2/infrastructure/d1/retrieval-repository";
@@ -12,6 +13,8 @@ import { D1SourceFoundationRepository } from "@/lib/v2/infrastructure/d1/source-
 import { fieldInputValue, parseFieldCorrection } from "@/lib/v2/presentation/field-input";
 import { defaultV2QueryPlan } from "@/lib/v2/retrieval/query-plan-v1";
 import { formatSavedViewFieldValue } from "@/lib/v2/retrieval/saved-view-fields";
+import { createOwnerStructureTemplates } from "@/lib/v2/templates/owner-structure-templates";
+import { itemValueKind, validateTemplateSubmission } from "@/lib/v2/templates/template-definition-v1";
 import { LinkSqlite } from "../../support/link-sqlite";
 
 const owner = "link-owner";
@@ -83,5 +86,38 @@ describe("fields with several values are lists", () => {
     expect(parseFieldCorrection("json", "드라마, 판타지 ,드라마")).toEqual(["드라마", "판타지"]);
     expect(parseFieldCorrection("json", '{"a":1}')).toEqual({ a: 1 });
     expect(formatSavedViewFieldValue({ propertyId: "p", value: '["SF","액션"]', renderer: "json", unit: null, sourceClass: "imported", lockedByUser: false } as never)).toBe("SF, 액션");
+  });
+  test("a guide asks for several values in a list field and its answer is kept as items", async () => {
+    const knowledge = new D1ImportedKnowledgeRepository(db, owner);
+    for (const title of ["작품 A", "작품 B"]) {
+      const capture = await record(title);
+      await knowledge.assignType(capture.objectId, { key: "video_log", label: "영상 로그" }, now);
+      await knowledge.setValue(capture.objectId, { ...genre, dataType: "short_text" }, { kind: "text", text: "드라마,판타지" }, null, now);
+    }
+    const templates = new D1TemplateRepository(db, owner);
+    expect(await createOwnerStructureTemplates(db, owner, { now })).toEqual(["video_log"]);
+    const before = (await templates.list())[0]!;
+    expect(before.definition.sections[0]!.items[0]).toMatchObject({ inputKind: "text", cardinality: "one" });
+
+    // The field becomes a list: the untouched draft is rebuilt, once.
+    expect(await finishNotionImport(db, owner, now)).toMatchObject({ listFields: 1, templates: ["video_log"] });
+    const guide = (await templates.list())[0]!;
+    expect(guide.id).not.toBe(before.id);
+    expect(guide.definition.sections[0]!.items[0]).toMatchObject({ prompt: "장르를 남길까요?", inputKind: "chips", cardinality: "many" });
+    expect(await createOwnerStructureTemplates(db, owner, { now })).toEqual([]);
+
+    const tried = await templates.transition(guide.id, "try", now);
+    const chosen = (await templates.getByVersion(tried!.currentVersionId))!;
+    const item = chosen.definition.sections[0]!.items[0]!;
+    const submission = validateTemplateSubmission({ templateVersionId: chosen.currentVersionId, appliedAt: now,
+      inputs: [{ itemKey: item.key, valueKind: itemValueKind(item), value: ["SF", "액션"], blankState: "answered", inputOrder: 0, clientTimestamp: now }] }, chosen.definition);
+    const capture = await prepareCaptureCommit({ draftId: crypto.randomUUID(), channel: "web", title: "새 작품", bodyMarkdown: "새로 본 작품", aiEnabled: false,
+      clientTimezone: "Asia/Seoul", privacyLevel: "normal", capturedAt: now }, crypto.randomUUID(), now, { templateId: chosen.id, definition: chosen.definition, submission });
+    await new D1SourceFoundationRepository(db, owner).commitCapture(capture);
+    expect(stored(capture.objectId)).toEqual([{ value_kind: "json", value_text: "SF, 액션", value_json: '["SF","액션"]', data_type: "ordered_list" }]);
+    // A guide the owner tried is never rebuilt.
+    db.sql.prepare("update v2_field_definitions set label='장르(복수)' where key='genre'").run();
+    expect(await createOwnerStructureTemplates(db, owner, { now })).toEqual([]);
+    expect((await templates.list()).map((template) => template.id)).toEqual([guide.id]);
   });
 });

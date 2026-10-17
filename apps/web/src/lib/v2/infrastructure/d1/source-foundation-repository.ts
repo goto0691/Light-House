@@ -43,6 +43,8 @@ export type V2RecordProjection = Readonly<{
   undated: boolean;
   /** The written date is a day without a time of day (record-date.ts). */
   writtenDayOnly: boolean;
+  /** The owner allowed AI organization for this record's capture. */
+  aiEnabled: boolean;
   locked: boolean;
   sources: readonly Readonly<{
     id: string;
@@ -126,6 +128,14 @@ function templateFieldDataType(valueKind: NonNullable<PreparedCaptureCommit["tem
   if (valueKind === "text") return "short_text";
   if (valueKind === "json") return "structured_json";
   return valueKind;
+}
+
+/** An answer for a field the owner keeps as a list (ordered_list) is stored as its items. */
+function templateListColumns(value: unknown) {
+  const items = Array.isArray(value) ? value.filter((item): item is string => typeof item === "string")
+    : typeof value === "string" ? value.split(/\s*,\s*/) : [];
+  const clean = [...new Set(items.map((item) => item.trim()).filter(Boolean))];
+  return clean.length ? { text: clean.join(", "), json: JSON.stringify(clean) } : { text: null, json: null };
 }
 
 function templateValueColumns(valueKind: NonNullable<PreparedCaptureCommit["template"]>["inputs"][number]["valueKind"], value: unknown) {
@@ -367,6 +377,7 @@ export class D1SourceFoundationRepository {
         const fieldId = `field:template:${this.userId}:${binding.fieldKey}`;
         const propertyId = `property:template:${input.objectId}:${value.itemKey}:${value.inputOrder}`;
         const columns = templateValueColumns(value.valueKind, value.value);
+        const list = templateListColumns(value.value);
         const dataType = templateFieldDataType(value.valueKind);
         statements.push(
           this.db.prepare(
@@ -377,9 +388,12 @@ export class D1SourceFoundationRepository {
           this.db.prepare(
             `insert into v2_property_values
              (id,user_id,owner_object_id,field_definition_id,value_kind,value_text,value_number,value_boolean,value_date,value_json,source_class,claim_risk,review_status,confirmed_by_user_at,locked_by_user,created_at)
-             select ?,?,?,id,?,?,?,?,?,?,'user_explicit','low','accepted',?,1,?
-             from v2_field_definitions where user_id=? and key=? and data_type=? limit 1`,
-          ).bind(propertyId, this.userId, input.objectId, value.valueKind, columns.text, columns.number, columns.boolean, columns.date, columns.json, input.committedAt, input.committedAt, this.userId, binding.fieldKey, dataType),
+             select ?,?,?,id,case when data_type='ordered_list' then 'json' else ? end,case when data_type='ordered_list' then ? else ? end,?,?,?,
+               case when data_type='ordered_list' then ? else ? end,'user_explicit','low','accepted',?,1,?
+             from v2_field_definitions where user_id=? and key=?
+               and (data_type=? or (data_type='ordered_list' and ? in ('short_text','structured_json') and ? is not null)) limit 1`,
+          ).bind(propertyId, this.userId, input.objectId, value.valueKind, list.text, columns.text, columns.number, columns.boolean, columns.date, list.json, columns.json,
+            input.committedAt, input.committedAt, this.userId, binding.fieldKey, dataType, dataType, list.json),
           this.db.prepare(
             `insert into v2_evidence_refs
              (id,user_id,target_kind,target_id,source_item_id,locator_kind,locator_json,created_at)
@@ -464,7 +478,7 @@ export class D1SourceFoundationRepository {
         `select o.id as record_id,o.lifecycle_status,d.title,d.body_markdown,d.privacy_level,
                 d.current_revision_id,d.current_version,d.written_at,d.document_status,c.captured_at,c.committed_at,
                 case when ${undatedImportSql("d", "c")} then 1 else 0 end as undated,
-                case when ${dayOnlyImportSql("d", "c")} then 1 else 0 end as written_day_only
+                case when ${dayOnlyImportSql("d", "c")} then 1 else 0 end as written_day_only,c.ai_enabled
          from v2_objects o join v2_documents d on d.object_id=o.id
          join v2_capture_bundles c on c.id=d.capture_id and c.user_id=o.user_id
          join v2_document_revisions r on r.id=d.current_revision_id and r.document_object_id=d.object_id
@@ -485,6 +499,7 @@ export class D1SourceFoundationRepository {
         committed_at: string;
         undated: number;
         written_day_only: number;
+        ai_enabled: number;
       }>();
     if (!row) return null;
     const locked = row.privacy_level === "restricted" && !restrictedUnlocked;
@@ -535,6 +550,7 @@ export class D1SourceFoundationRepository {
       committedAt: row.committed_at,
       undated: row.undated === 1,
       writtenDayOnly: row.written_day_only === 1,
+      aiEnabled: row.ai_enabled === 1,
       locked,
       sources: sourceRows.results.map((source) => ({
         id: source.id,
