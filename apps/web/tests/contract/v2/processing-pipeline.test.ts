@@ -53,7 +53,7 @@ async function seed(userId = "user-a") {
   return capture;
 }
 
-type PromptRegistry = { registry_context: { candidate_types: { key: string; label: string; status: string; usage_count: number }[]; candidate_fields: { key: string; data_type: string; status: string; usage_count: number }[] } };
+type PromptRegistry = { registry_context: { candidate_types: { key: string; label: string; status: string; usage_count: number }[]; candidate_fields: { key: string; data_type: string; status: string; usage_count: number; used_with_types: string[] }[] } };
 function promptInput(gateway: FakeV2StructuredModelGateway): PromptRegistry {
   const part = gateway.calls.at(-1)?.parts?.[0];
   return JSON.parse(part && "text" in part ? part.text : "{}") as PromptRegistry;
@@ -147,12 +147,13 @@ describe("I3 outbox, lease, and validated analysis pipeline", () => {
     expect(first).toEqual({ candidate_types: [], candidate_fields: [] });
     await analyze(await seed("user-b"), "foreign_type", "foreign_field");
     const hidden = await seed();
-    await analyze(hidden, "restricted_only_type", "restricted_only_field");
+    // The hidden record shares a field, so the field's types would leak restricted_only_type without the privacy join.
+    await analyze(hidden, "restricted_only_type", "user_rating");
     await db.prepare("update v2_documents set privacy_level='restricted' where object_id=?").bind(hidden.objectId).run();
 
     const later = await analyze(await seed(), "movie_review", "user_rating", "reuse");
     expect(later.candidate_types).toEqual([{ key: "movie_review", label: "영화 리뷰", status: "candidate", usage_count: 1 }]);
-    expect(later.candidate_fields).toEqual([expect.objectContaining({ key: "user_rating", status: "candidate", usage_count: 1 })]);
+    expect(later.candidate_fields).toEqual([expect.objectContaining({ key: "user_rating", status: "candidate", usage_count: 1, used_with_types: ["movie_review"] })]);
     const sent = JSON.stringify(later);
     for (const leaked of ["foreign_type", "foreign_field", "restricted_only_type", "restricted_only_field"]) expect(sent).not.toContain(leaked);
     // Reusing the listed key grows one definition instead of creating a near-duplicate.

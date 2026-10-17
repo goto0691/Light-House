@@ -1,9 +1,9 @@
 import { validateJsonSchemaValue } from "@/lib/v2/ai/safe-json-schema";
 
 export const ANALYSIS_SCHEMA_VERSION = "analysis-v1";
-export const ANALYSIS_PROMPT_VERSION = "analysis-main-multimodal-v3";
+export const ANALYSIS_PROMPT_VERSION = "analysis-main-multimodal-v4";
 export const ANALYSIS_VALIDATOR_VERSION = "analysis-semantic-v3";
-export const ANALYSIS_REGISTRY_VERSION = "registry-context-v1";
+export const ANALYSIS_REGISTRY_VERSION = "registry-context-v2";
 export const ANALYSIS_MODEL_CONFIG_VERSION = "gemini-roles-v1";
 
 /** `quote` is the model's copy of the evidence text; the server re-anchors offsets from it. */
