@@ -228,6 +228,9 @@ async function measure(db: MemoryD1, exported: NotionExport, records: readonly I
   const importedPersons = (await db.prepare(`select e.canonical_name as name from v2_entity_records e join v2_objects o on o.id=e.object_id
     where o.user_id=? and e.processing_run_id is null and e.entity_kind='person'`).bind(USER).all<{ name: string }>()).results;
   const distinctEntities = new Set(aiEntities.map((entity) => `${entity.kind}|${entity.name.normalize("NFKC").trim().toLowerCase()}`));
+  // A mention reuses an entity when its target was created by another run or imported.
+  const mentions = await db.prepare(`select count(*) as total,coalesce(sum(case when e.processing_run_id is null or e.processing_run_id<>r.processing_run_id then 1 else 0 end),0) as reused
+    from v2_relation_edges r join v2_entity_records e on e.object_id=r.object_object_id where r.user_id=? and r.source_class='ai_inferred'`).bind(USER).first<{ total: number; reused: number }>();
   const importedNames = new Set(importedPersons.map((person) => person.name.trim()));
 
   const templates = (await new D1TemplateRepository(db, USER).list()).map((template) => ({
@@ -278,6 +281,7 @@ async function measure(db: MemoryD1, exported: NotionExport, records: readonly I
     templates: analysis ? { generated: templates.filter((template) => template.status === "generated_draft").length, list: templates } : null,
     reviews: analysis ? { perRecordP50: percentile(reviewCounts, 0.5), perRecordP90: percentile(reviewCounts, 0.9), byKind: reviewKinds } : null,
     entities: analysis ? { aiCreated: aiEntities.length, aiDistinct: distinctEntities.size, duplicationRatio: ratio(aiEntities.length, distinctEntities.size),
+      mentionLinks: mentions?.total ?? 0, reusedMentions: mentions?.reused ?? 0, reuseRate: ratio(mentions?.reused ?? 0, mentions?.total ?? 0),
       importedPersons: importedPersons.length, aiPersonsMatchingImported: aiEntities.filter((entity) => entity.kind === "person" && importedNames.has(entity.name.trim())).length } : null,
     relations: { ...relationStats, importedEdges, preservation: ratio(importedEdges, Number(relationStats.docEdges) + Number(relationStats.personEdges)) },
     grouping: { focusObjects: groupFocus, expectedItems: groupItems, inExpectedGroup: groupCorrect, missing: groupMissing, accuracy: ratio(groupCorrect, groupItems) },

@@ -792,6 +792,7 @@ export class D1ProcessingQueueRepository {
         runId: input.runId,
         envelope: knowledgeEnvelope,
         evidenceSourceClasses: extractionSourceClasses,
+        entityVisibility: await legacyProjectionVisibilityPredicate(this.db, "eo"),
         now: input.now,
       }));
       for (const request of input.envelope.enrichment_requests) {

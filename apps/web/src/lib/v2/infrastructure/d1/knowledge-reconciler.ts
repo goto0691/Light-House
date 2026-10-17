@@ -10,8 +10,25 @@ type KnowledgeCommitInput = Readonly<{
   runId: string;
   envelope: AnalysisEnvelopeV1;
   evidenceSourceClasses?: ReadonlyMap<string, string>;
+  /** Legacy visibility predicate over alias `eo` for existing entity candidates. */
+  entityVisibility?: string;
   now: string;
 }>;
+
+/** Same normalization in JS and SQL: trimmed, spaces removed, ASCII case folded. */
+const entityNameKey = (name: string) => name.trim().replaceAll(" ", "").replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+const ENTITY_NAME_SQL = (expression: string) => `lower(replace(trim(${expression}),' ',''))`;
+
+/** One mention per kind and name in a record; the first temp id keeps every evidence span. */
+function distinctEntityProposals(entities: AnalysisEnvelopeV1["entity_proposals"]) {
+  const byName = new Map<string, AnalysisEnvelopeV1["entity_proposals"][number]>();
+  for (const entity of entities) {
+    const key = `${entity.entity_kind}|${entityNameKey(entity.mention)}`;
+    const first = byName.get(key);
+    byName.set(key, first ? { ...first, evidence_refs: [...first.evidence_refs, ...entity.evidence_refs] } : entity);
+  }
+  return [...byName.values()];
+}
 
 function fieldLabel(key: string) {
   return key.split(/[._-]+/).filter(Boolean).map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" ") || key;
@@ -240,27 +257,43 @@ export function buildKnowledgeCommitStatements(db: D1DatabaseBinding, input: Kno
     ).bind(ulid(), input.userId, unit.key, unit.label, unit.dimension, unit.canonical, unit.factor, input.now, input.now));
   }
 
-  for (const entity of input.envelope.entity_proposals) {
-    const entityObjectId = ulid();
+  // Local candidate search (06 §2): a mention links to the one existing active entity
+  // of the same kind and name. No candidate or several candidates create a new entity;
+  // existing entities are never merged. The link stays proposed for the user's review.
+  const candidates = `select eo.id from v2_entity_records e join v2_objects eo on eo.id=e.object_id
+    where eo.user_id=? and eo.object_kind='entity' and eo.lifecycle_status='active' and e.entity_kind=?
+      and ${ENTITY_NAME_SQL("e.canonical_name")}=${ENTITY_NAME_SQL("?")} and ${input.entityVisibility ?? "1=1"}`;
+  for (const entity of distinctEntityProposals(input.envelope.entity_proposals)) {
+    const createdId = ulid();
     const relationId = ulid();
+    const candidateBindings = [input.userId, entity.entity_kind, entity.mention];
+    const resolvedSql = `select coalesce((select id from v2_objects where id=? and user_id=?),(${candidates} order by eo.created_at,eo.id limit 1))`;
+    const resolvedBindings = [createdId, input.userId, ...candidateBindings];
     statements.push(
-      db.prepare(`insert into v2_objects (id,user_id,object_kind,lifecycle_status,created_at,updated_at) values (?,?,'entity','active',?,?)`).bind(entityObjectId, input.userId, input.now, input.now),
+      db.prepare(
+        `insert into v2_objects (id,user_id,object_kind,lifecycle_status,created_at,updated_at)
+         select ?,?,'entity','active',?,? where (select count(*) from (${candidates}))<>1`,
+      ).bind(createdId, input.userId, input.now, input.now, ...candidateBindings),
       db.prepare(
         `insert into v2_entity_records
          (object_id,proposal_temp_id,processing_run_id,entity_kind,canonical_name,resolution_status,created_at)
-         values (?,?,?,?,?,?,?)`,
-      ).bind(entityObjectId, entity.temp_id, input.runId, entity.entity_kind, entity.mention, entity.resolution_status, input.now),
+         select ?,?,?,?,?,?,? where exists (select 1 from v2_objects where id=? and user_id=?)`,
+      ).bind(createdId, entity.temp_id, input.runId, entity.entity_kind, entity.mention, entity.resolution_status, input.now, createdId, input.userId),
       db.prepare(
         `insert into v2_relation_edges
          (id,user_id,subject_object_id,predicate_definition_id,object_object_id,source_class,claim_risk,review_status,processing_run_id,locked_by_user,created_at)
-         select ?,?,?,id,?,'ai_inferred','low','proposed',?,0,?
+         select ?,?,?,id,(${resolvedSql}),'ai_inferred','low','proposed',?,0,?
          from v2_predicate_definitions where user_id=? and key='mentions_entity' limit 1`,
-      ).bind(relationId, input.userId, input.objectId, entityObjectId, input.runId, input.now, input.userId),
-      reviewStatement(db, input, "analysis_review", { code: "entity_resolution", entityTempId: entity.temp_id, entityObjectId, relationId, mention: entity.mention, entityKind: entity.entity_kind }),
+      ).bind(relationId, input.userId, input.objectId, ...resolvedBindings, input.runId, input.now, input.userId),
+      db.prepare(
+        `insert into v2_review_items (id,user_id,object_id,processing_run_id,kind,status,payload_json,created_at)
+         values (?,?,?,?,'analysis_review','open',json_object('code','entity_resolution','entityTempId',?,'entityObjectId',(${resolvedSql}),
+           'relationId',?,'mention',?,'entityKind',?,'reusedExisting',json(case when exists (select 1 from v2_objects where id=? and user_id=?) then 'false' else 'true' end)),?)`,
+      ).bind(ulid(), input.userId, input.objectId, input.runId, entity.temp_id, ...resolvedBindings, relationId, entity.mention, entity.entity_kind, createdId, input.userId, input.now),
     );
     for (const ref of entity.evidence_refs) {
       statements.push(
-        evidenceStatement(db, input, "entity", "select ?", [entityObjectId], ref),
+        evidenceStatement(db, input, "entity", resolvedSql, resolvedBindings, ref),
         evidenceStatement(db, input, "relation", "select ?", [relationId], ref),
       );
     }

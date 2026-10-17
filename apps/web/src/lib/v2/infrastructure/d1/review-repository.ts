@@ -185,13 +185,22 @@ export class D1ReviewRepository {
         }
       }
     } else if (typeof payload.entityTempId === "string" && review.processing_run_id) {
-      const entity = await this.db.prepare(
-        `select e.object_id,e.resolution_status,r.id as relation_id,r.review_status
-         from v2_entity_records e
-         join v2_objects eo on eo.id=e.object_id
-         left join v2_relation_edges r on r.processing_run_id=e.processing_run_id and r.object_object_id=e.object_id and r.subject_object_id=? and r.user_id=eo.user_id
-         where e.processing_run_id=? and e.proposal_temp_id=? and eo.user_id=? and ${targetLegacyVisibility} limit 1`,
-      ).bind(review.object_id, review.processing_run_id, payload.entityTempId, this.userId).first<{ object_id: string; resolution_status: string; relation_id: string | null; review_status: string | null }>();
+      // A mention may link to an entity another record created first; find it through this run's link.
+      const entity = typeof payload.relationId === "string"
+        ? await this.db.prepare(
+          `select e.object_id,e.resolution_status,r.id as relation_id,r.review_status
+           from v2_relation_edges r
+           join v2_entity_records e on e.object_id=r.object_object_id
+           join v2_objects eo on eo.id=e.object_id and eo.user_id=r.user_id
+           where r.id=? and r.processing_run_id=? and r.subject_object_id=? and r.user_id=? and ${targetLegacyVisibility} limit 1`,
+        ).bind(payload.relationId, review.processing_run_id, review.object_id, this.userId).first<{ object_id: string; resolution_status: string; relation_id: string | null; review_status: string | null }>()
+        : await this.db.prepare(
+          `select e.object_id,e.resolution_status,r.id as relation_id,r.review_status
+           from v2_entity_records e
+           join v2_objects eo on eo.id=e.object_id
+           left join v2_relation_edges r on r.processing_run_id=e.processing_run_id and r.object_object_id=e.object_id and r.subject_object_id=? and r.user_id=eo.user_id
+           where e.processing_run_id=? and e.proposal_temp_id=? and eo.user_id=? and ${targetLegacyVisibility} limit 1`,
+        ).bind(review.object_id, review.processing_run_id, payload.entityTempId, this.userId).first<{ object_id: string; resolution_status: string; relation_id: string | null; review_status: string | null }>();
       if (!entity) throw new ReviewResolutionError("review_target_missing", "The proposed entity no longer exists.");
       if (entity) {
         targetKind = "entity"; targetId = entity.object_id; priorStatus = entity.review_status ?? entity.resolution_status;
@@ -204,7 +213,13 @@ export class D1ReviewRepository {
         } else if (input.action === "reject") {
           statements.push(
             this.db.prepare(`update v2_relation_edges set review_status='rejected' where id=? and user_id=? and subject_object_id=?`).bind(entity.relation_id, this.userId, review.object_id),
-            this.db.prepare(`update v2_objects set lifecycle_status='archived',updated_at=? where id=? and user_id=?`).bind(now, entity.object_id, this.userId),
+            // Rejecting one mention never archives an entity that another record or an import still links to.
+            this.db.prepare(
+              `update v2_objects set lifecycle_status='archived',updated_at=? where id=? and user_id=?
+                 and exists (select 1 from v2_entity_records e where e.object_id=v2_objects.id and e.processing_run_id=?)
+                 and not exists (select 1 from v2_relation_edges other where other.object_object_id=v2_objects.id and other.user_id=v2_objects.user_id
+                   and other.id is not ? and other.review_status not in ('rejected','superseded') and other.superseded_at is null)`,
+            ).bind(now, entity.object_id, this.userId, review.processing_run_id, entity.relation_id),
           );
           resultStatus = "rejected";
         }
