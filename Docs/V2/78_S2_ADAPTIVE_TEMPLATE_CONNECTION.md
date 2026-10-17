@@ -51,6 +51,15 @@ FK ON SQLite에서 읽기 직후 경쟁 요청이 `dismiss`/`archive`하거나 �
 
 idle sweep은 후보 SELECT 1회를 추가한다(스키마 cold probe는 별도). 새 분석의 성공 관찰 callback은 기존 관찰 외 자격/receipt 조회 2회+receipt 쓰기 1회를 추가한다. 복구 3개와 신규 main 분석 3개를 함께 실행한 합성 fixture는 **D1 binding 164회, SQL 329문, batch 23회**, provider 호출 정확히 3회였다. 한 batch 안 SQL을 각각 binding 호출로 세지 않았다. 복구는 provider의 기존 3-job 한도를 늘리지 않지만 DB 작업 예산은 증가한다. 이 계측은 Worker CPU·네트워크·원격 D1 한도 증명이 아니며, 운영 환경의 호출 한도 확인은 별도 gate다.
 
+## 실제 자료 확인 · 2026-10-17
+
+노션 콘텐츠 DB 행 5건(같은 구조, 날짜가 다른 3건 포함)을 실제 runner·관찰기와 ChatGPT 플랜(`gpt-6.1-sol`)으로 분석했다. 격리 메모리 SQLite를 썼다. 상세는 [현재 상태](./CURRENT_WORK_STATE.md)의 10-17 항목이다.
+
+- **수정 전:** 분석 입력에 기존 분류·필드가 없어서 모델이 기록마다 다른 key를 지었다. 분류 5개·필드 이름 흔들림으로 구조 서명이 모두 달라 템플릿 0개였다.
+- **수정:** [04번](./04_AI_PROCESSING_CONTRACTS.md) 3절의 `registry_context`를 구현했다.
+- **수정 후:** 분류 1개를 4번 재사용했고, 필드 key 8개가 안정됐다. 날짜가 다른 3건째에 `generated_draft` 1개가 생성됐다.
+- 생성 정의의 이름·질문은 이 문서의 원칙대로 중립 문구다. 사용자에게 어떤 항목인지 보여 줄 문구는 별도 결정 대상이다.
+
 ## 한계와 다음 순서
 
 관찰 저장 일시 오류의 내구성 누락은 위 로컬 복구 경로로 보완했다. 실제 개인 기록에서 관찰이 쌓이는 품질·원격 cron 실행·배포 환경의 DB/CPU 예산은 이번 합성 검증에 포함하지 않았다. 원격 배포·migration·legacy cutover·서비스/과금 확대·실제 Gemini 호출은 수행하지 않았다. S1–S5 전체 통합·운영 상태는 [현재 상태](./CURRENT_WORK_STATE.md)와 [전체 완료표](./50_COMPLETION_GOAL_AND_EXECUTION_PLAN.md)를 따른다.

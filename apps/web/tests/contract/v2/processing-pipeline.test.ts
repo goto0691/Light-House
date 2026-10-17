@@ -45,12 +45,18 @@ beforeAll(async () => {
 beforeEach(reset);
 afterAll(async () => platform.dispose());
 
-async function seed() {
+async function seed(userId = "user-a") {
   const capture = await prepareCaptureCommit({
     draftId: `ai-${crypto.randomUUID()}`, channel: "web", title: "영화 감상", bodyMarkdown: "영화 봄날을 보고 별점 4.5점을 남겼다.", aiEnabled: true, clientTimezone: "Asia/Seoul", privacyLevel: "normal", capturedAt: "2026-08-12T09:00:00.000Z",
   }, `capture-${crypto.randomUUID()}`, "2026-08-12T09:00:01.000Z");
-  await new D1SourceFoundationRepository(db, "user-a").commitCapture(capture);
+  await new D1SourceFoundationRepository(db, userId).commitCapture(capture);
   return capture;
+}
+
+type PromptRegistry = { registry_context: { candidate_types: { key: string; label: string; status: string; usage_count: number }[]; candidate_fields: { key: string; data_type: string; status: string; usage_count: number }[] } };
+function promptInput(gateway: FakeV2StructuredModelGateway): PromptRegistry {
+  const part = gateway.calls.at(-1)?.parts?.[0];
+  return JSON.parse(part && "text" in part ? part.text : "{}") as PromptRegistry;
 }
 
 function envelope(capture: Awaited<ReturnType<typeof seed>>, overrides: Partial<AnalysisEnvelopeV1> = {}): AnalysisEnvelopeV1 {
@@ -122,6 +128,37 @@ describe("I3 outbox, lease, and validated analysis pipeline", () => {
     expect(promptText).toContain('"template_context":null');
     expect(promptText).not.toContain("foreign-template-version");
   });
+
+  test("sends the owner's non-restricted types and fields as registry_context so a later analysis can reuse them", async () => {
+    const queue = new D1ProcessingQueueRepository(db);
+    const analyze = async (capture: Awaited<ReturnType<typeof seed>>, typeKey: string, fieldKey: string, action: "propose_new" | "reuse" = "propose_new") => {
+      await expect(queue.dispatchPending()).resolves.toBe(1);
+      const base = envelope(capture, { enrichment_requests: [] });
+      const gateway = new FakeV2StructuredModelGateway("success", {
+        ...base,
+        document_proposals: base.document_proposals.map((document) => ({ ...document, type_assignments: document.type_assignments.map((type) => ({ ...type, type_key: typeKey, registry_action: action })) })),
+        field_proposals: base.field_proposals.map((field) => ({ ...field, field_key: fieldKey })),
+      });
+      await expect(runNextAnalysisJob({ queue, gateway, workerId: `registry-${typeKey}` })).resolves.toMatchObject({ outcome: "succeeded" });
+      return promptInput(gateway).registry_context;
+    };
+
+    const first = await analyze(await seed(), "movie_review", "user_rating");
+    expect(first).toEqual({ candidate_types: [], candidate_fields: [] });
+    await analyze(await seed("user-b"), "foreign_type", "foreign_field");
+    const hidden = await seed();
+    await analyze(hidden, "restricted_only_type", "restricted_only_field");
+    await db.prepare("update v2_documents set privacy_level='restricted' where object_id=?").bind(hidden.objectId).run();
+
+    const later = await analyze(await seed(), "movie_review", "user_rating", "reuse");
+    expect(later.candidate_types).toEqual([{ key: "movie_review", label: "영화 리뷰", status: "candidate", usage_count: 1 }]);
+    expect(later.candidate_fields).toEqual([expect.objectContaining({ key: "user_rating", status: "candidate", usage_count: 1 })]);
+    const sent = JSON.stringify(later);
+    for (const leaked of ["foreign_type", "foreign_field", "restricted_only_type", "restricted_only_field"]) expect(sent).not.toContain(leaked);
+    // Reusing the listed key grows one definition instead of creating a near-duplicate.
+    await expect(count("v2_type_definitions", "where user_id='user-a' and key='movie_review'")).resolves.toBe(1);
+    await expect(db.prepare("select usage_count from v2_type_definitions where user_id='user-a' and key='movie_review'").first()).resolves.toEqual({ usage_count: 2 });
+  }, 60_000);
 
   test("dispatches and executes one source outbox without storing raw model payload in run telemetry", async () => {
     const capture = await seed();

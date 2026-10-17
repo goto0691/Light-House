@@ -3,6 +3,7 @@ import { ulid } from "ulidx";
 import type { AnalysisEnvelopeV1 } from "@/lib/v2/ai/analysis-envelope-v1";
 import type { AttachmentReservation } from "@/lib/v2/domain/attachment-reservation";
 import type { GroundedFactV1, GroundedResultEnvelopeV1 } from "@/lib/v2/ai/grounded-result-v1";
+import { readAnalysisRegistryContext, type AnalysisRegistryContext } from "@/lib/v2/infrastructure/d1/analysis-registry-context-repository";
 import { buildKnowledgeCommitStatements } from "@/lib/v2/infrastructure/d1/knowledge-reconciler";
 import { D1LinkSnapshotRepository } from "@/lib/v2/infrastructure/d1/link-snapshot-repository";
 import {
@@ -99,6 +100,8 @@ export type V2AnalysisInput = Readonly<{
     expectedRoles: readonly string[];
     inputs: ReturnType<typeof templateInputAnalyzerProjection>;
   }>;
+  /** Existing owner types/fields to reuse (04 §3 registry_context). */
+  registryContext?: AnalysisRegistryContext;
 }>;
 
 export type V2GroundingInput = Readonly<{
@@ -468,6 +471,7 @@ export class D1ProcessingQueueRepository {
        where d.object_id=? and o.user_id=? and d.capture_id=? and d.current_revision_id=? and ${legacyVisibility} and ${personalSourceFence()} limit 1`,
     ).bind(job.objectId, job.userId, job.captureId, job.inputRevisionId).first<{ visible: number }>();
     if (!remainsVisible) return null;
+    const registryContext = await readAnalysisRegistryContext(this.db, job.userId, `${document.title}\n${document.body_markdown}`);
     return {
       job,
       title: document.title,
@@ -477,6 +481,7 @@ export class D1ProcessingQueueRepository {
         attachment: source.reservation_id ? { id: source.reservation_id, userId: source.attachment_user_id, objectKey: source.object_key, filename: source.filename, expectedSize: source.size_bytes, expectedMimeType: source.mime_type!, expectedSha256: source.sha256, expiresAt: source.expires_at } : null,
       })),
       templateContext,
+      registryContext,
     };
   }
 

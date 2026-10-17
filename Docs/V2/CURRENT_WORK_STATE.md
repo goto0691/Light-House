@@ -1,5 +1,38 @@
 # 현재 작업 상태 · 재개 진입점
 
+## 노션 실데이터 분류·포맷 시험 · 2026-10-17 KST
+
+사용자 요청: 기획대로 원문을 넣으면 분류(태그)가 생기고, 반복되면 포맷(S2 템플릿)이 생기는지 노션 자료로 확인한다.
+
+- **방법:** 골든 코퍼스의 콘텐츠 DB 행 5건을 썼다. 같은 속성 구조이고 노션 날짜가 서로 다른 3건, 그리고 속성이 적은 2건이다. 노션 날짜를 기록일(`capturedAt`)로 넣었다.
+  - 격리 메모리 SQLite에 실제 V2 migration을 적용하고, 실제 분석 runner와 S2 관찰기를 그대로 썼다.
+  - 공급자는 ChatGPT 플랜만 썼다(Gemini 폴백 끔). 호출 5회, 모두 `openai-plan:gpt-6.1-sol` 성공, 237초.
+  - 하네스·결과는 git 제외 `.private/notion-format-trial/`에 있다. 앱 로컬 D1·원격에는 쓰지 않았다.
+- **결과:** 분류·필드는 생겼다. 근거가 직접 있는 저위험 필드는 자동 확정됐다. 하지만 **템플릿은 0개**다.
+  - 분류 key가 5건 모두 달랐다: `content_viewing_log`, `movie`, `film_viewing_log`, `film`, `drama_work_note`. 모두 `propose_new`였고, 분류 정의는 전부 `candidate`(사용 1회)에 머물렀다.
+  - 필드 key도 흔들렸다: `genre`/`genres`, `director`/`director_creator`, `platform`/`viewing_platform`, `production_company`/`production_companies`. 우연히 같은 이름만 `observed`로 올랐다(`production_company` 4회 등).
+  - 그래서 구조 서명 5개가 모두 달라 "같은 구조 3건·3일" 조건에 도달하지 못했다.
+  - 기타: 같은 날짜 필드의 위험도 분류가 기록마다 달랐다(`low`/`autobiographical`). 열린 검토 항목은 기록당 4–11개였다.
+- **원인:** [04번](./04_AI_PROCESSING_CONTRACTS.md) 3절의 분석 입력 계약에는 `registry_context`(관련성 높은 기존 유형·필드 후보)가 있다. 실제 입력([processing-runner.ts](../../apps/web/src/lib/v2/ai/processing-runner.ts) `inputText`)에는 이 항목이 없다. 지시문도 "고정 목록 없이 key를 제안"이라, 모델이 재사용할 기존 key를 모른다. [12번](./12_ADAPTIVE_CAPTURE_TEMPLATES.md)의 alias 재사용도 reconciler에 구현돼 있지 않다(key 문자열 일치만 합친다).
+- **구현(사용자 요청):** 04번 계약대로 분석 입력에 `registry_context`를 넣었다.
+  - 새 [`analysis-registry-context-repository.ts`](../../apps/web/src/lib/v2/infrastructure/d1/analysis-registry-context-repository.ts): 소유자의 문서 분류(최대 40)·필드(최대 80)를 고른다. key·label·data type·status·사용 수만 읽는다.
+  - 경계는 S5 카탈로그와 같다: 활성·legacy 표시 가능·restricted가 아닌 문서가 뒷받침해야 한다. 제목·본문·값·entity 이름은 읽지 않는다. 개인 진술·제안 상태 필드도 key 안정성을 위해 포함한다.
+  - 정렬: active/observed 우선, 그다음 사용 수. 문서에 label이 나오는 분류를 앞에 둔다. 텍스트·임베딩 관련도 선별은 registry가 상한을 넘을 때의 후속이다.
+  - 지시문: 맞는 기존 분류는 정확한 key와 `reuse`로, 같은 의미·형식의 필드는 같은 key로 반환한다. 맞는 것이 없을 때만 새 key를 만든다.
+  - 버전: `ANALYSIS_PROMPT_VERSION` `analysis-main-multimodal-v3`, `ANALYSIS_REGISTRY_VERSION` `registry-context-v1`.
+- **검증:** 새 계약 시험 1건 PASS(16초).
+  - 시험 내용: 첫 분석은 빈 후보, 다른 소유자와 restricted 전용 정의는 제외, 다음 분석에 기존 분류·필드 전달, `reuse` 시 정의 1개 유지(사용 2).
+  - restricted 조건을 빼는 변이에서 이 시험이 `restricted_only_type` 누출로 실패함을 확인했고, 원본 해시를 복원했다.
+  - web typecheck exit0, 변경 5파일 lint exit0.
+- **노션 5건 재시험(같은 조건, 플랜만, 호출 5회, 225초):**
+  - 분류: 1건째 `media_log`(콘텐츠 감상 기록)를 만든 뒤 4건 모두 `reuse`. 3건째에 `observed`가 됐고, 4·5건째에는 분류 배정이 자동 `accepted`.
+  - 필드: key 8개가 끝까지 같았고 모두 `observed`에 올랐다.
+  - **포맷: 3건째(날짜 다른 3건)에서 `generated_draft` 템플릿 1개가 생성됐다.** 항목은 같은 구조 4필드(`director_creator`·`genre`·`media_type`·`production_company`)다. 속성이 적은 2건은 3필드 구조로 따로 관찰됐다(같은 날 2건이라 미생성).
+  - 남은 관찰: 템플릿 이름·질문은 기획대로 중립 문구("반복 기록 안내", "반복 항목 N")라 무엇을 묻는지 드러나지 않는다. 2건째에 `registry_conflict` 검토 1건이 생겼다. 열린 검토는 분류 확정 전 기록당 7–12개, 확정 후 2–3개다.
+- **관련 회귀:** 변경 모듈을 쓰는 Vitest 34파일 **816/816 PASS, exit0, 525초**(`--maxWorkers=1`). 전체 suite·브라우저·Worker build는 실행하지 않았다.
+- **실행 핸들:** 없음.
+- **다음:** 링크 분석 경로(`link-processing-runner`)에는 아직 `registry_context`가 없다. 템플릿 이름·질문 문구를 사용자에게 의미 있게 보여 줄지는 결정 대상이다.
+
 ## 이 체크아웃 로컬 정비 · 2026-10-17 KST
 
 `origin/main` `13c1cea`로 fast-forward한 뒤 이 폴더를 새 코드에 맞췄다. Claude Code 세션이 사용자 요청으로 진행했다.
