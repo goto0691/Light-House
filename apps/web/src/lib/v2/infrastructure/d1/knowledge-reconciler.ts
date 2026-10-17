@@ -50,6 +50,13 @@ function valueColumns(field: AnalysisEnvelopeV1["field_proposals"][number]) {
   };
 }
 
+/** Text for a field the owner keeps as a list (ordered_list) is stored as its comma-separated items. */
+function listColumns(field: AnalysisEnvelopeV1["field_proposals"][number]) {
+  if (field.value_type !== "text" || typeof field.value !== "string") return { text: null, json: null };
+  const items = [...new Set(field.value.split(/\s*[,、]\s*/u).map((item) => item.trim()).filter(Boolean))];
+  return items.length ? { text: items.join(", "), json: JSON.stringify(items) } : { text: null, json: null };
+}
+
 function directLowRisk(field: AnalysisEnvelopeV1["field_proposals"][number]) {
   return field.disposition === "accepted"
     && field.claim_risk === "low"
@@ -149,6 +156,7 @@ export function buildKnowledgeCommitStatements(db: D1DatabaseBinding, input: Kno
     const propertyId = ulid();
     const dataType = fieldDataType(field.value_type);
     const columns = valueColumns(field);
+    const list = listColumns(field);
     const accepted = directLowRisk(field);
     const initialStatus = accepted ? "accepted" : "proposed";
     const sourceClass = accepted ? field.evidence_refs.map((ref) => input.evidenceSourceClasses?.get(ref.source_item_id)).find(Boolean) ?? "user_explicit" : "ai_inferred";
@@ -161,38 +169,41 @@ export function buildKnowledgeCommitStatements(db: D1DatabaseBinding, input: Kno
       db.prepare(
         `insert or ignore into v2_property_values
          (id,user_id,owner_object_id,field_definition_id,proposal_temp_id,value_kind,value_text,value_number,value_boolean,value_date,value_json,source_class,claim_risk,review_status,locked_by_user,processing_run_id,created_at)
-         select ?,?,?,id,?,?,?,?,?,?,?,?,?,
+         select ?,?,?,id,?,case when data_type='ordered_list' then 'json' else ? end,
+           case when data_type='ordered_list' then ? else ? end,?,?,?,case when data_type='ordered_list' then ? else ? end,?,?,
            case when ?='accepted' and exists (
              select 1 from v2_property_values current
               where current.user_id=v2_field_definitions.user_id and current.owner_object_id=? and current.field_definition_id=v2_field_definitions.id
-               and current.review_status='accepted' and current.superseded_at is null and current.value_json<>?
+               and current.review_status='accepted' and current.superseded_at is null
+               and current.value_json<>(case when v2_field_definitions.data_type='ordered_list' then ? else ? end)
            ) then 'disputed' else ? end,
            0,?,?
          from v2_field_definitions
-         where user_id=? and key=? and data_type=?
+         where user_id=? and key=? and (data_type=? or (data_type='ordered_list' and ?='short_text' and ? is not null))
            and not exists (
              select 1 from v2_property_values current
               where current.user_id=v2_field_definitions.user_id and current.owner_object_id=? and current.field_definition_id=v2_field_definitions.id
-               and current.review_status='accepted' and current.superseded_at is null and current.value_json=?
+               and current.review_status='accepted' and current.superseded_at is null
+               and current.value_json=(case when v2_field_definitions.data_type='ordered_list' then ? else ? end)
            )
          limit 1`,
       ).bind(
         propertyId, input.userId, input.objectId, field.temp_id, field.value_type,
-        columns.text, columns.number, columns.boolean, columns.date, columns.json,
+        list.text, columns.text, columns.number, columns.boolean, columns.date, list.json, columns.json,
         sourceClass, field.claim_risk,
-        initialStatus, input.objectId, columns.json, initialStatus,
+        initialStatus, input.objectId, list.json, columns.json, initialStatus,
         input.runId, input.now,
-        input.userId, field.field_key, dataType,
-        input.objectId, columns.json,
+        input.userId, field.field_key, dataType, dataType, list.json,
+        input.objectId, list.json, columns.json,
       ),
     );
     const targetSql = `select coalesce(
       (select id from v2_property_values where id=? and user_id=?),
       (select p.id from v2_property_values p join v2_field_definitions f on f.id=p.field_definition_id
-       where p.user_id=f.user_id and p.owner_object_id=? and f.user_id=? and f.key=? and p.review_status='accepted' and p.superseded_at is null and p.value_json=? limit 1)
+       where p.user_id=f.user_id and p.owner_object_id=? and f.user_id=? and f.key=? and p.review_status='accepted' and p.superseded_at is null and p.value_json in (?,?) limit 1)
     )`;
     for (const ref of field.evidence_refs) {
-      statements.push(evidenceStatement(db, input, "property_value", targetSql, [propertyId, input.userId, input.objectId, input.userId, field.field_key, columns.json], ref));
+      statements.push(evidenceStatement(db, input, "property_value", targetSql, [propertyId, input.userId, input.objectId, input.userId, field.field_key, columns.json, list.json ?? columns.json], ref));
     }
     statements.push(
       db.prepare(
@@ -206,8 +217,9 @@ export function buildKnowledgeCommitStatements(db: D1DatabaseBinding, input: Kno
         `insert into v2_review_items
          (id,user_id,object_id,processing_run_id,kind,status,payload_json,created_at)
          select ?,?,?,?,'registry_conflict','open',?,?
-         where exists (select 1 from v2_field_definitions where user_id=? and key=? and data_type<>?)`,
-      ).bind(ulid(), input.userId, input.objectId, input.runId, JSON.stringify({ target: "field", key: field.field_key, proposedDataType: dataType }), input.now, input.userId, field.field_key, dataType),
+         where exists (select 1 from v2_field_definitions where user_id=? and key=? and data_type<>?
+           and not (data_type='ordered_list' and ?='short_text' and ? is not null))`,
+      ).bind(ulid(), input.userId, input.objectId, input.runId, JSON.stringify({ target: "field", key: field.field_key, proposedDataType: dataType }), input.now, input.userId, field.field_key, dataType, dataType, list.json),
     );
     if (accepted) {
       statements.push(

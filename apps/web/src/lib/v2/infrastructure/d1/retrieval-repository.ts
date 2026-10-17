@@ -12,6 +12,8 @@ export type V2RetrievalResult = Readonly<{
   privacyLevel: "normal" | "sensitive" | "restricted";
   capturedAt: string;
   writtenAt: string | null;
+  /** Present only for a record with no date of its own (record-date.ts); its date is not shown. */
+  undated?: true;
   updatedAt: string;
   typeKey: string | null;
   typeLabel: string;

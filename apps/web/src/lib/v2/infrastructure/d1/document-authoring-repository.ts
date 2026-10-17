@@ -10,6 +10,7 @@ import {
 } from "@/lib/v2/domain/document-revision";
 import { legacyProjectionVisibilityPredicate } from "@/lib/v2/infrastructure/d1/legacy-projection-visibility";
 import type { D1DatabaseBinding } from "@/lib/v2/infrastructure/d1/source-commit-repository";
+import { undatedImportSql } from "@/lib/v2/presentation/record-date";
 
 const REVISION_OPERATION = "document.revise";
 
@@ -39,6 +40,8 @@ export type V2LibraryRecord = Readonly<{
   writtenAt: string | null;
   capturedAt: string;
   updatedAt: string;
+  /** No date of its own (an untouched import without one): no date shown, listed after dated records. */
+  undated: boolean;
   locked: boolean;
 }>;
 
@@ -48,15 +51,16 @@ export type V2LibraryPage = Readonly<{
   totalCount: number;
 }>;
 
-type LibraryCursor = { version: 1; updatedAt: string; recordId: string; includeDeleted: boolean };
+type LibraryCursor = { version: 1 | 2; updatedAt: string; recordId: string; includeDeleted: boolean; undated?: boolean };
 
 function readLibraryCursor(cursor: string | undefined, includeDeleted: boolean): LibraryCursor | null {
   if (!cursor) return null;
   try {
     if (cursor.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(cursor)) throw new Error("Invalid cursor encoding.");
     const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as LibraryCursor;
-    if (value.version !== 1 || typeof value.updatedAt !== "string" || !value.updatedAt || typeof value.recordId !== "string" || !value.recordId || value.includeDeleted !== includeDeleted) throw new Error("Invalid cursor scope.");
-    return value;
+    if (![1, 2].includes(value.version) || typeof value.updatedAt !== "string" || !value.updatedAt || typeof value.recordId !== "string" || !value.recordId || value.includeDeleted !== includeDeleted) throw new Error("Invalid cursor scope.");
+    if (value.version === 2 && typeof value.undated !== "boolean") throw new Error("Invalid cursor scope.");
+    return { ...value, undated: value.undated === true };
   } catch {
     throw new DocumentRevisionValidationError("Library cursor is invalid for this collection.");
   }
@@ -338,24 +342,27 @@ export class D1DocumentAuthoringRepository {
     const count = await this.db.prepare(`select count(*) as value from v2_objects o join v2_documents d on d.object_id=o.id
       join v2_capture_bundles c on c.id=d.capture_id and c.user_id=o.user_id
       where o.user_id=? and ${legacyVisibility} ${lifecycle}`).bind(this.userId).first<{ value: number }>();
+    // Records with a date come first, newest change first; records with no date of their own follow.
+    const undated = `(case when ${undatedImportSql("d", "c")} then 1 else 0 end)`;
+    const after = "(o.updated_at < ? or (o.updated_at = ? and o.id < ?))";
     const rows = await this.db
       .prepare(
         `select o.id as record_id,o.lifecycle_status,o.updated_at,d.title,d.body_markdown,d.privacy_level,d.document_status,
-                d.current_version,d.written_at,c.captured_at
+                d.current_version,d.written_at,c.captured_at,${undated} as undated
          from v2_objects o join v2_documents d on d.object_id=o.id join v2_capture_bundles c on c.id=d.capture_id and c.user_id=o.user_id
          where o.user_id=? and ${legacyVisibility} ${lifecycle}
-           ${cursor ? "and (o.updated_at < ? or (o.updated_at = ? and o.id < ?))" : ""}
-         order by o.updated_at desc,o.id desc limit ?`,
+           ${!cursor ? "" : cursor.undated ? `and ${undated}=1 and ${after}` : `and (${undated}=1 or ${after})`}
+         order by ${undated},o.updated_at desc,o.id desc limit ?`,
       )
       .bind(this.userId, ...(cursor ? [cursor.updatedAt, cursor.updatedAt, cursor.recordId] : []), limit + 1)
       .all<{
         record_id: string; lifecycle_status: string; updated_at: string; title: string; body_markdown: string;
         privacy_level: "normal" | "sensitive" | "restricted"; document_status: string; current_version: number;
-        written_at: string | null; captured_at: string;
+        written_at: string | null; captured_at: string; undated: number;
       }>();
     const pageRows = rows.results.slice(0, limit);
     const last = pageRows.at(-1);
-    const nextCursor = rows.results.length > limit && last ? Buffer.from(JSON.stringify({ version: 1, updatedAt: last.updated_at, recordId: last.record_id, includeDeleted } satisfies LibraryCursor)).toString("base64url") : null;
+    const nextCursor = rows.results.length > limit && last ? Buffer.from(JSON.stringify({ version: 2, updatedAt: last.updated_at, recordId: last.record_id, includeDeleted, undated: last.undated === 1 } satisfies LibraryCursor)).toString("base64url") : null;
     const records = pageRows.map((row) => {
       const locked = row.privacy_level === "restricted";
       const excerpt = row.privacy_level === "normal" ? row.body_markdown.replace(/[#*_>`\[\]]/g, "").trim().slice(0, 160) : null;
@@ -370,6 +377,7 @@ export class D1DocumentAuthoringRepository {
         writtenAt: locked ? null : row.written_at,
         capturedAt: row.captured_at,
         updatedAt: row.updated_at,
+        undated: row.undated === 1,
         locked,
       };
     });

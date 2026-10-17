@@ -7,6 +7,7 @@ import { useRef, useState } from "react";
 
 import type { V2LibraryRecord } from "@/lib/v2/infrastructure/d1/document-authoring-repository";
 import { SemanticIcon } from "@/components/v2/semantic-icon";
+import { RECORD_TIME_ZONE } from "@/lib/v2/presentation/record-date";
 import { documentStatusLabel, privacyLabel } from "@/lib/v2/presentation/record-labels";
 import { V2MobileNavigation } from "@/components/v2/mobile-navigation";
 
@@ -80,7 +81,7 @@ export function LibraryView({ records, pinnedViews = [], totalCount = records.le
                 </span>
                 <span className="v2-library-record__copy"><strong>{rowTitle(record)}</strong><small>{record.excerpt ?? (record.locked ? "최근 재인증 전에는 내용이 표시되지 않습니다." : "민감 기록의 미리보기는 숨겼습니다.")}</small></span>
                 <span>{documentStatusLabel(record.documentStatus)}</span>
-                <time dateTime={record.updatedAt}>{new Date(record.updatedAt).toLocaleDateString("ko-KR")}</time>
+                {record.undated ? null : <time dateTime={record.updatedAt}>{new Date(record.updatedAt).toLocaleDateString("ko-KR", { timeZone: RECORD_TIME_ZONE })}</time>}
               </button>
             ))}
           </div>

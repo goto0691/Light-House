@@ -15,9 +15,10 @@ export class ImportedKnowledgeError extends Error {
 
 export type ImportedDefinition = Readonly<{ key: string; label: string; definition?: string }>;
 export type ImportedRelationProvenance = Readonly<{ sourceItemId: string; property: string }>;
-export type ImportedFieldDataType = "short_text" | "long_text" | "decimal" | "boolean" | "date";
+export type ImportedFieldDataType = "short_text" | "long_text" | "decimal" | "boolean" | "date" | "ordered_list";
 export type ImportedField = Readonly<{ key: string; label: string; dataType: ImportedFieldDataType }>;
-export type ImportedValue = Readonly<{ kind: "text"; text: string } | { kind: "number"; number: number } | { kind: "boolean"; boolean: boolean } | { kind: "date"; date: string }>;
+/** A list (multi-select) is stored as a JSON array, with its items also joined as text for reading and search. */
+export type ImportedValue = Readonly<{ kind: "text"; text: string } | { kind: "number"; number: number } | { kind: "boolean"; boolean: boolean } | { kind: "date"; date: string } | { kind: "list"; items: readonly string[] }>;
 
 function key(value: string) {
   if (!CANONICAL_KEY.test(value)) throw new ImportedKnowledgeError("imported_key_invalid", "Imported keys must be canonical lowercase registry keys.");
@@ -90,11 +91,12 @@ export class D1ImportedKnowledgeRepository {
     const fieldLabel = label(field.label);
     await this.activeObject(documentId, "document");
     const columns = {
-      text: value.kind === "text" ? value.text : null,
+      kind: value.kind === "list" ? "json" : value.kind,
+      text: value.kind === "text" ? value.text : value.kind === "list" ? value.items.join(", ") : null,
       number: value.kind === "number" ? value.number : null,
       boolean: value.kind === "boolean" ? (value.boolean ? 1 : 0) : null,
       date: value.kind === "date" ? value.date : null,
-      json: JSON.stringify(value.kind === "text" ? value.text : value.kind === "number" ? value.number : value.kind === "boolean" ? value.boolean : value.date),
+      json: JSON.stringify(value.kind === "text" ? value.text : value.kind === "number" ? value.number : value.kind === "boolean" ? value.boolean : value.kind === "list" ? value.items : value.date),
     };
     await this.db.batch([
       this.db.prepare(
@@ -115,7 +117,7 @@ export class D1ImportedKnowledgeRepository {
         `insert into v2_property_values
          (id,user_id,owner_object_id,field_definition_id,proposal_temp_id,value_kind,value_text,value_number,value_boolean,value_date,value_json,source_class,claim_risk,review_status,locked_by_user,processing_run_id,created_at)
          values (?,?,?,?,null,?,?,?,?,?,?,'imported','low','accepted',0,null,?)`,
-      ).bind(propertyId, this.userId, documentId, definition.id, value.kind, columns.text, columns.number, columns.boolean, columns.date, columns.json, now),
+      ).bind(propertyId, this.userId, documentId, definition.id, columns.kind, columns.text, columns.number, columns.boolean, columns.date, columns.json, now),
       this.db.prepare(
         `update v2_field_definitions set usage_count=(select count(distinct p.owner_object_id) from v2_property_values p where p.field_definition_id=v2_field_definitions.id and p.user_id=v2_field_definitions.user_id and p.review_status not in ('rejected','superseded')),
            updated_at=? where id=? and user_id=?`,

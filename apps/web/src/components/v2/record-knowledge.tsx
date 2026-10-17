@@ -18,6 +18,7 @@ function valueText(field: PresentedField) {
     const date = new Date(field.value);
     return Number.isNaN(date.valueOf()) ? field.value : date.toLocaleDateString("ko-KR");
   }
+  if (Array.isArray(field.value) && field.value.every((item) => ["string", "number"].includes(typeof item))) return field.value.join(", ");
   if (typeof field.value === "object") return JSON.stringify(field.value);
   return String(field.value);
 }

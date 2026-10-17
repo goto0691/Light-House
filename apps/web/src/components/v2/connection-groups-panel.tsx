@@ -2,6 +2,7 @@ import { ChevronRight, Link2, Lock } from "lucide-react";
 import Link from "next/link";
 
 import type { ConnectionGroupItem, ConnectionGroups } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
+import { RECORD_TIME_ZONE } from "@/lib/v2/presentation/record-date";
 
 /**
  * Connections grouped by the category of what they connect to (D-116): a count per
@@ -50,7 +51,7 @@ export function ConnectionGroupsPanel({ groups, heading, basePath, expandedGroup
 }
 
 function ConnectionItem({ item }: { item: ConnectionGroupItem }) {
-  const date = item.date ? new Date(item.date).toLocaleDateString("ko-KR") : null;
+  const date = item.date ? new Date(item.date).toLocaleDateString("ko-KR", { timeZone: RECORD_TIME_ZONE }) : null;
   const href = item.objectKind === "document" ? `/v2/records/${encodeURIComponent(item.objectId)}` : item.objectKind === "entity" ? `/v2/entities/${encodeURIComponent(item.objectId)}` : null;
   const body = <><strong>{item.label}</strong>{date ? <time dateTime={item.date!}>{date}</time> : null}{item.origins.includes("ai") ? <em>AI 해석</em> : null}</>;
   return href ? <Link href={href}>{body}</Link> : <span>{body}</span>;

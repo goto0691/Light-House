@@ -3,7 +3,7 @@ import { D1TemplateRepository } from "@/lib/v2/infrastructure/d1/template-reposi
 import type { TemplateDefinitionV1, TemplateInputKind } from "@/lib/v2/templates/template-definition-v1";
 import { neutralFieldPrompt } from "@/lib/v2/templates/template-prompts";
 
-const INPUT_KINDS: Readonly<Record<string, TemplateInputKind>> = { date: "date", boolean: "boolean", decimal: "number", integer: "number", long_text: "long_text", rating: "rating" };
+const INPUT_KINDS: Readonly<Record<string, TemplateInputKind>> = { date: "date", boolean: "boolean", decimal: "number", integer: "number", long_text: "long_text", rating: "rating", ordered_list: "chips" };
 const SIGNATURE = (typeKey: string) => `owner-structure:${typeKey}`;
 const MAX_ITEMS = 12;
 // Set by the old tool on its own (Notion 생성 일시); a new record already keeps its own time.
@@ -52,7 +52,7 @@ export async function createOwnerStructureTemplates(db: D1DatabaseBinding, userI
           key: field.key, kind: "field" as const, prompt: neutralFieldPrompt(field.label),
           prominence: index < 3 ? "core" as const : "suggested" as const,
           binding: { ownerRole: "primary_document" as const, fieldKey: field.key },
-          inputKind: INPUT_KINDS[field.data_type] ?? "text", cardinality: "one" as const,
+          inputKind: INPUT_KINDS[field.data_type] ?? "text", cardinality: field.data_type === "ordered_list" ? "many" as const : "one" as const,
           allowedAiOperations: ["extract_from_capture" as const],
         })),
       }],

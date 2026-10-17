@@ -14,6 +14,7 @@ import { legacyProjectionVisibilityPredicate } from "@/lib/v2/infrastructure/d1/
 import { analysisExtractionProofSql } from "@/lib/v2/infrastructure/d1/analysis-extraction-provenance";
 import { hasVideoAnalysisProvenanceSchema, videoAnalysisProofSql } from "@/lib/v2/infrastructure/d1/video-analysis-provenance";
 import type { D1DatabaseBinding, D1PreparedStatementBinding } from "@/lib/v2/infrastructure/d1/source-commit-repository";
+import { dayOnlyImportSql, undatedImportSql } from "@/lib/v2/presentation/record-date";
 
 type IdempotencyRow = { payload_hash: string; response_json: string };
 
@@ -38,6 +39,10 @@ export type V2RecordProjection = Readonly<{
   documentStatus: "inbox" | "draft" | "revising" | "finished" | "archived" | null;
   capturedAt: string;
   committedAt: string;
+  /** No date of its own (record-date.ts): the page shows no date. */
+  undated: boolean;
+  /** The written date is a day without a time of day (record-date.ts). */
+  writtenDayOnly: boolean;
   locked: boolean;
   sources: readonly Readonly<{
     id: string;
@@ -457,7 +462,9 @@ export class D1SourceFoundationRepository {
     const row = await this.db
       .prepare(
         `select o.id as record_id,o.lifecycle_status,d.title,d.body_markdown,d.privacy_level,
-                d.current_revision_id,d.current_version,d.written_at,d.document_status,c.captured_at,c.committed_at
+                d.current_revision_id,d.current_version,d.written_at,d.document_status,c.captured_at,c.committed_at,
+                case when ${undatedImportSql("d", "c")} then 1 else 0 end as undated,
+                case when ${dayOnlyImportSql("d", "c")} then 1 else 0 end as written_day_only
          from v2_objects o join v2_documents d on d.object_id=o.id
          join v2_capture_bundles c on c.id=d.capture_id and c.user_id=o.user_id
          join v2_document_revisions r on r.id=d.current_revision_id and r.document_object_id=d.object_id
@@ -476,6 +483,8 @@ export class D1SourceFoundationRepository {
         document_status: "inbox" | "draft" | "revising" | "finished" | "archived";
         captured_at: string;
         committed_at: string;
+        undated: number;
+        written_day_only: number;
       }>();
     if (!row) return null;
     const locked = row.privacy_level === "restricted" && !restrictedUnlocked;
@@ -524,6 +533,8 @@ export class D1SourceFoundationRepository {
       documentStatus: locked ? null : row.document_status,
       capturedAt: row.captured_at,
       committedAt: row.committed_at,
+      undated: row.undated === 1,
+      writtenDayOnly: row.written_day_only === 1,
       locked,
       sources: sourceRows.results.map((source) => ({
         id: source.id,

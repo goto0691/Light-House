@@ -16,19 +16,21 @@ export type NotionDatabaseMapping = Readonly<{ type: Readonly<{ key: string; lab
 const text = (key: string, label: string, entityKind?: string): NotionFieldMapping => ({ key, label, dataType: "short_text", ...(entityKind ? { entityKind } : {}) });
 const longText = (key: string, label: string): NotionFieldMapping => ({ key, label, dataType: "long_text" });
 const date = (key: string, label: string): NotionFieldMapping => ({ key, label, dataType: "date" });
+/** A multi-select or a comma list in Notion: several values, kept as a list. */
+const list = (key: string, label: string, entityKind?: string): NotionFieldMapping => ({ key, label, dataType: "ordered_list", ...(entityKind ? { entityKind } : {}) });
 
 export const NOTION_DATABASES: Readonly<Record<string, NotionDatabaseMapping>> = {
   "영상 로그": {
     type: { key: "video_log", label: "영상 로그" },
     fields: {
-      "감독/크리에이터": text("director_creator", "감독/크리에이터", "person"),
+      "감독/크리에이터": list("director_creator", "감독/크리에이터", "person"),
       "날짜": date("record_date", "날짜"),
       "다시 볼 가치": { key: "rewatch_worthy", label: "다시 볼 가치", dataType: "boolean" },
       "리뷰": longText("review", "리뷰"),
       "시청상태": text("viewing_status", "시청상태"),
       "유형": text("media_type", "유형"),
-      "장르": text("genre", "장르"),
-      "제작사": text("production_company", "제작사", "organization"),
+      "장르": list("genre", "장르"),
+      "제작사": list("production_company", "제작사", "organization"),
       "평점": text("user_rating", "평점"),
       "플랫폼": text("platform", "플랫폼", "platform"),
     },
@@ -36,11 +38,11 @@ export const NOTION_DATABASES: Readonly<Record<string, NotionDatabaseMapping>> =
   "컨텐츠 로그": {
     type: { key: "content_log", label: "컨텐츠 로그" },
     fields: {
-      "감독": text("director_creator", "감독/크리에이터", "person"),
+      "감독": list("director_creator", "감독/크리에이터", "person"),
       "날짜": date("record_date", "날짜"),
       "유형": text("media_type", "유형"),
-      "장르": text("genre", "장르"),
-      "제작사": text("production_company", "제작사", "organization"),
+      "장르": list("genre", "장르"),
+      "제작사": list("production_company", "제작사", "organization"),
       "평가": text("evaluation", "평가"),
       "플랫폼": text("platform", "플랫폼", "platform"),
       "한줄평": longText("one_line_review", "한줄평"),
@@ -53,7 +55,7 @@ export const NOTION_DATABASES: Readonly<Record<string, NotionDatabaseMapping>> =
       "날짜": date("record_date", "날짜"),
       "리뷰": longText("review", "리뷰"),
       "상태": text("play_status", "진행 상태"),
-      "장르": text("genre", "장르"),
+      "장르": list("genre", "장르"),
       "평점": text("user_rating", "평점"),
       "플랫폼": text("platform", "플랫폼", "platform"),
       "플레이 타임": { key: "play_time", label: "플레이 타임", dataType: "decimal" },
@@ -64,7 +66,7 @@ export const NOTION_DATABASES: Readonly<Record<string, NotionDatabaseMapping>> =
     fields: {
       "상태": text("note_status", "정리 상태"),
       "생성 일시": date("created_on", "생성 일시"),
-      "유형": text("note_type", "글 유형"),
+      "유형": list("note_type", "글 유형"),
       "출처": text("source", "출처"),
       "카테고리": text("category", "카테고리"),
       "한 줄 요약": longText("summary", "한 줄 요약"),
@@ -101,8 +103,12 @@ export function notionEntityPredicate(field: NotionFieldMapping) {
   return { key: `mentions.${field.key}`, label: field.label };
 }
 
+/** Words that stand for "no one / unknown" in a person or company property; they are not entities. */
+const PLACEHOLDER_NAMES = new Set(["정보 없음", "정보없음", "없음", "미상", "알 수 없음", "모름", "-", "?", "n/a", "na", "unknown", "none"]);
+export const isPlaceholderName = (name: string) => PLACEHOLDER_NAMES.has(name.trim().toLowerCase());
+
 /** Multi-select and list values are comma separated in the export. */
-export const splitNotionList = (value: string) => value.split(/\s*,\s*/).map((part) => part.trim()).filter(Boolean);
+export const splitNotionList = (value: string) => [...new Set(value.split(/\s*,\s*/).map((part) => part.trim()).filter(Boolean))];
 
 /** A Notion value as a typed field value, or null when it does not fit the field. */
 export function notionFieldValue(field: NotionFieldMapping, raw: string, toDate: (value: string) => string | null) {
@@ -111,5 +117,6 @@ export function notionFieldValue(field: NotionFieldMapping, raw: string, toDate:
   if (field.dataType === "date") { const day = toDate(value); return day ? { kind: "date" as const, date: day } : null; }
   if (field.dataType === "boolean") return /^(yes|no)$/i.test(value) ? { kind: "boolean" as const, boolean: /^yes$/i.test(value) } : null;
   if (field.dataType === "decimal") return /^\d+(\.\d+)?$/.test(value) ? { kind: "number" as const, number: Number(value) } : null;
+  if (field.dataType === "ordered_list") { const items = splitNotionList(value); return items.length ? { kind: "list" as const, items } : null; }
   return { kind: "text" as const, text: value };
 }

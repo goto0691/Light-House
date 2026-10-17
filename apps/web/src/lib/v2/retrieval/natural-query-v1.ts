@@ -159,7 +159,7 @@ const UNSAFE_TEXT = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]|[\uD800-\uDF
 const INTERPRETIVE_KEY = /(?:^|[_.-])(?:emotions?|moods?|feelings?|sentiments?|intents?|intentions?|motives?|motivations?|personality|personalities|traits?|relationships?|attitudes?)(?:$|[_.-])/;
 const INTERPRETIVE_LABEL = /감정|기분|의도|속마음|동기|성격|성향|관계/;
 const NUMERIC_TYPES: ReadonlySet<string> = new Set(["rating", "integer", "decimal"]);
-const TEXT_TYPES: ReadonlySet<string> = new Set(["short_text", "long_text", "enum_value", "url"]);
+const TEXT_TYPES: ReadonlySet<string> = new Set(["short_text", "long_text", "enum_value", "url", "ordered_list"]);
 
 /** Emotion/intent/personality/relationship fields are never offered or accepted as filters. */
 export function isInterpretiveField(key: string, label = "") {

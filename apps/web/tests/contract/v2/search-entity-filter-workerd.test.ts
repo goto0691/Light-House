@@ -8,6 +8,7 @@ import { D1ImportedKnowledgeRepository } from "@/lib/v2/infrastructure/d1/import
 import { D1RetrievalRepository } from "@/lib/v2/infrastructure/d1/retrieval-repository";
 import type { D1DatabaseBinding } from "@/lib/v2/infrastructure/d1/source-commit-repository";
 import { D1SourceFoundationRepository } from "@/lib/v2/infrastructure/d1/source-foundation-repository";
+import { NATURAL_QUERY_LIMITS } from "@/lib/v2/retrieval/natural-query-v1";
 import { defaultV2QueryPlan } from "@/lib/v2/retrieval/query-plan-v1";
 
 // Actual workerd D1 caps expression depth at 100; the Node SQLite fixture does not, so an
@@ -54,4 +55,14 @@ test("actual D1 finds records connected to an entity, alone and with a category,
   expect(await ids(defaultV2QueryPlan({ entityFilters: [{ targetObjectId: platformEntity }, { entityKind: "person" }] }))).toEqual([]);
   expect(await ids(defaultV2QueryPlan({ fullText: "작품" }))).toEqual([watched, second, unrelated].sort());
   expect((await search.searchPage(defaultV2QueryPlan({ entityFilters: [{ targetObjectId: platformEntity }] }), true)).results.map((result) => result.recordId)).toContain(locked);
+  // A list item condition together with category, entity and text conditions stays within D1's limits.
+  await knowledge.setValue(watched, { key: "genre", label: "장르", dataType: "ordered_list" }, { kind: "list", items: ["드라마", "판타지"] }, null, now);
+  expect(await ids(defaultV2QueryPlan({ fullText: "작품", typeKeys: ["video_log"], entityFilters: [{ targetObjectId: platformEntity }],
+    propertyFilters: [{ fieldKey: "genre", operator: "eq", value: "판타지" }, { fieldKey: "genre", operator: "contains", value: "드라" }] }))).toEqual([watched]);
+  // The natural-language planner's limits at once: 20 categories, 20 field and 10 entity conditions, a date range and text.
+  const fields = Array.from({ length: NATURAL_QUERY_LIMITS.propertyFilters }, (_, index) => ({ fieldKey: "genre", operator: index % 2 ? "contains" as const : "eq" as const, value: index % 2 ? "판" : "드라마" }));
+  const entities = Array.from({ length: NATURAL_QUERY_LIMITS.entityFilters }, (_, index) => index % 2 ? { targetObjectId: platformEntity } : { entityKind: "platform", canonicalName: "net" });
+  const types = ["video_log", ...Array.from({ length: NATURAL_QUERY_LIMITS.typeKeys - 1 }, (_, index) => `other_type_${index}`)];
+  expect(await ids(defaultV2QueryPlan({ fullText: "작품 하나", typeKeys: types, propertyFilters: fields, entityFilters: entities,
+    dateFilter: { axis: "captured_at", from: "2026-01-01", to: "2026-12-31" } }))).toEqual([watched]);
 }, 120_000);

@@ -1,5 +1,7 @@
 import type { D1DatabaseBinding } from "@/lib/v2/infrastructure/d1/source-commit-repository";
 import { legacyProjectionVisibilityPredicate } from "@/lib/v2/infrastructure/d1/legacy-projection-visibility";
+import { undatedImportSql } from "@/lib/v2/presentation/record-date";
+import { entityKindLabel } from "@/lib/v2/presentation/record-labels";
 
 export const CONNECTION_GROUPS_CONTRACT = "connection-groups-v1";
 const DEFAULT_ITEMS_PER_GROUP = 5;
@@ -7,7 +9,6 @@ const DEFAULT_ITEMS_PER_GROUP = 5;
 export const EXPANDED_ITEMS = 100;
 const MAX_EDGES = 5000;
 const UNCLASSIFIED = Object.freeze({ key: "unclassified", label: "분류 전" });
-const ENTITY_KIND_LABELS: Readonly<Record<string, string>> = { person: "사람", work: "작품", place: "장소", organization: "단체", book: "책", game: "게임", platform: "플랫폼" };
 
 /** Imported owner links read as the owner's own (D-119); only AI and external links are marked. */
 export type ConnectionOrigin = "user" | "ai" | "external";
@@ -67,7 +68,7 @@ function category(row: EdgeRow) {
 
 function union<T>(values: readonly T[], value: T): T[] { return values.includes(value) ? [...values] : [...values, value]; }
 
-export const entityKindLabel = (kind: string) => ENTITY_KIND_LABELS[kind] ?? kind;
+export { entityKindLabel };
 
 /** The header of an entity page: an active, visible entity of this owner, or null. */
 export async function readEntitySummary(db: D1DatabaseBinding, userId: string, entityId: string) {
@@ -115,7 +116,7 @@ export async function readConnectionGroups(
          and r.superseded_at is null and r.review_status in ('accepted','proposed')
      )
      select e.relation_id,e.review_status,e.source_class,e.predicate_label,e.direction,target.id as other_id,target.object_kind,
-            doc.title,doc.privacy_level,coalesce(doc.written_at,cap.captured_at) as doc_date,
+            doc.title,doc.privacy_level,case when ${undatedImportSql("doc", "cap")} then null else coalesce(doc.written_at,cap.captured_at) end as doc_date,
             ent.entity_kind,ent.canonical_name,ev.event_type_key,ev.occurred_at_start,
             (select json_object('key',t.key,'label',t.label) from v2_object_type_assignments a
                join v2_type_definitions t on t.id=a.type_definition_id and t.user_id=a.user_id

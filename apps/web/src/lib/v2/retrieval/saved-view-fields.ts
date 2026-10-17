@@ -87,9 +87,17 @@ export function presentSavedViewFields(rows: readonly SavedViewFieldRow[], priva
 }
 
 /** Plain text only: callers render it as text, never HTML or executable JSON. */
+/** A stored list reads as "드라마, 판타지"; other JSON stays as stored. */
+function listText(json: string) {
+  try {
+    const value = JSON.parse(json) as unknown;
+    return Array.isArray(value) && value.every((item) => typeof item === "string") ? value.join(", ") : json;
+  } catch { return json; }
+}
+
 export function formatSavedViewFieldValue(field: V2SavedViewFieldValue): string {
   if (field.value === null) return "값 없음";
-  const value = field.renderer === "boolean" ? field.value ? "예" : "아니요" : String(field.value);
+  const value = field.renderer === "boolean" ? field.value ? "예" : "아니요" : field.renderer === "json" ? listText(String(field.value)) : String(field.value);
   if (field.renderer === "rating" && !field.unit) return `${value} (척도 미기록)`;
   return field.unit ? `${value} ${field.unit}` : value;
 }

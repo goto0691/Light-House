@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, Link2, Shapes } from "lucide-react";
+import { entityKindLabel } from "@/lib/v2/presentation/record-labels";
 import type { FacetKind, FacetPage } from "@/lib/v2/retrieval/facet-page";
 import "./facet-discovery.css";
 
@@ -28,7 +29,7 @@ export function FacetExplorePanels({ pages, query = "", pathname = "/v2/explore"
         <input name={`${kind}_page`} type="hidden" value="1" /><label>{heading} 검색<input type="search" name={`${kind}_q`} maxLength={100} defaultValue={page.query} /></label><button type="submit">{heading} 찾기</button>
       </form>
       <p className="v2-facet-summary">전체 {page.totalCount}개 · {page.page}/{page.totalPages}페이지 · 현재 {page.items.length}개 표시</p>
-      {page.items.length ? <ul className="v2-facet-items">{page.items.map((item) => <li key={item.key}><Link prefetch={false} href={kind === "month" ? monthSearch(item.key) : `/v2/search?${new URLSearchParams({ [kind === "entity" ? "entity" : "type"]: item.key })}`}><strong>{item.label}</strong><span>{item.count}개 기록{item.entityKind ? ` · ${item.entityKind}` : ""}</span></Link></li>)}</ul> : <p>현재 조건에 맞는 항목이 없습니다. 검색어를 비워 전체 범위를 볼 수 있습니다.</p>}
+      {page.items.length ? <ul className="v2-facet-items">{page.items.map((item) => <li key={item.key}><Link prefetch={false} href={kind === "month" ? monthSearch(item.key) : kind === "entity" ? `/v2/entities/${encodeURIComponent(item.key)}` : `/v2/search?${new URLSearchParams({ type: item.key })}`}><strong>{item.label}</strong><span>{item.count}개 기록{item.entityKind ? ` · ${entityKindLabel(item.entityKind)}` : ""}</span></Link></li>)}</ul> : <p>현재 조건에 맞는 항목이 없습니다. 검색어를 비워 전체 범위를 볼 수 있습니다.</p>}
       <nav aria-label={`${heading} 페이지`}>{page.page > 1 ? <Link prefetch={false} href={pageHref(page.page - 1)}>이전</Link> : <span>첫 페이지</span>}{page.page < page.totalPages ? <Link prefetch={false} href={pageHref(page.page + 1)}>다음</Link> : <span>마지막 페이지</span>}</nav>
     </section>;
   })}</div>;

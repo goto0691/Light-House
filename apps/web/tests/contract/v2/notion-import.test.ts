@@ -1,11 +1,17 @@
 import JSZip from "jszip";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
+import { prepareDocumentRevision } from "@/lib/v2/domain/document-revision";
 import { readNotionExport } from "@/lib/v2/import/notion-export";
 import { importNotionExport } from "@/lib/v2/import/notion-import";
 import { readConnectionGroups } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
+import { D1DocumentAuthoringRepository } from "@/lib/v2/infrastructure/d1/document-authoring-repository";
+import { D1ImportedKnowledgeRepository } from "@/lib/v2/infrastructure/d1/imported-knowledge-repository";
 import { D1PresentationRepository } from "@/lib/v2/infrastructure/d1/presentation-repository";
+import { D1RetrievalRepository } from "@/lib/v2/infrastructure/d1/retrieval-repository";
+import { D1SourceFoundationRepository } from "@/lib/v2/infrastructure/d1/source-foundation-repository";
 import { D1TemplateRepository } from "@/lib/v2/infrastructure/d1/template-repository";
+import { defaultV2QueryPlan } from "@/lib/v2/retrieval/query-plan-v1";
 import { LinkSqlite } from "../../support/link-sqlite";
 
 const owner = "link-owner";
@@ -50,7 +56,11 @@ describe("Notion import brings the owner's records in as the owner's own", () =>
     // The record reads as written on its own date, not on the import day; the capture keeps the real save time.
     expect(db.sql.prepare(`select o.created_at,o.updated_at,d.written_at,c.committed_at from v2_objects o join v2_documents d on d.object_id=o.id join v2_capture_bundles c on c.id=d.capture_id where o.id=?`).get(record.object_id))
       .toEqual({ created_at: "2025-09-08T12:00:00.000Z", updated_at: "2025-09-08T12:00:00.000Z", written_at: "2025-09-08T12:00:00.000Z", committed_at: now });
-    expect(stats.dated).toBe(3);
+    expect(stats).toMatchObject({ dated: 2, borrowed: 1, undated: 0 });
+    // The undated work takes the day it was first watched, through its link.
+    const work = recordBy("작품 A")!;
+    expect(db.sql.prepare(`select o.updated_at,d.written_at from v2_objects o join v2_documents d on d.object_id=o.id where o.id=?`).get(work.object_id))
+      .toEqual({ updated_at: "2025-09-08T12:00:00.000Z", written_at: "2025-09-08T12:00:00.000Z" });
     expect(record.body_markdown).toContain("감독/크리에이터: 감독 갑");
     for (const hidden of ["친구 병", "네트워크", "컨텐츠 로그", ".md"]) expect(record.body_markdown).not.toContain(hidden);
     expect(recordBy("감상 B")!.body_markdown).toContain("짧은 감상 메모.");
@@ -58,7 +68,7 @@ describe("Notion import brings the owner's records in as the owner's own", () =>
     const presentation = await new D1PresentationRepository(db, owner).project(record.object_id);
     const fields = presentation.sections.flatMap((section) => section.fields);
     expect(fields.map((field) => [field.label, field.value, field.sourceLabel])).toEqual(expect.arrayContaining([
-      ["날짜", "2025-09-08", "원문에서 명시함"], ["다시 볼 가치", false, "원문에서 명시함"], ["장르", "드라마,판타지", "원문에서 명시함"], ["플랫폼", "Netflix", "원문에서 명시함"],
+      ["날짜", "2025-09-08", "원문에서 명시함"], ["다시 볼 가치", false, "원문에서 명시함"], ["장르", ["드라마", "판타지"], "원문에서 명시함"], ["플랫폼", "Netflix", "원문에서 명시함"],
     ]));
     expect(JSON.stringify(presentation)).not.toMatch(/가져온|notion|노션/i);
   });
@@ -104,6 +114,57 @@ describe("Notion import brings the owner's records in as the owner's own", () =>
     expect(items.map((item) => item.prompt).sort()).toEqual(["정리 상태를 남길까요?", "카테고리를 남길까요?"]);
   });
 
+  test("a page with no date and no dated link shows no date and is listed after dated records until the owner edits it", async () => {
+    const zip = new JSZip();
+    zip.file(`게임 로그 ${id(8)}_all.csv`, "﻿이름,개발사,날짜,상태\n\"게임 A\",,,\n\"게임 B\",,,\n");
+    zip.file(`게임 A ${id(800)}.md`, "# 게임 A\n\n개발사: 회사 병\n상태: 완료\n");
+    zip.file(`게임 B ${id(801)}.md`, "# 게임 B\n\n날짜: 2024년 3월 1일\n상태: 완료\n");
+    const stats = await importNotionExport(db, owner, await readNotionExport(await zip.generateAsync({ type: "nodebuffer" })), { now });
+    expect(stats).toMatchObject({ dated: 1, borrowed: 0, undated: 1 });
+    const undatedGame = recordBy("게임 A")!, datedGame = recordBy("게임 B")!;
+    const library = await new D1DocumentAuthoringRepository(db, owner).listRecordsPage();
+    expect(library.records.map((record) => [record.title, record.undated])).toEqual([["게임 B", false], ["게임 A", true]]);
+    expect(await new D1SourceFoundationRepository(db, owner).getRecord(undatedGame.object_id)).toMatchObject({ undated: true, writtenAt: null });
+    expect(await new D1SourceFoundationRepository(db, owner).getRecord(datedGame.object_id)).toMatchObject({ undated: false, writtenDayOnly: true });
+    // One page per screen still walks both groups in order.
+    const first = await new D1DocumentAuthoringRepository(db, owner).listRecordsPage({ limit: 1 });
+    const second = await new D1DocumentAuthoringRepository(db, owner).listRecordsPage({ limit: 1, cursor: first.nextCursor! });
+    expect([first.records[0]!.title, second.records[0]!.title, second.nextCursor]).toEqual(["게임 B", "게임 A", null]);
+    const developer = db.sql.prepare("select object_id from v2_entity_records where canonical_name='회사 병'").get() as { object_id: string };
+    expect((await readConnectionGroups(db, owner, developer.object_id))!.groups[0]!.items).toEqual([expect.objectContaining({ label: "게임 A", date: null })]);
+    const found = (await new D1RetrievalRepository(db, owner).searchPage(defaultV2QueryPlan({ fullText: "게임" }))).results;
+    expect(Object.fromEntries(found.map((result) => [result.title, result.undated ?? false]))).toEqual({ "게임 A": true, "게임 B": false });
+    // Once the owner edits it, it is an ordinary record changed today.
+    const current = await new D1SourceFoundationRepository(db, owner).getRecord(undatedGame.object_id);
+    const edit = await prepareDocumentRevision({ expectedVersion: 1, expectedRevisionId: current!.currentRevisionId!, title: "게임 A",
+      bodyMarkdown: "다시 해 본 메모", writtenAt: null, documentStatus: "inbox", privacyLevel: "normal" }, crypto.randomUUID(), "2026-10-18T01:00:00.000Z");
+    expect(await new D1DocumentAuthoringRepository(db, owner).saveRevision(undatedGame.object_id, edit)).toMatchObject({ outcome: "saved" });
+    expect((await new D1DocumentAuthoringRepository(db, owner).listRecordsPage()).records.map((record) => [record.title, record.undated]))
+      .toEqual([["게임 A", false], ["게임 B", false]]);
+  });
+
+  test("\"정보 없음\" is not a person: new imports skip it and an earlier one that only imports used is retired", async () => {
+    const zip = new JSZip();
+    zip.file(`영상 로그 ${id(9)}_all.csv`, "﻿이름,감독/크리에이터,날짜\n\"감상 C\",,\n");
+    zip.file(`감상 C ${id(900)}.md`, "# 감상 C\n\n감독/크리에이터: 정보 없음, 감독 정\n날짜: 2025년 1월 1일\n");
+    const exported = await readNotionExport(await zip.generateAsync({ type: "nodebuffer" }));
+    await importNotionExport(db, owner, exported, { now });
+    expect(db.sql.prepare("select canonical_name from v2_entity_records order by canonical_name").all()).toEqual([{ canonical_name: "감독 정" }]);
+
+    // An entity left by an earlier import, and one the analyzer also links to.
+    const knowledge = new D1ImportedKnowledgeRepository(db, owner);
+    const record = recordBy("감상 C")!.object_id;
+    const stale = await knowledge.ensureEntity("person", "정보 없음", now);
+    await knowledge.addRelation({ subjectObjectId: record, objectObjectId: stale, predicate: { key: "mentions.director_creator", label: "감독/크리에이터" }, now });
+    const used = await knowledge.ensureEntity("organization", "미상", now);
+    db.sql.prepare(`insert into v2_relation_edges (id,user_id,subject_object_id,predicate_definition_id,object_object_id,source_class,claim_risk,review_status,processing_run_id,locked_by_user,created_at)
+      select 'ai-edge',?,?,id,?,'ai_inferred','low','proposed',null,0,? from v2_predicate_definitions limit 1`).run(owner, record, used, now);
+    expect(await importNotionExport(db, owner, exported, { now })).toMatchObject({ placeholders: 1 });
+    expect(db.sql.prepare("select id,lifecycle_status from v2_objects where id in (?,?) order by id").all(stale, used))
+      .toEqual([{ id: stale, lifecycle_status: "archived" }, { id: used, lifecycle_status: "active" }].sort((a, b) => a.id.localeCompare(b.id)));
+    expect((await readConnectionGroups(db, owner, record))!.groups.flatMap((group) => group.items.map((item) => item.label))).not.toContain("정보 없음");
+  });
+
   test("re-running changes nothing and never overwrites a value the owner corrected", async () => {
     const exported = await syntheticExport();
     await importNotionExport(db, owner, exported, { now });
@@ -114,7 +175,7 @@ describe("Notion import brings the owner's records in as the owner's own", () =>
     const counts = () => db.sql.prepare(`select (select count(*) from v2_documents) d,(select count(*) from v2_property_values where review_status='accepted') p,(select count(*) from v2_relation_edges) r,(select count(*) from v2_entity_records) e`).get();
     const before = counts();
     const again = await importNotionExport(db, owner, exported, { now });
-    expect(again).toMatchObject({ created: 0, replayed: 3, values: 0, valuesKept: 1, pageLinks: 0, personLinks: 0, entityLinks: 0, dated: 0 });
+    expect(again).toMatchObject({ created: 0, replayed: 3, values: 0, valuesKept: 1, pageLinks: 0, personLinks: 0, entityLinks: 0, dated: 0, borrowed: 1, undated: 0 });
     expect(counts()).toEqual(before);
     expect(db.sql.prepare(`select value_text from v2_property_values where id='corrected'`).get()).toEqual({ value_text: "다시 보는 중" });
   });

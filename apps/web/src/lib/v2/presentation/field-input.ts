@@ -8,6 +8,7 @@ export function fieldInputValue(field: Pick<PresentedField, "renderer" | "value"
     const value = String(field.value);
     return /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(value) ? value.slice(0, 10) : "";
   }
+  if (Array.isArray(field.value) && field.value.every((item) => typeof item === "string")) return field.value.join(", ");
   if (typeof field.value === "object") return JSON.stringify(field.value);
   return String(field.value);
 }
@@ -29,7 +30,8 @@ export function parseFieldCorrection(renderer: PresentedField["renderer"], input
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input) || Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== input) throw new Error("올바른 날짜를 입력해주세요.");
   }
   if (renderer === "json") {
-    try { return JSON.parse(input) as unknown; } catch { throw new Error("올바른 JSON 값을 입력해주세요."); }
+    // Valid JSON stays JSON; anything else is a list edited as "드라마, 판타지".
+    try { return JSON.parse(input) as unknown; } catch { return [...new Set(input.split(/\s*,\s*/).map((item) => item.trim()).filter(Boolean))]; }
   }
   return input;
 }

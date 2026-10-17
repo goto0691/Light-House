@@ -6,6 +6,7 @@ import { sqliteUnicodeCaseVariants, sqliteUnicodeLiteralPattern } from "@/lib/v2
 import { suggestSemanticIconForType } from "@/lib/v2/presentation/semantic-icons";
 import type { V2RetrievalPage, V2RetrievalResult } from "./retrieval-repository";
 import { captureSavedViewVisibleFields, preferredSavedViewFieldRows, presentSavedViewFields, SAVED_FIELD_INLINE_BYTES, SAVED_FIELD_PREVIEW_POINTS, type SavedViewFieldRow, type SavedViewFieldValueRow } from "@/lib/v2/retrieval/saved-view-fields";
+import { undatedImportSql } from "@/lib/v2/presentation/record-date";
 
 type Capabilities = Readonly<{ links: boolean; curations: boolean }>;
 const capabilities = new WeakMap<D1DatabaseBinding, Capabilities>();
@@ -93,39 +94,65 @@ export function canonicalRetrievalSql(input: { plan: V2RetrievalQueryPlanV1; use
   const bindings: unknown[] = [JSON.stringify(tokens.map(searchToken)), input.userId, input.includeRestricted ? 1 : 0];
   const conditions = ["o.user_id=?", "o.lifecycle_status='active'", input.legacyVisibility, "(?=1 or d.privacy_level<>'restricted')"];
   if (input.recordId !== undefined) { conditions.push("d.object_id=?"); bindings.push(input.recordId); }
-  if (plan.typeKeys.length) {
-    conditions.push(`exists(select 1 from v2_object_type_assignments a join v2_type_definitions t on t.id=a.type_definition_id and t.user_id=a.user_id
-      where a.user_id=o.user_id and a.object_id=d.object_id and a.review_status not in ('rejected','superseded') and t.key in (select value from json_each(?)))`);
-    bindings.push(JSON.stringify(plan.typeKeys));
+  // Each category, field and entity condition becomes its own materialized set of documents;
+  // the sets are intersected in groups of four and the one result is joined in FROM. As nested
+  // EXISTS conditions, or as one join each, they are re-resolved inside every expression that
+  // reaches eligible_documents and a few together exceed D1's depth-100 expression limit (the
+  // Node SQLite fixture allows deeper trees). These CTEs follow search_tokens, so their values
+  // follow its one binding.
+  // D1 also caps a statement at 100 bound values: the owner is bound once for all sets.
+  const filterCtes: string[] = [], filterJoins: string[] = [], filterBindings: unknown[] = [];
+  let filterSets: string[] = [];
+  const owner = "(select user_id from filter_owner)";
+  if (plan.typeKeys.length || plan.propertyFilters.length || plan.entityFilters.length) {
+    filterCtes.push("filter_owner as (select ? as user_id)");
+    filterBindings.push(input.userId);
   }
-  for (const filter of plan.propertyFilters) {
+  const documentSet = (name: string, select: string, values: readonly unknown[]) => {
+    filterCtes.push(`${name} as materialized (${select})`);
+    filterSets.push(name);
+    filterBindings.push(...values);
+  };
+  if (plan.typeKeys.length) {
+    documentSet("type_documents", `select distinct a.object_id from v2_object_type_assignments a join v2_type_definitions t on t.id=a.type_definition_id and t.user_id=a.user_id
+      where a.user_id=${owner} and a.review_status not in ('rejected','superseded') and t.key in (select value from json_each(?))`, [JSON.stringify(plan.typeKeys)]);
+  }
+  for (const [index, filter] of plan.propertyFilters.entries()) {
     const values: unknown[] = [filter.fieldKey];
     let clause = "";
-    if (filter.operator === "eq") { clause = "and p.value_json=?"; values.push(JSON.stringify(filter.value)); }
+    // A list (stored items plus their ", "-joined text) equals a value when one of its items does.
+    if (filter.operator === "eq") {
+      clause = `and (select p.value_json=q.v or (p.value_kind='json' and json_type(q.v)='text'
+        and instr(','||replace(coalesce(p.value_text,''),', ',',')||',',','||json_extract(q.v,'$')||',')>0) from (select ? as v) q)`;
+      values.push(JSON.stringify(filter.value));
+    }
     if (filter.operator === "contains") { clause = "and instr(lower(coalesce(p.value_text,p.value_json)),lower(?))>0"; values.push(filter.value); }
     if (filter.operator === "gte") { clause = "and p.value_number>=?"; values.push(filter.value); }
     if (filter.operator === "lte") { clause = "and p.value_number<=?"; values.push(filter.value); }
-    conditions.push(`exists(select 1 from v2_property_values p join v2_field_definitions f on f.id=p.field_definition_id and f.user_id=p.user_id
-      where p.user_id=o.user_id and p.owner_object_id=d.object_id and p.review_status='accepted' and p.superseded_at is null and f.key=? ${clause})`);
-    bindings.push(...values);
+    documentSet(`property_documents_${index}`, `select distinct p.owner_object_id as object_id from v2_property_values p join v2_field_definitions f on f.id=p.field_definition_id and f.user_id=p.user_id
+      where p.user_id=${owner} and p.review_status='accepted' and p.superseded_at is null and f.key=? ${clause}`, values);
   }
-  // Each entity filter becomes its own materialized set of documents, joined in FROM. As a nested
-  // EXISTS, the entity visibility predicate is re-resolved inside every expression that reaches
-  // eligible_documents and exceeds D1's depth-100 expression limit (the Node SQLite fixture allows
-  // deeper trees). The filter CTEs follow search_tokens, so their values follow its one binding.
-  const entityCtes: string[] = [], entityJoins: string[] = [], entityBindings: unknown[] = [];
   for (const [index, filter] of plan.entityFilters.entries()) {
-    const clauses = ["r.user_id=?", "r.review_status='accepted'", "r.superseded_at is null", input.entityVisibility];
-    entityBindings.push(input.userId);
-    if (filter.entityKind) { clauses.push("e.entity_kind=?"); entityBindings.push(filter.entityKind); }
-    if (filter.canonicalName) { clauses.push("instr(lower(e.canonical_name),lower(?))>0"); entityBindings.push(filter.canonicalName); }
-    if (filter.targetObjectId) { clauses.push("e.object_id=?"); entityBindings.push(filter.targetObjectId); }
-    entityCtes.push(`entity_documents_${index} as materialized (select distinct r.subject_object_id as object_id from v2_relation_edges r
+    const clauses = [`r.user_id=${owner}`, "r.review_status='accepted'", "r.superseded_at is null", input.entityVisibility];
+    const values: unknown[] = [];
+    if (filter.entityKind) { clauses.push("e.entity_kind=?"); values.push(filter.entityKind); }
+    if (filter.canonicalName) { clauses.push("instr(lower(e.canonical_name),lower(?))>0"); values.push(filter.canonicalName); }
+    if (filter.targetObjectId) { clauses.push("e.object_id=?"); values.push(filter.targetObjectId); }
+    documentSet(`entity_documents_${index}`, `select distinct r.subject_object_id as object_id from v2_relation_edges r
       join v2_entity_records e on e.object_id=r.object_object_id
-      join v2_objects eo on eo.id=e.object_id and eo.user_id=r.user_id and eo.lifecycle_status='active' where ${clauses.join(" and ")})`);
-    entityJoins.push(`join entity_documents_${index} entity_match_${index} on entity_match_${index}.object_id=d.object_id`);
+      join v2_objects eo on eo.id=e.object_id and eo.user_id=r.user_id and eo.lifecycle_status='active' where ${clauses.join(" and ")}`, values);
   }
-  bindings.splice(1, 0, ...entityBindings);
+  for (let level = 0; filterSets.length > 1; level += 1) {
+    const groups: string[] = [];
+    for (let index = 0; index < filterSets.length; index += 4) {
+      const name = `filter_documents_${level}_${index / 4}`;
+      filterCtes.push(`${name} as materialized (${filterSets.slice(index, index + 4).map((set) => `select object_id from ${set}`).join(" intersect ")})`);
+      groups.push(name);
+    }
+    filterSets = groups;
+  }
+  if (filterSets[0]) filterJoins.push(`join ${filterSets[0]} on ${filterSets[0]}.object_id=d.object_id`);
+  bindings.splice(1, 0, ...filterBindings);
   if (plan.dateFilter) {
     const axis = plan.dateFilter.axis === "written_at" ? "d.written_at" : "c.captured_at";
     if (plan.dateFilter.from) { conditions.push(`${axis}>=?`); bindings.push(`${plan.dateFilter.from}T00:00:00.000Z`); }
@@ -134,13 +161,14 @@ export function canonicalRetrievalSql(input: { plan: V2RetrievalQueryPlanV1; use
   const ctes = [`search_tokens as (select json_extract(value,'$.token') as token,json_extract(value,'$.pattern') as pattern,
       json_extract(value,'$.prefix') as prefix,json_extract(value,'$.points') as points,json_extract(value,'$.parts') as parts,
       json_extract(value,'$.anchors') as anchors from json_each(?))`,
-    ...entityCtes,
+    ...filterCtes,
     `eligible_documents as materialized (select d.*,o.user_id,o.updated_at as object_updated_at,c.captured_at,
+      case when ${undatedImportSql("d", "c")} then 1 else 0 end as undated,
       ${schema.links ? "d.current_link_snapshot_id as search_current_snapshot,d.published_link_run_id as search_published_run" : "null as search_current_snapshot,null as search_published_run"}
       from v2_documents d join v2_objects o on o.id=d.object_id
       join v2_capture_bundles c on c.id=d.capture_id and c.user_id=o.user_id
       join v2_document_revisions current on current.id=d.current_revision_id and current.document_object_id=d.object_id
-      ${entityJoins.join(" ")}
+      ${filterJoins.join(" ")}
       where ${conditions.join(" and ")})`,
     `eligible_sources as materialized (select d.object_id,s.*,l.role as link_role from eligible_documents d
       join v2_document_source_links l on l.document_object_id=d.object_id
@@ -305,7 +333,7 @@ export function materializeRetrievalMatch(row: CanonicalRetrievalOriginRow, toke
 type CanonicalQuery = ReturnType<typeof canonicalRetrievalSql>;
 type QueryPageRow = { total_count: number; page: number; page_size: number; total_pages: number; items_json: string };
 type DocumentResultRow = { object_id: string; title: string; privacy_level: V2RetrievalResult["privacyLevel"]; captured_at: string; written_at: string | null;
-  object_updated_at: string; body_excerpt: string; matches: CanonicalRetrievalOriginRow[]; match_count: number };
+  undated: number; object_updated_at: string; body_excerpt: string; matches: CanonicalRetrievalOriginRow[]; match_count: number };
 type PropertyDisplayRow = SavedViewFieldValueRow & { recordId: string; fieldKey: string };
 type TypeDisplayRow = SavedViewFieldValueRow & { recordId: string; typeKey: string };
 type DisplayPageRow = QueryPageRow & { field_registry_json: string; property_values_json: string; type_values_json: string };
@@ -336,10 +364,10 @@ function savedViewFieldsForRecord(record: DocumentResultRow, fields: readonly st
 /** Count, page membership, privacy and returned bytes share one SQL snapshot. */
 export async function canonicalRecordPage(db: D1DatabaseBinding, plan: V2RetrievalQueryPlanV1, query: CanonicalQuery, page: number, visibleFields: readonly string[] = []): Promise<V2RetrievalPage> {
   const selectedFields = captureSavedViewVisibleFields(visibleFields);
-  const jsonFields = ["object_id", "title", "privacy_level", "captured_at", "written_at", "object_updated_at", "body_excerpt", "match_count"];
+  const jsonFields = ["object_id", "title", "privacy_level", "captured_at", "written_at", "undated", "object_updated_at", "body_excerpt", "match_count"];
   const row = await db.prepare(`${query.withSql}, selected_display_fields as (
       select ? as user_id,value as field_key from json_each(?))${pageCtes("select count(*) as total_count from matched_records")},
-    result_rows as materialized (select d.object_id,d.user_id,d.title,d.privacy_level,d.captured_at,d.written_at,d.object_updated_at,substr(d.body_markdown,1,220) as body_excerpt,
+    result_rows as materialized (select d.object_id,d.user_id,d.title,d.privacy_level,d.captured_at,d.written_at,d.undated,d.object_updated_at,substr(d.body_markdown,1,220) as body_excerpt,
       (select count(*) from matching_origins m where m.record_id=d.object_id) as match_count,
       (select json_group_array(${retrievalOriginJson("m")}) from
         (select * from matching_origins where record_id=d.object_id order by ${retrievalOriginOrder} limit 3) m) as matches_json
@@ -406,7 +434,7 @@ export async function canonicalRecordPage(db: D1DatabaseBinding, plan: V2Retriev
     if (plan.typeKeys.length) reasons.push(typeKey && plan.typeKeys.includes(typeKey) ? `${typeLabel} 분류` : "분류 조건 일치");
     for (const filter of plan.propertyFilters) reasons.push(`${filter.fieldKey} ${filter.operator}`);
     if (plan.entityFilters.length) reasons.push("확인된 대상과 연결");
-    return { recordId: value.object_id, title: value.title, privacyLevel: value.privacy_level, capturedAt: value.captured_at, writtenAt: value.written_at,
+    return { recordId: value.object_id, title: value.title, privacyLevel: value.privacy_level, capturedAt: value.captured_at, writtenAt: value.written_at, ...(value.undated === 1 ? { undated: true } : {}),
       updatedAt: value.object_updated_at, typeKey, typeLabel, iconKey: suggestSemanticIconForType(typeKey),
       snippet: value.privacy_level === "normal" ? matches[0]?.snippet ?? value.body_excerpt : null,
       inclusionReasons: reasons.length ? reasons : ["최근 기록"], matches, matchCount: value.match_count,

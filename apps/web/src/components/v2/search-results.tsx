@@ -13,6 +13,7 @@ import "@/app/v2/search-location.css";
 import "@/app/v2/saved-view-display.css";
 import { validateSavedViewDisplay, type V2SavedViewDisplay } from "@/lib/v2/retrieval/saved-view-contract";
 import { formatSavedViewFieldValue, SAVED_VIEW_BUILTIN_FIELDS, type V2SavedViewField } from "@/lib/v2/retrieval/saved-view-fields";
+import { RECORD_TIME_ZONE } from "@/lib/v2/presentation/record-date";
 
 type ResultWithMatches = V2RetrievalResult & { matches?: readonly V2RetrievalMatch[]; matchCount?: number };
 const origins = ["document_title", "document_body", "user_note", "external_source", "source", "manual_extract", "ai_extract", "ai_interpretation", "curation"];
@@ -93,7 +94,7 @@ function groupLabel(result: V2RetrievalResult, display: V2SavedViewDisplay | und
   if (denied) return "접근 확인 필요";
   if (result.privacyLevel !== "normal") return "민감·보호 기록";
   if (display.groupBy === "type") return result.typeLabel;
-  const value = display.groupBy === "written_month" ? result.writtenAt : result.capturedAt;
+  const value = result.undated ? null : display.groupBy === "written_month" ? result.writtenAt : result.capturedAt;
   return value && /^\d{4}-\d{2}/.test(value) ? `${value.slice(0, 4)}년 ${value.slice(5, 7)}월` : "날짜 미상";
 }
 
@@ -119,7 +120,7 @@ export function SearchResults({ results, queried, queryPlan, display }: { result
         {deniedRecords.has(result.recordId) ? deniedContent(result) : <>
         <span className="v2-search-result__icon">{result.privacyLevel === "restricted" ? <LockKeyhole aria-hidden="true" size={19} /> : result.privacyLevel === "sensitive" ? <Shield aria-hidden="true" size={19} /> : <SemanticIcon context="type" iconKey={result.iconKey} size={19} />}</span>
         <div className="v2-search-result__copy">
-          {!settings ? <p><span>{result.typeLabel}</span><time dateTime={result.writtenAt ?? result.capturedAt}><CalendarDays aria-hidden="true" size={12} /> {new Date(result.writtenAt ?? result.capturedAt).toLocaleDateString("ko-KR")}</time></p> : settings.layout === "timeline" ? <p>{result.privacyLevel === "normal" ? <>{settings.groupBy === "written_month" ? "작성일" : "보관일(저장 날짜)"} · {(settings.groupBy === "written_month" ? result.writtenAt : result.capturedAt) ? <time dateTime={(settings.groupBy === "written_month" ? result.writtenAt : result.capturedAt)!}>{(settings.groupBy === "written_month" ? result.writtenAt : result.capturedAt)!.slice(0, 10)}</time> : "미상"}</> : "민감·보호 기록 · 날짜 숨김"}</p> : null}
+          {!settings ? <p><span>{result.typeLabel}</span>{result.undated ? null : <time dateTime={result.writtenAt ?? result.capturedAt}><CalendarDays aria-hidden="true" size={12} /> {new Date(result.writtenAt ?? result.capturedAt).toLocaleDateString("ko-KR", { timeZone: RECORD_TIME_ZONE })}</time>}</p> : settings.layout === "timeline" ? <p>{result.privacyLevel === "normal" ? <>{settings.groupBy === "written_month" ? "작성일" : "보관일(저장 날짜)"} · {(settings.groupBy === "written_month" ? result.writtenAt : result.capturedAt) ? <time dateTime={(settings.groupBy === "written_month" ? result.writtenAt : result.capturedAt)!}>{(settings.groupBy === "written_month" ? result.writtenAt : result.capturedAt)!.slice(0, 10)}</time> : "미상"}</> : "민감·보호 기록 · 날짜 숨김"}</p> : null}
           <h2><Link href={`/v2/records/${encodeURIComponent(result.recordId)}`}>{result.title}</Link></h2>
           {result.snippet && result.privacyLevel === "normal" ? <div className="v2-search-result__snippet">{result.snippet}</div> : <div className="v2-search-result__private"><FileText aria-hidden="true" size={14} /> {result.privacyLevel === "restricted" ? "재인증된 보호 기록 · 미리보기 숨김" : result.privacyLevel === "sensitive" ? "민감 기록 · 검색 문맥 숨김" : "보관 위치에서 정확한 자료를 확인하세요."}</div>}
           <ul aria-label="포함 이유">{result.inclusionReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>

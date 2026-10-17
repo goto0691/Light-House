@@ -20,6 +20,7 @@ import { readConnectionGroups } from "@/lib/v2/infrastructure/d1/connection-grou
 import { D1SourceFoundationRepository } from "@/lib/v2/infrastructure/d1/source-foundation-repository";
 import { D1PresentationRepository } from "@/lib/v2/infrastructure/d1/presentation-repository";
 import { D1LinkPresentationRepository } from "@/lib/v2/infrastructure/d1/link-presentation-repository";
+import { formatRecordDate } from "@/lib/v2/presentation/record-date";
 import { privacyLabel } from "@/lib/v2/presentation/record-labels";
 import { parseRecordLocationParam, type V2RecordLocationV1 } from "@/lib/v2/retrieval/record-location-v1";
 import "../../v2-product.css";
@@ -78,7 +79,7 @@ export default async function V2RecordPage({ params, searchParams }: PageProps<"
           <RestrictedUnlock />
         ) : (
           <>
-            <header className="v2-record-heading"><RecordTypeBadge presentation={{ displayType: presentation.displayType }} /><p>{new Date(record.capturedAt).toLocaleString("ko-KR")}</p><h1>{record.title}</h1><span className="v2-record-privacy">{privacyLabel(record.privacyLevel)}</span></header>
+            <header className="v2-record-heading"><RecordTypeBadge presentation={{ displayType: presentation.displayType }} />{record.undated ? null : <p>{formatRecordDate(record.writtenAt ?? record.capturedAt, Boolean(record.writtenAt) && record.writtenDayOnly)}</p>}<h1>{record.title}</h1><span className="v2-record-privacy">{privacyLabel(record.privacyLevel)}</span></header>
             <RecordSearchLocation ownerId={session.userId} recordId={record.recordId} location={searchLocation} invalid={invalidSearchLocation} />
             <pre className="v2-record-markdown">{record.bodyMarkdown}</pre>
             <RecordKnowledge presentationJson={JSON.stringify(connections ? { ...presentation, connections: [] } : presentation)} />
