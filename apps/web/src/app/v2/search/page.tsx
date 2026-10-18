@@ -17,6 +17,7 @@ import { getV2CloudflareBindings } from "@/lib/v2/infrastructure/cloudflare/runt
 import { D1RetrievalRepository } from "@/lib/v2/infrastructure/d1/retrieval-repository";
 import { readFacetPage } from "@/lib/v2/infrastructure/d1/facet-page-repository";
 import { readNaturalQueryCatalog } from "@/lib/v2/infrastructure/d1/natural-query-catalog-repository";
+import { isSortableFieldDataType } from "@/lib/v2/retrieval/natural-query-v1";
 import { parseFacetRequest } from "@/lib/v2/retrieval/facet-page";
 import { describeV2QueryPlan, hasV2QueryConditions, pagePlanFromSearchParams } from "@/lib/v2/retrieval/plan-presentation";
 import { searchPageFromParams } from "@/lib/v2/retrieval/search-params";
@@ -41,11 +42,14 @@ export default async function V2SearchPage({ searchParams }: { searchParams: Pro
   const grant = await getActiveRestrictedGrant(db, { userId: session.userId, sessionId: session.sessionId });
   const repository = new D1RetrievalRepository(db, session.userId);
   const selectedType = plan.typeKeys[0] ?? "";
-  const [resultPage, typeFacets, catalog] = await Promise.all([queried ? repository.searchPage(plan, Boolean(grant), searchPageFromParams(params)) : { results: [], totalCount: 0, page: 1, pageSize: 50, totalPages: 1 }, readFacetPage(db, session.userId, parseFacetRequest(new URLSearchParams({ kind: "type", ...(selectedType ? { selected: selectedType } : {}) }))), showApplied ? readNaturalQueryCatalog(db, session.userId) : null]);
+  const [resultPage, typeFacets, catalog] = await Promise.all([queried ? repository.searchPage(plan, Boolean(grant), searchPageFromParams(params)) : { results: [], totalCount: 0, page: 1, pageSize: 50, totalPages: 1 }, readFacetPage(db, session.userId, parseFacetRequest(new URLSearchParams({ kind: "type", ...(selectedType ? { selected: selectedType } : {}) }))), readNaturalQueryCatalog(db, session.userId)]);
+  // The owner's fields with an order of their own can order the results (search-sort-controls).
+  const sortableFields = catalog.fields.filter((field) => isSortableFieldDataType(field.dataType)).map((field) => ({ key: field.key, label: field.label }))
+    .sort((left, right) => left.label.localeCompare(right.label, "ko"));
   if (grant && !hasUnexpiredRestrictedGrant(grant)) notFound();
   const results = resultPage.results;
   const appliedChips = showApplied ? describeV2QueryPlan(plan, {
-    types: new Map(catalog?.types.map((type) => [type.key, type.label])), fields: new Map(catalog?.fields.map((field) => [field.key, field.label])),
+    types: new Map(catalog.types.map((type) => [type.key, type.label])), fields: new Map(catalog.fields.map((field) => [field.key, field.label])),
   }) : [];
 
   return (
@@ -65,7 +69,7 @@ export default async function V2SearchPage({ searchParams }: { searchParams: Pro
             <SearchTypeSelector key={`${params.toString()}:${JSON.stringify(typeFacets)}`} initialPage={typeFacets} selectedKey={selectedType} />
             <label>최소 평점<select defaultValue={params.get("rating") ?? ""} name="rating"><option value="">상관없음</option><option value="3">3.0 이상</option><option value="4">4.0 이상</option><option value="4.5">4.5 이상</option></select></label>
             <label>시작일<input defaultValue={params.get("from") ?? ""} name="from" type="date" /></label><label>종료일<input defaultValue={params.get("to") ?? ""} name="to" type="date" /></label>
-            <SearchSortControls sort={plan.sort} />
+            <SearchSortControls sort={plan.sort} fields={sortableFields} />
           </div></details>
         </form>
         {planInvalid ? <p className="v2-product-error" role="alert">주소에 담긴 검색 조건을 읽지 못했습니다. 조건을 다시 입력해 주세요.</p> : null}

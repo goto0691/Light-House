@@ -30,6 +30,10 @@ export type ConnectionGroup = Readonly<{
   /** Sensitive records count toward the group but their titles stay closed. */
   closedSensitiveCount: number;
 }>;
+/** Item order inside each group: newest first (default), oldest first, or by name. Undated items come last. */
+export const CONNECTION_ORDERS = ["recent", "oldest", "name"] as const;
+export type ConnectionOrder = typeof CONNECTION_ORDERS[number];
+
 export type ConnectionGroups = Readonly<{
   contractVersion: typeof CONNECTION_GROUPS_CONTRACT;
   total: number;
@@ -95,7 +99,7 @@ export async function readConnectionGroups(
   db: D1DatabaseBinding,
   userId: string,
   objectId: string,
-  options: Readonly<{ itemsPerGroup?: number; expandedGroup?: string | null; outgoingRelationIds?: ReadonlySet<string> | null }> = {},
+  options: Readonly<{ itemsPerGroup?: number; expandedGroup?: string | null; outgoingRelationIds?: ReadonlySet<string> | null; order?: ConnectionOrder }> = {},
 ): Promise<ConnectionGroups | null> {
   const [subjectVisibility, targetVisibility] = await Promise.all([
     legacyProjectionVisibilityPredicate(db, "subject"), legacyProjectionVisibilityPredicate(db, "target"),
@@ -161,7 +165,11 @@ export async function readConnectionGroups(
 
   const limit = Math.max(1, Math.min(options.itemsPerGroup ?? DEFAULT_ITEMS_PER_GROUP, 50));
   const projected = [...groups.entries()].map(([groupKey, group]) => {
-    const items = [...group.items.values()].sort((left, right) => (right.date ?? "").localeCompare(left.date ?? "") || left.label.localeCompare(right.label, "ko"));
+    const byName = (left: ConnectionGroupItem, right: ConnectionGroupItem) => left.label.localeCompare(right.label, "ko");
+    const byDate = (left: ConnectionGroupItem, right: ConnectionGroupItem, newest: boolean) => left.date && right.date
+      ? (newest ? right.date.localeCompare(left.date) : left.date.localeCompare(right.date)) : left.date ? -1 : right.date ? 1 : 0;
+    const items = [...group.items.values()].sort((left, right) => options.order === "name" ? byName(left, right) || byDate(left, right, true)
+      : byDate(left, right, options.order !== "oldest") || byName(left, right));
     return {
       groupKey, label: group.label, count: items.length + group.sensitive.size, relationLabels: group.relationLabels,
       items: items.slice(0, groupKey === options.expandedGroup ? EXPANDED_ITEMS : limit), closedSensitiveCount: group.sensitive.size,

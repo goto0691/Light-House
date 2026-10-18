@@ -51,16 +51,29 @@ export type V2LibraryPage = Readonly<{
   totalCount: number;
 }>;
 
-type LibraryCursor = { version: 1 | 2; updatedAt: string; recordId: string; includeDeleted: boolean; undated?: boolean };
+/** Library orders: last change (default), the record's own date, or title; each either way. */
+export const V2_LIBRARY_SORTS = ["updated", "date", "title"] as const;
+export type V2LibrarySort = typeof V2_LIBRARY_SORTS[number];
+export type V2LibraryDirection = "asc" | "desc";
 
-function readLibraryCursor(cursor: string | undefined, includeDeleted: boolean): LibraryCursor | null {
+/** Where the next page starts: the last row's group (records without the ordered value come last), key and id. */
+type LibraryCursor = { version: 3; sort: V2LibrarySort; direction: V2LibraryDirection; group: 0 | 1; key: string; recordId: string; includeDeleted: boolean };
+type LegacyLibraryCursor = { version: 1 | 2; updatedAt: string; recordId: string; includeDeleted: boolean; undated?: boolean };
+
+function readLibraryCursor(cursor: string | undefined, includeDeleted: boolean, sort: V2LibrarySort, direction: V2LibraryDirection): LibraryCursor | null {
   if (!cursor) return null;
   try {
     if (cursor.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(cursor)) throw new Error("Invalid cursor encoding.");
-    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as LibraryCursor;
-    if (![1, 2].includes(value.version) || typeof value.updatedAt !== "string" || !value.updatedAt || typeof value.recordId !== "string" || !value.recordId || value.includeDeleted !== includeDeleted) throw new Error("Invalid cursor scope.");
-    if (value.version === 2 && typeof value.undated !== "boolean") throw new Error("Invalid cursor scope.");
-    return { ...value, undated: value.undated === true };
+    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as LibraryCursor | LegacyLibraryCursor;
+    if (typeof value.recordId !== "string" || !value.recordId || value.includeDeleted !== includeDeleted) throw new Error("Invalid cursor scope.");
+    if (value.version === 1 || value.version === 2) {
+      // Earlier cursors only ever walked the default order.
+      if (sort !== "updated" || direction !== "desc" || typeof value.updatedAt !== "string" || !value.updatedAt) throw new Error("Invalid cursor scope.");
+      if (value.version === 2 && typeof value.undated !== "boolean") throw new Error("Invalid cursor scope.");
+      return { version: 3, sort, direction, group: value.undated ? 1 : 0, key: value.updatedAt, recordId: value.recordId, includeDeleted };
+    }
+    if (value.version !== 3 || value.sort !== sort || value.direction !== direction || ![0, 1].includes(value.group) || typeof value.key !== "string") throw new Error("Invalid cursor scope.");
+    return value;
   } catch {
     throw new DocumentRevisionValidationError("Library cursor is invalid for this collection.");
   }
@@ -333,36 +346,43 @@ export class D1DocumentAuthoringRepository {
     return (await this.listRecordsPage(options)).records;
   }
 
-  async listRecordsPage(options: { includeDeleted?: boolean; limit?: number; cursor?: string } = {}): Promise<V2LibraryPage> {
+  async listRecordsPage(options: { includeDeleted?: boolean; limit?: number; cursor?: string; sort?: V2LibrarySort; direction?: V2LibraryDirection } = {}): Promise<V2LibraryPage> {
     const limit = Number.isFinite(options.limit) ? Math.min(100, Math.max(1, Math.trunc(options.limit!))) : 50;
     const includeDeleted = options.includeDeleted === true;
-    const cursor = readLibraryCursor(options.cursor, includeDeleted);
+    const sort = options.sort && V2_LIBRARY_SORTS.includes(options.sort) ? options.sort : "updated";
+    const direction = options.direction === "asc" ? "asc" : "desc";
+    const cursor = readLibraryCursor(options.cursor, includeDeleted, sort, direction);
     const legacyVisibility = await legacyProjectionVisibilityPredicate(this.db);
     const lifecycle = includeDeleted ? "" : "and o.lifecycle_status <> 'deleted'";
     const count = await this.db.prepare(`select count(*) as value from v2_objects o join v2_documents d on d.object_id=o.id
       join v2_capture_bundles c on c.id=d.capture_id and c.user_id=o.user_id
       where o.user_id=? and ${legacyVisibility} ${lifecycle}`).bind(this.userId).first<{ value: number }>();
-    // Records with a date come first, newest change first; records with no date of their own follow.
+    // Records with the ordered value come first; records without it (no date of their own, no title,
+    // a locked record's hidden title) follow in the same direction. A locked title never orders anything.
     const undated = `(case when ${undatedImportSql("d", "c")} then 1 else 0 end)`;
-    const after = "(o.updated_at < ? or (o.updated_at = ? and o.id < ?))";
+    const group = sort === "title" ? "(case when d.privacy_level='restricted' or coalesce(trim(d.title),'')='' then 1 else 0 end)" : undated;
+    const key = sort === "title" ? "(case when d.privacy_level='restricted' then '' else lower(coalesce(trim(d.title),'')) end)"
+      : sort === "date" ? "coalesce(d.written_at,c.captured_at)" : "o.updated_at";
+    const before = direction === "desc" ? "<" : ">";
+    const after = `(${group} > ? or (${group} = ? and (${key} ${before} ? or (${key} = ? and o.id ${before} ?))))`;
     const rows = await this.db
       .prepare(
         `select o.id as record_id,o.lifecycle_status,o.updated_at,d.title,d.body_markdown,d.privacy_level,d.document_status,
-                d.current_version,d.written_at,c.captured_at,${undated} as undated
+                d.current_version,d.written_at,c.captured_at,${undated} as undated,${group} as sort_group,${key} as sort_key
          from v2_objects o join v2_documents d on d.object_id=o.id join v2_capture_bundles c on c.id=d.capture_id and c.user_id=o.user_id
          where o.user_id=? and ${legacyVisibility} ${lifecycle}
-           ${!cursor ? "" : cursor.undated ? `and ${undated}=1 and ${after}` : `and (${undated}=1 or ${after})`}
-         order by ${undated},o.updated_at desc,o.id desc limit ?`,
+           ${cursor ? `and ${after}` : ""}
+         order by ${group},${key} ${direction},o.id ${direction} limit ?`,
       )
-      .bind(this.userId, ...(cursor ? [cursor.updatedAt, cursor.updatedAt, cursor.recordId] : []), limit + 1)
+      .bind(this.userId, ...(cursor ? [cursor.group, cursor.group, cursor.key, cursor.key, cursor.recordId] : []), limit + 1)
       .all<{
         record_id: string; lifecycle_status: string; updated_at: string; title: string; body_markdown: string;
         privacy_level: "normal" | "sensitive" | "restricted"; document_status: string; current_version: number;
-        written_at: string | null; captured_at: string; undated: number;
+        written_at: string | null; captured_at: string; undated: number; sort_group: number; sort_key: string;
       }>();
     const pageRows = rows.results.slice(0, limit);
     const last = pageRows.at(-1);
-    const nextCursor = rows.results.length > limit && last ? Buffer.from(JSON.stringify({ version: 2, updatedAt: last.updated_at, recordId: last.record_id, includeDeleted, undated: last.undated === 1 } satisfies LibraryCursor)).toString("base64url") : null;
+    const nextCursor = rows.results.length > limit && last ? Buffer.from(JSON.stringify({ version: 3, sort, direction, group: last.sort_group === 1 ? 1 : 0, key: String(last.sort_key ?? ""), recordId: last.record_id, includeDeleted } satisfies LibraryCursor)).toString("base64url") : null;
     const records = pageRows.map((row) => {
       const locked = row.privacy_level === "restricted";
       const excerpt = row.privacy_level === "normal" ? row.body_markdown.replace(/[#*_>`\[\]]/g, "").trim().slice(0, 160) : null;

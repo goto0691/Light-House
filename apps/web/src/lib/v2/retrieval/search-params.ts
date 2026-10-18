@@ -30,13 +30,16 @@ export function queryPlanFromSearchParams(params: SearchParamSource): V2Retrieva
   const rawEntityName = params.get("entity_name")?.trim() || null;
   const entityName = rawEntityName ? rawEntityName.slice(0, 200) : null;
   const allowedSort = ["relevance", "updated_at", "captured_at", "written_at", "title"] as const;
+  // sort=property&sort_key=<field> orders by one of the owner's fields; an unusable key falls back to the default.
+  const sortKey = params.get("sort_key")?.trim() ?? "";
+  const propertySort = sortField === "property" && CANONICAL_KEY.test(sortKey);
   return defaultV2QueryPlan({
     fullText: q,
     typeKeys,
     propertyFilters: rating !== null && Number.isFinite(rating) && rating >= 0 && rating <= 5 ? [{ fieldKey: "user_rating", operator: "gte", value: rating }] : [],
     entityFilters: entityId || entityKind || entityName ? [{ ...(entityId ? { targetObjectId: entityId } : {}), ...(entityKind ? { entityKind } : {}), ...(entityName ? { canonicalName: entityName } : {}) }] : [],
     dateFilter: from || to ? { axis: "captured_at", from, to } : null,
-    sort: {
+    sort: propertySort ? { field: "property", fieldKey: sortKey, direction: direction === "asc" ? "asc" : "desc" } : {
       field: allowedSort.includes(sortField as never) ? sortField as V2RetrievalQueryPlanV1["sort"]["field"] : q ? "relevance" : "updated_at",
       direction: direction === "asc" ? "asc" : "desc",
     },

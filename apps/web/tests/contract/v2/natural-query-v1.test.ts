@@ -28,7 +28,7 @@ function draft(overrides: Partial<NaturalQueryDraftV1> = {}): NaturalQueryDraftV
   return {
     full_text: "", type_keys: [], property_filters: [], entity_filters: [], date_mode: "none", date_axis: "captured_at",
     date_relative_kind: "previous", date_relative_unit: "day", date_relative_count: 1, date_from: "", date_to: "",
-    sort_field: "default", sort_direction: "desc", limit: 0, unmapped_phrases: [], ...overrides,
+    sort_field: "default", sort_field_key: "", sort_direction: "desc", limit: 0, unmapped_phrases: [], ...overrides,
   };
 }
 function resolve(question: string, value: unknown, day = today) { return resolveNaturalQueryDraft(value, { question, today: day, catalog }); }
@@ -41,14 +41,14 @@ function schemaKeys(value: unknown, found = new Set<string>()): Set<string> {
 describe("natural query provider request", () => {
   test("sends only the question, Seoul today and filtered owner catalog through a flat provider schema", async () => {
     const prepared = await prepareNaturalQueryRequest({ question: "  작년에   별점 준 게임 리뷰 ", today, catalog });
-    expect(prepared.request).toMatchObject({ role: "main_analyzer", schemaId: "natural-query-draft.v1", promptVersion: "natural-query-plan.v1", deadlineMs: 30_000 });
+    expect(prepared.request).toMatchObject({ role: "main_analyzer", schemaId: "natural-query-draft.v2", promptVersion: "natural-query-plan.v2", deadlineMs: 30_000 });
     expect(prepared.request.parts).toHaveLength(1);
     const payload = JSON.parse((prepared.request.parts![0] as { text: string }).text);
     expect(Object.keys(payload).sort()).toEqual(["catalog", "contract_version", "question", "timezone", "today"]);
     expect(payload).toMatchObject({ contract_version: NATURAL_QUERY_INPUT_CONTRACT, question: "작년에 별점 준 게임 리뷰", today, timezone: "Asia/Seoul" });
     // Interpretive fields and malformed kinds never reach the provider.
     expect(payload.catalog.fields.map((field: { key: string }) => field.key)).toEqual(["user_rating", "platform", "visited_on", "finished"]);
-    expect(payload.catalog.fields[0]).toEqual({ key: "user_rating", label: "평점", data_type: "rating", operators: ["exists", "eq", "gte", "lte"] });
+    expect(payload.catalog.fields[0]).toEqual({ key: "user_rating", label: "평점", data_type: "rating", operators: ["exists", "eq", "gte", "lte"], sortable: true });
     expect(payload.catalog.fields[2].operators).toEqual(["exists"]);
     expect(payload.catalog.entity_kinds).toEqual(["place", "work"]);
     expect(prepared.inputHash).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -177,6 +177,17 @@ describe("natural query draft validation", () => {
     expect(text.dropped[0].message).toBe("질문에 없는 검색어 ‘우울’은 추가하지 않았습니다.");
     expect(resolve("리뷰", draft({ sort_field: "relevance", sort_direction: "asc" })).plan.sort).toEqual({ field: "updated_at", direction: "asc" });
     expect(resolve("오래된 리뷰", draft({ sort_field: "captured_at", sort_direction: "asc" })).plan.sort).toEqual({ field: "captured_at", direction: "asc" });
+    // "평점 높은 순" orders by the owner's rating field; an unknown, unsortable or interpretive field keeps the default order.
+    expect(resolve("평점 높은 게임 리뷰", draft({ type_keys: ["game_review"], sort_field: "field", sort_field_key: "user_rating", sort_direction: "desc" })).plan.sort)
+      .toEqual({ field: "property", fieldKey: "user_rating", direction: "desc" });
+    expect(resolve("방문일 오래된 순", draft({ sort_field: "field", sort_field_key: "방문일", sort_direction: "asc" })).plan.sort)
+      .toEqual({ field: "property", fieldKey: "visited_on", direction: "asc" });
+    const unknown = resolve("가격 낮은 순", draft({ sort_field: "field", sort_field_key: "price", sort_direction: "asc" }));
+    expect([unknown.plan.sort, unknown.dropped.map((note) => note.code)]).toEqual([{ field: "updated_at", direction: "desc" }, ["unknown_field"]]);
+    const feeling = resolve("기분 좋은 순", draft({ sort_field: "field", sort_field_key: "mood", sort_direction: "desc" }));
+    // Interpretive fields never reach the catalog, so they cannot order results either.
+    expect([feeling.plan.sort, feeling.dropped.map((note) => note.code)]).toEqual([{ field: "updated_at", direction: "desc" }, ["unknown_field"]]);
+    expect(resolve("평점 순 리뷰", draft({ full_text: "리뷰", sort_field: "field", sort_field_key: "", sort_direction: "desc" })).plan.sort).toEqual({ field: "relevance", direction: "desc" });
     // Half of a surrogate pair is a UTF-16 substring but never a safe token.
     expect(resolve("리뷰 👀", draft({ full_text: "\uD83D" })).plan.fullText).toBeNull();
   });

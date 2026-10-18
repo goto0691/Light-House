@@ -104,7 +104,7 @@ export function canonicalRetrievalSql(input: { plan: V2RetrievalQueryPlanV1; use
   const filterCtes: string[] = [], filterJoins: string[] = [], filterBindings: unknown[] = [];
   let filterSets: string[] = [];
   const owner = "(select user_id from filter_owner)";
-  if (plan.typeKeys.length || plan.propertyFilters.length || plan.entityFilters.length) {
+  if (plan.typeKeys.length || plan.propertyFilters.length || plan.entityFilters.length || plan.sort.field === "property") {
     filterCtes.push("filter_owner as (select ? as user_id)");
     filterBindings.push(input.userId);
   }
@@ -154,6 +154,16 @@ export function canonicalRetrievalSql(input: { plan: V2RetrievalQueryPlanV1; use
     filterSets = groups;
   }
   if (filterSets[0]) filterJoins.push(`join ${filterSets[0]} on ${filterSets[0]}.object_id=d.object_id`);
+  // Ordering by a field reads one comparable value per record: the smallest for ascending, the
+  // largest for descending (a list or a disputed field can hold several).
+  if (plan.sort.field === "property") {
+    const sortable = `case when p.value_kind in ('number','rating') then p.value_number when p.value_kind='date' then p.value_date
+      when p.value_kind='boolean' then p.value_boolean else lower(coalesce(p.value_text,p.value_json)) end`;
+    filterCtes.push(`sort_values as materialized (select p.owner_object_id as object_id,${plan.sort.direction === "asc" ? "min" : "max"}(${sortable}) as v
+      from v2_property_values p join v2_field_definitions f on f.id=p.field_definition_id and f.user_id=p.user_id
+      where p.user_id=${owner} and f.key=? and p.review_status='accepted' and p.superseded_at is null group by p.owner_object_id)`);
+    filterBindings.push(plan.sort.fieldKey);
+  }
   bindings.splice(1, 0, ...filterBindings);
   if (plan.dateFilter) {
     const axis = plan.dateFilter.axis === "written_at" ? "d.written_at" : "c.captured_at";
@@ -300,11 +310,16 @@ export function canonicalRetrievalSql(input: { plan: V2RetrievalQueryPlanV1; use
     ctes.push(`fts_scores as materialized (select object_id,bm25(v2_documents_fts,0,0,4,2,1.5,1.2) as score from v2_documents_fts where v2_documents_fts match ? and user_id=?)`);
     bindings.push(expression, input.userId);
   }
-  const sortColumn = plan.sort.field === "title" ? "d.title" : plan.sort.field === "captured_at" ? "d.captured_at"
-    : plan.sort.field === "written_at" ? "coalesce(d.written_at,d.captured_at)" : plan.sort.field === "updated_at" ? "d.object_updated_at"
-      : hasFts ? "coalesce((select min(score) from fts_scores where object_id=d.object_id),0)" : "d.object_updated_at";
-  return { withSql: `with recursive ${ctes.join(",\n")}`, bindings, tokens, userId: input.userId,
-    orderSql: `${sortColumn} ${plan.sort.field === "relevance" && hasFts ? "asc" : plan.sort.direction},d.object_id` };
+  // Records without the ordered value (no date of their own, no title, no value for the field) come last either way.
+  const direction = plan.sort.direction;
+  const sortValue = "(select v from sort_values s where s.object_id=d.object_id)";
+  const order = plan.sort.field === "relevance" && hasFts ? "coalesce((select min(score) from fts_scores where object_id=d.object_id),0) asc"
+    : plan.sort.field === "title" ? `coalesce(trim(d.title),'')='',lower(d.title) ${direction}`
+      : plan.sort.field === "captured_at" ? `d.undated,d.captured_at ${direction}`
+        : plan.sort.field === "written_at" ? `d.undated,coalesce(d.written_at,d.captured_at) ${direction}`
+          : plan.sort.field === "property" ? `${sortValue} is null,${sortValue} ${direction}`
+            : `d.undated,d.object_updated_at ${direction}`;
+  return { withSql: `with recursive ${ctes.join(",\n")}`, bindings, tokens, userId: input.userId, orderSql: `${order},d.object_id` };
 }
 
 const labels: Record<V2RetrievalMatch["origin"], string> = { document_title: "제목", document_body: "내 글", user_note: "보관한 내 메모",

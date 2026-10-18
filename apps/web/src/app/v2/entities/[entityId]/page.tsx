@@ -7,7 +7,7 @@ import { EntityMergeButton, EntityRenameForm } from "@/components/v2/entity-cura
 import { getSession } from "@/lib/auth/session";
 import { getV2ServerFeatureFlags } from "@/lib/v2/config/server-feature-flags";
 import { getV2CloudflareBindings } from "@/lib/v2/infrastructure/cloudflare/runtime-bindings";
-import { entityKindLabel, readConnectionGroups, readEntitySummary } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
+import { CONNECTION_ORDERS, entityKindLabel, readConnectionGroups, readEntitySummary } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
 import { D1EntityCurationRepository } from "@/lib/v2/infrastructure/d1/entity-curation-repository";
 import "../../v2-product.css";
 
@@ -32,7 +32,8 @@ export default async function V2EntityPage({ params, searchParams }: PageProps<"
   const mergeQuery = typeof query.merge_q === "string" ? query.merge_q.slice(0, 100) : "";
   const [alternateNames, candidates] = await Promise.all([curation.alternateNames(entity.entityId), mergeQuery ? curation.candidates(entity.entityId, mergeQuery) : []]);
   const expandedGroup = typeof query.group === "string" ? query.group : null;
-  const groups = await readConnectionGroups(db, session.userId, entity.entityId, { expandedGroup });
+  const order = CONNECTION_ORDERS.find((value) => value === query.order) ?? "recent";
+  const groups = await readConnectionGroups(db, session.userId, entity.entityId, { expandedGroup, order });
   if (!groups) notFound();
   const typeSearch = (groupKey: string) => groupKey.startsWith("type:") && groupKey !== "type:unclassified"
     ? `/v2/search?entity=${encodeURIComponent(entity.entityId)}&type=${encodeURIComponent(groupKey.slice(5))}` : null;
@@ -50,7 +51,7 @@ export default async function V2EntityPage({ params, searchParams }: PageProps<"
           <EntityRenameForm entityId={entity.entityId} name={entity.name} />
         </header>
         {groups.total || groups.pendingCount
-          ? <ConnectionGroupsPanel basePath={`/v2/entities/${encodeURIComponent(entity.entityId)}`} expandedGroup={expandedGroup} groups={groups} heading="이 대상과 이어진 기록" searchHref={typeSearch} />
+          ? <ConnectionGroupsPanel basePath={`/v2/entities/${encodeURIComponent(entity.entityId)}`} expandedGroup={expandedGroup} groups={groups} heading="이 대상과 이어진 기록" order={order} searchHref={typeSearch} />
           : <p className="v2-connection-groups__pending">아직 이어진 기록이 없습니다.</p>}
         <section className="v2-entity-merge" aria-labelledby="entity-merge-heading">
           <h2 id="entity-merge-heading">같은 대상 합치기</h2>

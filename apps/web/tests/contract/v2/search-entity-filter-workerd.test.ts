@@ -65,4 +65,9 @@ test("actual D1 finds records connected to an entity, alone and with a category,
   const types = ["video_log", ...Array.from({ length: NATURAL_QUERY_LIMITS.typeKeys - 1 }, (_, index) => `other_type_${index}`)];
   expect(await ids(defaultV2QueryPlan({ fullText: "작품 하나", typeKeys: types, propertyFilters: fields, entityFilters: entities,
     dateFilter: { axis: "captured_at", from: "2026-01-01", to: "2026-12-31" } }))).toEqual([watched]);
+  // Ordering by a field on top of the same maximum still fits D1, and records without the field come last.
+  expect(await ids(defaultV2QueryPlan({ fullText: "작품 하나", typeKeys: types, propertyFilters: fields, entityFilters: entities,
+    dateFilter: { axis: "captured_at", from: "2026-01-01", to: "2026-12-31" }, sort: { field: "property", fieldKey: "genre", direction: "asc" } }))).toEqual([watched]);
+  const byGenre = await search.searchPage(defaultV2QueryPlan({ fullText: "작품", sort: { field: "property", fieldKey: "genre", direction: "desc" } }));
+  expect(byGenre.results[0]?.recordId).toBe(watched);
 }, 120_000);

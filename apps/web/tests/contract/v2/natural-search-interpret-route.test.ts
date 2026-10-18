@@ -61,7 +61,7 @@ function entity(userId: string, subjectId: string, kind: string, name: string) {
 
 function draft(overrides: Partial<NaturalQueryDraftV1> = {}): NaturalQueryDraftV1 {
   return { full_text: "", type_keys: [], property_filters: [], entity_filters: [], date_mode: "none", date_axis: "captured_at", date_relative_kind: "previous",
-    date_relative_unit: "day", date_relative_count: 1, date_from: "", date_to: "", sort_field: "default", sort_direction: "desc", limit: 0, unmapped_phrases: [], ...overrides };
+    date_relative_unit: "day", date_relative_count: 1, date_from: "", date_to: "", sort_field: "default", sort_field_key: "", sort_direction: "desc", limit: 0, unmapped_phrases: [], ...overrides };
 }
 function gateway(respond: (request: V2StructuredModelRequest) => unknown) {
   const calls: V2StructuredModelRequest[] = [];
@@ -127,13 +127,13 @@ describe("POST /api/v2/search/interpret", () => {
     expect(response.status).toBe(200); expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     const body = await response.json() as { contract: string; today: string; plan: V2RetrievalQueryPlanV1; href: string; chips: unknown[]; dropped: { code: string; message: string }[] };
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ role: "main_analyzer", schemaId: "natural-query-draft.v1", promptVersion: "natural-query-plan.v1" });
+    expect(calls[0]).toMatchObject({ role: "main_analyzer", schemaId: "natural-query-draft.v2", promptVersion: "natural-query-plan.v2" });
     const payload = payloadOf(calls[0]);
     expect(payload).toEqual({
       contract_version: "natural-query-input.v1", today: "2026-09-28", timezone: "Asia/Seoul", question,
       catalog: {
         types: [{ key: "game_review", label: "게임 리뷰" }, { key: "health_log", label: "건강 기록" }],
-        fields: [{ key: "user_rating", label: "평점", data_type: "rating", operators: ["exists", "eq", "gte", "lte"] }],
+        fields: [{ key: "user_rating", label: "평점", data_type: "rating", operators: ["exists", "eq", "gte", "lte"], sortable: true }],
         entity_kinds: ["place"],
       },
     });
@@ -159,12 +159,12 @@ describe("POST /api/v2/search/interpret", () => {
     const calls = gateway(() => draft());
     expect((await post({ question: "비밀 일기" })).status).toBe(200);
     expect(payloadOf(calls[0]).catalog).toEqual({ types: [{ key: "game_review", label: "게임 리뷰" }, { key: "health_log", label: "건강 기록" }],
-      fields: [{ key: "user_rating", label: "평점", data_type: "rating", operators: ["exists", "eq", "gte", "lte"] }], entity_kinds: ["place"] });
+      fields: [{ key: "user_rating", label: "평점", data_type: "rating", operators: ["exists", "eq", "gte", "lte"], sortable: true }], entity_kinds: ["place"] });
     harness.grant.mockResolvedValue(null);
     harness.session.mockResolvedValue({ sessionId: "other-session", userId: other, email: "other@example.test", expiresAt: Date.now() + 600_000 });
     expect((await post({ question: "게임 리뷰" })).status).toBe(200);
     expect(payloadOf(calls[1]).catalog).toEqual({ types: [{ key: "other_type", label: "타인 분류" }],
-      fields: [{ key: "other_field", label: "타인 항목", data_type: "short_text", operators: ["exists", "eq", "contains"] }], entity_kinds: ["other_kind"] });
+      fields: [{ key: "other_field", label: "타인 항목", data_type: "short_text", operators: ["exists", "eq", "contains"], sortable: true }], entity_kinds: ["other_kind"] });
     expect(JSON.stringify(payloadOf(calls[1]))).not.toMatch(/game_review|user_rating|place|health_log/);
   });
 
@@ -201,9 +201,9 @@ describe("POST /api/v2/search/interpret", () => {
       catalog: {
         types: [{ key: "game_review", label: "게임 리뷰" }, { key: "health_log", label: "건강 기록" }],
         fields: [
-          { key: "health_measurement", label: "건강 측정치", data_type: "integer", operators: ["exists", "eq", "gte", "lte"] },
-          { key: "health_note", label: "건강 메모", data_type: "short_text", operators: ["exists", "eq", "contains"] },
-          { key: "user_rating", label: "평점", data_type: "rating", operators: ["exists", "eq", "gte", "lte"] },
+          { key: "health_measurement", label: "건강 측정치", data_type: "integer", operators: ["exists", "eq", "gte", "lte"], sortable: true },
+          { key: "health_note", label: "건강 메모", data_type: "short_text", operators: ["exists", "eq", "contains"], sortable: true },
+          { key: "user_rating", label: "평점", data_type: "rating", operators: ["exists", "eq", "gte", "lte"], sortable: true },
         ],
         entity_kinds: ["place"],
       },

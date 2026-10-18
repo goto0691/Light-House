@@ -3,9 +3,9 @@
 import { Activity, Archive, Compass, DatabaseBackup, FileText, LockKeyhole, NotebookTabs, Plus, Search, Settings, Shield, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import type { V2LibraryRecord } from "@/lib/v2/infrastructure/d1/document-authoring-repository";
+import type { V2LibraryDirection, V2LibraryRecord, V2LibrarySort } from "@/lib/v2/infrastructure/d1/document-authoring-repository";
 import { SemanticIcon } from "@/components/v2/semantic-icon";
 import { RECORD_TIME_ZONE } from "@/lib/v2/presentation/record-date";
 import { documentStatusLabel, privacyLabel } from "@/lib/v2/presentation/record-labels";
@@ -16,9 +16,42 @@ function rowTitle(record: V2LibraryRecord) {
 }
 
 type PinnedView = Readonly<{ id: string; name: string; iconKey: string }>;
+type LibraryOrder = Readonly<{ sort: V2LibrarySort; direction: V2LibraryDirection; explicit?: boolean }>;
 
-export function LibraryView({ records, pinnedViews = [], totalCount = records.length, nextCursor = null, hasPrevious = false }: { records: readonly V2LibraryRecord[]; pinnedViews?: readonly PinnedView[]; totalCount?: number; nextCursor?: string | null; hasPrevious?: boolean }) {
+const ORDERS: readonly Readonly<{ value: string; label: string }>[] = [
+  { value: "updated:desc", label: "최근 바뀐 순" }, { value: "updated:asc", label: "오래전에 바뀐 순" },
+  { value: "date:desc", label: "기록 날짜 최신순" }, { value: "date:asc", label: "기록 날짜 오래된 순" },
+  { value: "title:asc", label: "제목 가나다순" }, { value: "title:desc", label: "제목 역순" },
+];
+const ORDER_STORAGE_KEY = "lh.library.order";
+const DEFAULT_ORDER = "updated:desc";
+
+function orderHref(value: string, cursor?: string | null) {
+  const [sort, direction] = value.split(":");
+  const params = new URLSearchParams();
+  if (value !== DEFAULT_ORDER) { params.set("sort", sort!); params.set("dir", direction!); }
+  if (cursor) params.set("cursor", cursor);
+  const query = params.toString();
+  return query ? `/v2/library?${query}` : "/v2/library";
+}
+
+/** The date a row shows follows the order: the record's own date when ordered by it, otherwise its last change. */
+function rowDate(record: V2LibraryRecord, sort: V2LibrarySort) {
+  if (record.undated) return null;
+  return sort === "date" ? record.writtenAt ?? record.capturedAt : record.updatedAt;
+}
+
+export function LibraryView({ records, pinnedViews = [], totalCount = records.length, nextCursor = null, hasPrevious = false, order = { sort: "updated", direction: "desc" } }: { records: readonly V2LibraryRecord[]; pinnedViews?: readonly PinnedView[]; totalCount?: number; nextCursor?: string | null; hasPrevious?: boolean; order?: LibraryOrder }) {
   const router = useRouter();
+  const current = `${order.sort}:${order.direction}`;
+  // The last chosen order is a per-device convenience; the address always wins when it names one.
+  useEffect(() => {
+    try {
+      if (order.explicit) { window.localStorage.setItem(ORDER_STORAGE_KEY, current); return; }
+      const remembered = window.localStorage.getItem(ORDER_STORAGE_KEY);
+      if (remembered && remembered !== current && ORDERS.some((option) => option.value === remembered)) router.replace(orderHref(remembered));
+    } catch { /* Storage can be unavailable; the default order still works. */ }
+  }, [current, order.explicit, router]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [peekOpen, setPeekOpen] = useState(true);
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -54,7 +87,12 @@ export function LibraryView({ records, pinnedViews = [], totalCount = records.le
           <Link className="v2-library-search" href="/v2/search"><Search aria-hidden="true" size={17} /><span>기록 검색</span><kbd>⌘ K</kbd></Link>
           <Link href="/v2/capture"><Plus aria-hidden="true" size={18} /><span>새 기록</span></Link>
         </header>
-        <div className="v2-library-product__summary"><strong>{totalCount.toLocaleString("ko-KR")}</strong>개의 원본 기록 · 현재 {records.length}개 표시</div>
+        <div className="v2-library-product__summary"><span><strong>{totalCount.toLocaleString("ko-KR")}</strong>개의 원본 기록 · 현재 {records.length}개 표시</span>
+          <label className="v2-library-order">정렬<select value={current} onChange={(event) => {
+            try { window.localStorage.setItem(ORDER_STORAGE_KEY, event.target.value); } catch { /* per-device only */ }
+            router.push(orderHref(event.target.value));
+          }}>{ORDERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        </div>
         {records.length ? (
           <div aria-label="모든 기록" className="v2-library-records" role="listbox">
             {records.map((record, index) => (
@@ -81,14 +119,14 @@ export function LibraryView({ records, pinnedViews = [], totalCount = records.le
                 </span>
                 <span className="v2-library-record__copy"><strong>{rowTitle(record)}</strong><small>{record.excerpt ?? (record.locked ? "최근 재인증 전에는 내용이 표시되지 않습니다." : "민감 기록의 미리보기는 숨겼습니다.")}</small></span>
                 <span>{documentStatusLabel(record.documentStatus)}</span>
-                {record.undated ? null : <time dateTime={record.updatedAt}>{new Date(record.updatedAt).toLocaleDateString("ko-KR", { timeZone: RECORD_TIME_ZONE })}</time>}
+                {rowDate(record, order.sort) ? <time dateTime={rowDate(record, order.sort)!}>{new Date(rowDate(record, order.sort)!).toLocaleDateString("ko-KR", { timeZone: RECORD_TIME_ZONE })}</time> : null}
               </button>
             ))}
           </div>
         ) : (
           <section className="v2-library-empty"><FileText aria-hidden="true" size={28} /><h2>아직 기록이 없습니다.</h2><p>분류를 정하지 않아도 됩니다. 먼저 한 문장이나 이미지를 남겨두세요.</p><Link className="v2-product-primary" href="/v2/capture">첫 기록 남기기</Link></section>
         )}
-        {hasPrevious || nextCursor ? <nav className="v2-pagination" aria-label="보관함 페이지">{hasPrevious ? <Link href="/v2/library">최신 기록으로</Link> : <span />}{nextCursor ? <Link href={`/v2/library?cursor=${encodeURIComponent(nextCursor)}`}>다음 기록 보기</Link> : <span>마지막 기록입니다</span>}</nav> : null}
+        {hasPrevious || nextCursor ? <nav className="v2-pagination" aria-label="보관함 페이지">{hasPrevious ? <Link href={orderHref(current)}>처음으로</Link> : <span />}{nextCursor ? <Link href={orderHref(current, nextCursor)}>다음 기록 보기</Link> : <span>마지막 기록입니다</span>}</nav> : null}
       </section>
 
       {peekOpen && selected ? (

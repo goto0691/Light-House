@@ -10,6 +10,9 @@ export type V2EntityFilter = Readonly<{
   targetObjectId?: string;
 }>;
 
+export const V2_SORT_FIELDS = ["relevance", "updated_at", "captured_at", "written_at", "title", "property"] as const;
+export type V2SortField = typeof V2_SORT_FIELDS[number];
+
 export type V2RetrievalQueryPlanV1 = Readonly<{
   contractVersion: "retrieval-query-v1";
   targetObjectKind: "document";
@@ -18,7 +21,8 @@ export type V2RetrievalQueryPlanV1 = Readonly<{
   propertyFilters: readonly V2PropertyFilter[];
   entityFilters: readonly V2EntityFilter[];
   dateFilter: Readonly<{ axis: "captured_at" | "written_at"; from: string | null; to: string | null }> | null;
-  sort: Readonly<{ field: "relevance" | "updated_at" | "captured_at" | "written_at" | "title"; direction: "asc" | "desc" }>;
+  /** `property` orders by one of the owner's fields (`fieldKey`); records without a value come last. */
+  sort: Readonly<{ field: V2SortField; direction: "asc" | "desc"; fieldKey?: string }>;
   limit: number;
 }>;
 
@@ -102,14 +106,17 @@ export function validateV2QueryPlan(value: unknown): V2RetrievalQueryPlanV1 {
   }
   if (!root.sort || typeof root.sort !== "object" || Array.isArray(root.sort)) invalid("The sort definition is invalid.");
   const sort = root.sort as Record<string, unknown>;
-  exactKeys(sort, ["field", "direction"]);
-  if (!(["relevance", "updated_at", "captured_at", "written_at", "title"] as const).includes(sort.field as never) || !(["asc", "desc"] as const).includes(sort.direction as never)) invalid("The sort definition is invalid.");
+  exactKeys(sort, sort.field === "property" ? ["field", "direction", "fieldKey"] : ["field", "direction"]);
+  if (!V2_SORT_FIELDS.includes(sort.field as never) || !(["asc", "desc"] as const).includes(sort.direction as never)) invalid("The sort definition is invalid.");
+  if (sort.field === "property" && (typeof sort.fieldKey !== "string" || !canonicalKey.test(sort.fieldKey))) invalid("The sort field key is invalid.");
   if (!Number.isInteger(root.limit) || (root.limit as number) < 1 || (root.limit as number) > 100) invalid("The retrieval limit is invalid.");
   return {
     contractVersion: "retrieval-query-v1", targetObjectKind: "document",
     fullText: root.fullText === null ? null : (root.fullText as string).trim(),
     typeKeys: [...new Set(root.typeKeys as string[])], propertyFilters, entityFilters, dateFilter,
-    sort: { field: sort.field as V2RetrievalQueryPlanV1["sort"]["field"], direction: sort.direction as "asc" | "desc" },
+    sort: sort.field === "property"
+      ? { field: "property", direction: sort.direction as "asc" | "desc", fieldKey: sort.fieldKey as string }
+      : { field: sort.field as V2SortField, direction: sort.direction as "asc" | "desc" },
     limit: root.limit as number,
   };
 }

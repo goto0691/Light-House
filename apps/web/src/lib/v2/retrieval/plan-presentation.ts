@@ -26,7 +26,7 @@ const ENTITY_KIND_LABELS: ReadonlyMap<string, string> = new Map([
   ["place", "장소"], ["work", "작품"], ["book", "책"], ["game", "게임"], ["movie", "영화"], ["person", "인물"],
   ["event", "사건"], ["organization", "단체"], ["topic", "주제"], ["product", "제품"],
 ]);
-const SORT_LABELS: Readonly<Record<V2RetrievalQueryPlanV1["sort"]["field"], Readonly<Record<"asc" | "desc", string>>>> = {
+const SORT_LABELS: Readonly<Record<Exclude<V2RetrievalQueryPlanV1["sort"]["field"], "property">, Readonly<Record<"asc" | "desc", string>>>> = {
   relevance: { desc: "관련도순", asc: "관련도순" },
   updated_at: { desc: "최근 수정순", asc: "오래전 수정순" },
   captured_at: { desc: "최근 기록순", asc: "오래전 기록순" },
@@ -62,13 +62,16 @@ export function describeV2QueryPlan(candidate: V2RetrievalQueryPlanV1, labels: V
     const { from, to } = plan.dateFilter;
     chips.push({ kind: "date", label: dateAxisLabel(plan.dateFilter.axis), value: from && to ? (from === to ? from : `${from} ~ ${to}`) : from ? `${from} 이후` : `${to}까지` });
   }
-  chips.push({ kind: "sort", label: "정렬", value: SORT_LABELS[plan.sort.field][plan.sort.direction] });
+  chips.push({ kind: "sort", label: "정렬", value: plan.sort.field === "property"
+    ? `${labels.fields?.get(plan.sort.fieldKey!) ?? plan.sort.fieldKey} ${plan.sort.direction === "desc" ? "큰 값·최근부터" : "작은 값·오래된 것부터"}`
+    : SORT_LABELS[plan.sort.field][plan.sort.direction] });
   if (plan.limit !== 50) chips.push({ kind: "limit", label: "한 번에 표시", value: `${plan.limit}개` });
   return chips;
 }
 
 export function hasV2QueryConditions(plan: V2RetrievalQueryPlanV1) {
-  return Boolean(plan.fullText || plan.typeKeys.length || plan.propertyFilters.length || plan.entityFilters.length || plan.dateFilter);
+  // Ordering by a field is a way to browse every record that has it.
+  return Boolean(plan.fullText || plan.typeKeys.length || plan.propertyFilters.length || plan.entityFilters.length || plan.dateFilter || plan.sort.field === "property");
 }
 
 /**
@@ -95,6 +98,7 @@ export function searchParamsForPlan(candidate: V2RetrievalQueryPlanV1, options: 
     if (plan.dateFilter.to) simple.set("to", plan.dateFilter.to);
   }
   simple.set("sort", plan.sort.field);
+  if (plan.sort.fieldKey) simple.set("sort_key", plan.sort.fieldKey);
   simple.set("direction", plan.sort.direction);
   const params = JSON.stringify(queryPlanFromSearchParams(simple)) === JSON.stringify(plan) ? simple : new URLSearchParams({ plan: JSON.stringify(plan) });
   if (options.natural) params.set("nl", "1");

@@ -17,7 +17,7 @@ import { getV2ServerFeatureFlags } from "@/lib/v2/config/server-feature-flags";
 import { unavailableLinkPresentation, type LinkPresentationV1 } from "@/lib/v2/domain/link-presentation-v1";
 import { LinkSnapshotError } from "@/lib/v2/domain/link-snapshot-v1";
 import { getV2CloudflareBindings } from "@/lib/v2/infrastructure/cloudflare/runtime-bindings";
-import { readConnectionGroups } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
+import { CONNECTION_ORDERS, readConnectionGroups } from "@/lib/v2/infrastructure/d1/connection-groups-repository";
 import { D1SourceFoundationRepository } from "@/lib/v2/infrastructure/d1/source-foundation-repository";
 import { D1PresentationRepository } from "@/lib/v2/infrastructure/d1/presentation-repository";
 import { D1LinkPresentationRepository } from "@/lib/v2/infrastructure/d1/link-presentation-repository";
@@ -51,9 +51,10 @@ export default async function V2RecordPage({ params, searchParams }: PageProps<"
   }
   const showLinks = Boolean(links && (links.unavailableReason || links.selectedSnapshot || links.availableSources.some((source) => source.manualLink)));
   const expandedGroup = typeof query.group === "string" ? query.group : null;
+  const order = CONNECTION_ORDERS.find((value) => value === query.order) ?? "recent";
   // Grouped connections replace the flat list; restricted records keep the existing projection.
   const connections = record.locked ? null : await readConnectionGroups(db, session.userId, recordId,
-    { expandedGroup, outgoingRelationIds: new Set(presentation.connections.map((connection) => connection.relationId)) });
+    { expandedGroup, order, outgoingRelationIds: new Set(presentation.connections.map((connection) => connection.relationId)) });
   const sourceFieldTargets = new Map<string, string>();
   for (const field of [...presentation.sections.flatMap((section) => section.fields), ...presentation.reviewItems.flatMap((item) => item.field ? [item.field] : [])]) {
     for (const evidence of field.evidence) if (evidence.sourceItemId && !sourceFieldTargets.has(evidence.sourceItemId)) sourceFieldTargets.set(evidence.sourceItemId, field.propertyId);
@@ -85,7 +86,7 @@ export default async function V2RecordPage({ params, searchParams }: PageProps<"
             <pre className="v2-record-markdown">{record.bodyMarkdown}</pre>
             {flags.ai && flags.write && !record.aiEnabled && record.privacyLevel === "normal" ? <RecordAnalysisRequest recordId={record.recordId} /> : null}
             <RecordKnowledge presentationJson={JSON.stringify(connections ? { ...presentation, connections: [] } : presentation)} />
-            {connections ? <ConnectionGroupsPanel basePath={`/v2/records/${encodeURIComponent(record.recordId)}`} expandedGroup={expandedGroup} groups={connections} heading="이 기록과 이어진 것" /> : null}
+            {connections ? <ConnectionGroupsPanel basePath={`/v2/records/${encodeURIComponent(record.recordId)}`} expandedGroup={expandedGroup} groups={connections} heading="이 기록과 이어진 것" order={order} /> : null}
             {showLinks && links ? <RecordLinkAnalysis key={`${session.userId}:${record.recordId}`} initial={links} recordId={record.recordId} recoveryIdentity={{ ownerId: session.userId, ...recoveryPolicy }} /> : null}
             <RecordSourceMaterials analysisSummary={showLinks ? "외부 텍스트 분석과 공개 웹 텍스트 수집은 위 링크 정리 패널에서 별도 요청 · 자동 OCR·영상 분석 안 함" : undefined} fieldTargets={Object.fromEntries(sourceFieldTargets)} sources={record.sources} videoReview={record.currentRevisionId ? { recordId: record.recordId, currentRevisionId: record.currentRevisionId, writeEnabled: flags.write } : undefined} />
           </>
