@@ -166,6 +166,16 @@
 .v2-connection-groups__order { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 12px; font-size: 12px; }
 .v2-connection-groups__order a, .v2-connection-groups__order span { border: 1px solid #e0d7c9; border-radius: 999px; padding: 4px 10px; color: #6c776f; text-decoration: none; }
 .v2-connection-groups__order [aria-current] { background: #2f4a3c; border-color: #2f4a3c; color: #fff; }
+.v2-local-browser { max-width: 760px; margin: 18px auto 0; display: grid; gap: 10px; padding: 16px 18px; border: 1px solid #e0d7c9; border-radius: 16px; background: #fffdf8; }
+.v2-local-browser h2 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 15px; }
+.v2-local-browser p { margin: 0; font-size: 13px; color: #6c776f; }
+.v2-local-browser form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.v2-local-browser label { display: grid; gap: 4px; flex: 1 1 260px; font-size: 13px; color: #6c776f; }
+.v2-local-browser input { font: inherit; padding: 9px 11px; border: 1px solid #d8cfbf; border-radius: 10px; min-width: 0; background: #fff; }
+.v2-local-browser button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #2f4a3c; border-radius: 999px; background: #2f4a3c; color: #fff; padding: 8px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+.v2-local-browser button:disabled { opacity: .6; cursor: default; }
+.v2-local-browser__login { display: flex; flex-wrap: wrap; gap: 8px; }
+.v2-local-browser__login button { background: #fffdf8; color: #2f4a3c; }
 .v2-entity-alternates { color: #6c776f; font-size: 13px; margin: 8px 0 0; }
 .v2-entity-action { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; border: 1px solid #d8cfbf; border-radius: 999px; background: transparent; padding: 6px 12px; font: inherit; font-size: 13px; color: #3f4a43; cursor: pointer; }
 .v2-entity-rename, .v2-entity-merge-confirm { display: grid; gap: 8px; margin-top: 12px; }

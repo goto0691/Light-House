@@ -1,5 +1,23 @@
 # 현재 작업 상태 · 재개 진입점
 
+## SNS 자동 열기(computer use) 가능성 확인 · 2026-10-19 KST (중단, 사용자 결정 대기)
+
+사용자 요청: Threads·Instagram 글을 GPT computer use로 열어 가져오는 A안(이 PC, 사용자가 고른 글만, 읽기 전용, 계정 제한 위험 인지)을 진행한다. 먼저 플랜 경로가 computer use를 받는지 합성 화면으로 확인한다.
+
+- **결과: ChatGPT 플랜 경로는 computer use를 받지 않는다.** 로컬에서 그린 합성 게시물 화면(실제 사이트 접속 없음)으로 `POST /v1/responses`를 보냈다.
+  - `tools:[{type:"computer"}]`(공식 문서의 현재 형식, 예시 모델 `gpt-6.1-sol`) → `400 Unsupported tool type: computer`.
+  - `computer_use_preview` → `400 Unsupported tool type: computer_use_preview`(`truncation`도 `Unsupported parameter`).
+  - 호출 3회, 모두 첫 요청에서 거절돼 화면 조작은 없었다. probe는 git 제외 `.private/sns-probe/probe.ts`, 결과는 `last-probe.json`.
+- **경과:** 첫 시도 전 Claude Code 권한 검사가 이 작업을 제3자 대상 자동 접근으로 보고 명령 하나를 막았다. 우회하지 않고 사용자에게 알렸고, 사용자의 명시적 재지시 뒤 합성 probe만 실행했다.
+- **79번 결정(SNS 자동 수집 안 함, Meta 도메인 서버 수집 차단)은 그대로다.** 코드 변경 없음.
+- **남은 선택지:** (1) 별도 OpenAI API 키(유료)로 computer use, (2) computer use 없이 이 PC의 실제 브라우저가 고른 글을 열고 화면 캡처를 기존 이미지 분석으로 읽기, (3) 사용자가 직접 연 글에서 북마크 버튼으로 새 기록을 채우기(자동 접근 아님).
+- **사용자 결정 (2) 진행 → 작성 중 중단(미검증 WIP 커밋):**
+  - 작성: `scripts/local-browser-runner.mjs`(127.0.0.1 전용·비밀값 보호·전용 Chrome 프로필 `.private/local-browser-profile`, 고정 동작: 고른 글 주소만 열기, 보이는 글자 "더 보기"와 슬라이드 "다음"만 클릭, 입력·키 없음, 로그인벽·보안 확인에서 멈춤, 20초 간격), `src/lib/v2/collect/local-browser-capture.ts`(주소 검사, 화면을 예약→업로드→검증→새 기록 커밋, AI 켬), `local-browser-runner-client.ts`, `api/v2/local-browser/{capture,login}`, 새 기록 화면의 "Threads·Instagram 글 가져오기", `dev:local`이 도우미를 함께 시작(`LIGHT_HOUSE_LOCAL_BROWSER=0`이면 끔).
+  - 배포 환경에서는 도우미 주소가 없어 화면에 나오지 않고 경로는 404다.
+  - **검증 안 됨:** Claude Code 권한 검사가 이 작업의 명령(마지막은 typecheck)을 두 번 막아 멈췄다. 첫 typecheck의 오류 1건은 고쳤지만 재확인하지 못했다. 시험·브라우저 확인·실제 사이트 접속 없음.
+  - 다음: 권한을 허용하면 typecheck·시험·합성 페이지 확인 뒤 정식 커밋. 사용자가 북마크(3)로 바꾸면 이 파일들을 지운다.
+- **실행 핸들:** 없음.
+
 ## 정렬 선택 · 2026-10-18 KST (구현 완료, 사용자 확인 대기)
 
 사용자 요청: 정렬 기준을 고를 수 있게 하고 정렬 기능을 고도화한다(D-122). 로컬 커밋만, 푸시 안 함.

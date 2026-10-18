@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 
 import { CaptureComposer } from "@/components/v2/capture-composer";
+import { LocalBrowserCapture } from "@/components/v2/local-browser-capture";
 import { PwaRegistration } from "@/components/v2/pwa-registration";
+import { localBrowserRunner } from "@/lib/v2/collect/local-browser-runner-client";
 import { getV2ServerFeatureFlags } from "@/lib/v2/config/server-feature-flags";
 import "../v2-product.css";
 
@@ -19,6 +21,7 @@ export default async function V2CapturePage({ searchParams }: PageProps<"/v2/cap
       <PwaRegistration enabled={flags.offline} />
       <nav className="v2-product-nav" aria-label="V2 탐색"><a href="/v2/library"><strong>Light House</strong></a><span>새 기록</span></nav>
       <CaptureComposer initialDraftId={draftId} initialTemplateVersionId={templateVersionId} offlineEnabled={flags.offline} writeEnabled={flags.write} />
+      {flags.write && flags.ai && !draftId && localBrowserRunner() ? <LocalBrowserCapture /> : null}
     </main>
   );
 }
